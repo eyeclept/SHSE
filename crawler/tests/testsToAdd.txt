@@ -1,0 +1,3 @@
+start.py:
+getIPs
+    test not ips don't work, test ips work, test cidr works, test out of range, test if data is accurate
