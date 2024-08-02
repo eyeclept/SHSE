@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "shse"
+version = "0.1.0"
+description = "Self Hosted Search Engine"
+authors = ["eyeclept <eyeclept@pm.me>"]
+license = "GPL"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+PyTermGUI = "^7.7.1"
+elasticsearch = "^8.14.0"
+Flask = "^3.0.3"
+Scrapy = "^2.11.2"
+configparser = "^7.0.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
