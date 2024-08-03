@@ -9,6 +9,10 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 Scrapy = "^2.11.2"
+configparser = "^7.0.0"
+ipaddress = "^1.0.23"
+python-nmap = "^0.7.1"
+pysocks = "^1.7.1"
 
 
 [build-system]

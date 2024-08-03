@@ -9,6 +9,8 @@ Description:
 # imports
 import configparser
 import ipaddress
+import nmap
+import socket
 # constants
 
 # classes
@@ -119,3 +121,33 @@ def cidrToList(ciderIP):
         for ip in network:
             output.append(str(ip))  
     return output
+
+def portScan(ip, portRange = '1-1024'):
+    """
+    use-----> scans ip range
+    input---> ip range is a string of the ip in cider notation, and the port range ("low-high")(optional). use nmap -p formatting
+    output--> a bool of if it's up, and the scan result
+    details-> 
+    # Example usage:
+    portScan("172.16.0.1", "1-10240")
+    """
+    nm = nmap.PortScanner()
+    nm.scan(ip, portRange)
+    return nm[ip].is_up(), nm
+
+def reverseDnsLookup(ip):
+    """
+    use-----> 
+    input---> 
+    output--> 
+    details-> 
+
+        # Test the function
+        print(reverseDnsLookup("8.8.8.8"))  # Output: dns.google
+    
+    """
+    try:
+        return socket.gethostbyaddr(ip)[0]
+    except socket.herror:
+        return None
+
