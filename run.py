@@ -8,9 +8,7 @@ Install Info:
       
 """
 # imports
-from crawl import *
-from search import *
-from tests import testGenUrls
+from tests import test_gen_urls
 
 # constants
 
@@ -24,7 +22,7 @@ def main():
     output--> 
     details-> 
     """
-
+    
     pass
 # functions
 def function():

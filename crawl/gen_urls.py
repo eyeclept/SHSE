@@ -4,20 +4,19 @@ Date:   2024
 E-mail: eyeclept@pm.me
 Description:
     A script for scanning and checking network hosts using IP addresses and ports.
+
+    TODO add checks to config things to ensure proper config file
+    TODO ensure ip addresses are ipv4
 """
 
 # imports
 import configparser
 import ipaddress
-import nmap
 import socket
 
 # constants are not used in this code, so I removed them
 
 # classes
-class NetworkScanner:
-    def __init__(self):
-        pass
 
 # functions
 def function():
@@ -40,18 +39,9 @@ def get_config_data(config_file: str) -> configparser.ConfigParser:
     
     """
     config = configparser.ConfigParser()
-    return config.read(config_file)
+    config.read(config_file)
+    return config
 
-
-def get_ips_and_ports(config: configparser.ConfigParser) -> tuple:
-    """
-    use-----> Get IP addresses and port ranges from a configuration file.
-    input---> config is the ConfigParser object to search
-    output--> A tuple containing lists of IP addresses and ports
-    details-> 
-    
-    """
-    return get_ips(config), get_ports(config)
 
 
 def get_ips(config: configparser.ConfigParser) -> list:
@@ -66,7 +56,7 @@ def get_ips(config: configparser.ConfigParser) -> list:
     try:
         ip_ranges = config["NETWORKS"]["ip_range"].split(",")
     except (configparser.NoSectionError, configparser.NoOptionError):
-        pass  # raise error if section or option is missing
+        raise ValueError("Config error: failed to split config on ','")
 
     output = []
     for ip_range in ip_ranges:
@@ -87,18 +77,19 @@ def get_ports(config: configparser.ConfigParser) -> list:
     try:
         ports = config["NETWORKS"]["ports"].split(",")
     except (configparser.NoSectionError, configparser.NoOptionError):
-        pass  # raise error if section or option is missing
+        raise ValueError("Config error: failed to split config on ','")
 
     output = []
     for port in ports:
         try:
             int(port)
+            output.append(port)
         except ValueError as e:
             raise ValueError(f"Config error: Invalid port: {port}. Must be an integer")
         if not 0 <= int(port) <= 65535:
             raise ValueError(f"Config error: Invalid port: {port}. Must be within range 0-65535")
 
-    return output
+    return list(set(output))
 
 
 def check_config(config: configparser.ConfigParser) -> None:
@@ -132,17 +123,21 @@ def cidr_to_list(cidr_ip: str) -> list:
     return output
 
 
-def port_scan(ip: str, port_range: str = '1-1024') -> tuple:
+def port_scan(ip: str, port_range: list = [80]) -> bool:
     """
     use-----> Perform a port scan on an IP address.
     input---> ip is the IP address to scan, port_range is the port range to scan (optional)
     output--> A tuple containing a boolean indicating if the host is up and the scan result
     details-> 
-    
+        TODO need to make it work with multiple ports and output results in a tuple
     """
-    nm = nmap.PortScanner()
-    nm.scan(ip, port_range)
-    return nm[ip].is_up(), nm
+    for port in port_range:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex((ip, port))
+        if result == 0:
+            return True
+    return False
+
 
 
 def reverse_dns_lookup(ip: str) -> str:
@@ -156,4 +151,4 @@ def reverse_dns_lookup(ip: str) -> str:
     try:
         return socket.gethostbyaddr(ip)[0]
     except socket.herror:
-        return None
+        return ""
