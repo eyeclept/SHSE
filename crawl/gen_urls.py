@@ -13,6 +13,8 @@ Description:
 import configparser
 import ipaddress
 import socket
+import threading
+import concurrent.futures
 
 # constants are not used in this code, so I removed them
 
@@ -21,14 +23,27 @@ import socket
 # functions
 def function():
     """
-    use-----> 
     input---> 
     output--> 
     details-> 
     
     """
     pass
+def get_dns_list(config_name: str = "config.ini", max_threads = 8):
+    """
+    input---> 
+    output--> 
+    details-> 
+    
+    """
 
+    ips_up = []
+    config = get_config_data(config_name)
+    ips_to_search = get_ips(config)
+    ports_to_search = get_ports(config)
+    ips_up = port_scan_multi(ips_to_search, ports_to_search, max_threads)
+    dns_results = reverse_dns_lookup_multi(ips_up)
+    return dns_results
 
 def get_config_data(config_file: str) -> configparser.ConfigParser:
     """
@@ -38,11 +53,10 @@ def get_config_data(config_file: str) -> configparser.ConfigParser:
     details->
     
     """
+    print(f"Reading {config_file}")
     config = configparser.ConfigParser()
     config.read(config_file)
     return config
-
-
 
 def get_ips(config: configparser.ConfigParser) -> list:
     """
@@ -65,7 +79,6 @@ def get_ips(config: configparser.ConfigParser) -> list:
 
     return list(set(output))
 
-
 def get_ports(config: configparser.ConfigParser) -> list:
     """
     use-----> Get a list of port ranges from a configuration file.
@@ -82,15 +95,13 @@ def get_ports(config: configparser.ConfigParser) -> list:
     output = []
     for port in ports:
         try:
-            int(port)
-            output.append(port)
+            output.append(int(port))
         except ValueError as e:
             raise ValueError(f"Config error: Invalid port: {port}. Must be an integer")
         if not 0 <= int(port) <= 65535:
             raise ValueError(f"Config error: Invalid port: {port}. Must be within range 0-65535")
 
     return list(set(output))
-
 
 def check_config(config: configparser.ConfigParser) -> None:
     """
@@ -101,7 +112,6 @@ def check_config(config: configparser.ConfigParser) -> None:
     
     """
     pass  # implement error checking here
-
 
 def cidr_to_list(cidr_ip: str) -> list:
     """
@@ -114,14 +124,12 @@ def cidr_to_list(cidr_ip: str) -> list:
     try:
         network = ipaddress.ip_network(cidr_ip)
     except ValueError as e:
-        raise ValueError(f"Invalid CIDR notation: {cidr_ip}. Must be in format x.x.x.x/y or x.x.x.x")
+        raise ValueError(f"Invalid CIDR notation: {cidr_ip}. \n Must be in format x.x.x.x/y or x.x.x.x. Use the network address for ranges.")
 
     output = []
     for ip in network:
         output.append(str(ip))
-
     return output
-
 
 def port_scan(ip: str, port_range: list = [80]) -> bool:
     """
@@ -131,6 +139,7 @@ def port_scan(ip: str, port_range: list = [80]) -> bool:
     details-> 
         TODO need to make it work with multiple ports and output results in a tuple
     """
+    print(f"Scanning {ip}")
     for port in port_range:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         result = sock.connect_ex((ip, port))
@@ -138,7 +147,40 @@ def port_scan(ip: str, port_range: list = [80]) -> bool:
             return True
     return False
 
+def port_scan_multi(ips: list, port_range: list = [80], max_threads: int = 8) -> list:
+    """
+    
+    input--->
 
+    output-->
+
+    details->
+
+
+    """
+
+    print(f"Scanning {ips}")
+
+    ips_up = []
+
+    def scan_ip(ip):
+        is_up = port_scan(ip, port_range)
+        print(f"Done scanning {ip}")
+        if is_up:
+            ips_up.append(ip)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
+        futures = {executor.submit(scan_ip, ip): ip for ip in ips}
+
+        for future in concurrent.futures.as_completed(futures):
+            ip = futures[future]
+            try:
+                future.result()
+            except Exception as e:
+                print(f"Error scanning {ip}: {e}")
+
+    print(f"Ips up include: {ips_up}")
+    return ips_up
 
 def reverse_dns_lookup(ip: str) -> str:
     """
@@ -149,6 +191,30 @@ def reverse_dns_lookup(ip: str) -> str:
     
     """
     try:
-        return socket.gethostbyaddr(ip)[0]
+        hostname = socket.gethostbyaddr(ip)[0]
+        print(f"Searched {ip}, found {hostname}")
+        return hostname
     except socket.herror:
         return ""
+
+def reverse_dns_lookup_multi(ips: list, max_threads: int = 8) -> list:
+    """
+    input---> 
+    output--> 
+    details-> 
+    
+    """
+    dns_results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
+        futures = {executor.submit(reverse_dns_lookup, ip): (ip,) for ip in ips}
+
+        for future in concurrent.futures.as_completed(futures):
+            ip = futures[future]
+
+            try:
+                dns_result = future.result()
+                if dns_result:  # if DNS result is not empty
+                    dns_results.append(dns_result)
+            except Exception as e:
+                print(f"Error looking up {ip[0]}: {e}")
+    return dns_results

@@ -56,16 +56,43 @@ def test_get_ports():
     """
     config =gen_urls.get_config_data("test_config.ini")
     result = gen_urls.get_ports(config)
-    assert "80" in result
-    assert "443" in result
-    assert "8080" not in result
+    assert 80 in result
+    assert 443 in result
+    assert 8080 not in result
     with pytest.raises(ValueError):
         config = gen_urls.get_config_data("test_config_bad_option.ini")
         gen_urls.get_ports(config)
 
 
+def test_port_scan_multi():
+    """
+    Input: None
+    Output: None
+    Details:
+        
+    """
+    ips = ["172.27.72.1", "172.27.72.21", "172.27.72.22", "172.27.72.66", "172.27.72.75", "172.27.72.78", "172.27.72.", ""]
+    port_range = [80,443]
+    output = gen_urls.port_scan_multi(ips, port_range)
+    assert "172.27.72.1" in output
+    assert "172.27.72.21" in output
+    assert "172.27.72.22" not in output
+    assert "172.27.72.66" in output
+    assert "172.27.72.75" in output
+    assert "172.27.72.78" in output
+    assert "172.27.72.100" not in output
+    assert "172.27.72.123" not in output
 
-
+def test_reverse_dns_lookup_multi():
+    """
+    Input: None
+    Output: None
+    Details:
+        
+    """ 
+    ips = ["172.27.72.1",  "172.27.72.21",  "172.27.72.66",  "172.27.72.75",  "172.27.72.78"]
+    dns_results = gen_urls.reverse_dns_lookup_multi(ips)
+    assert "ollama.epinisea.dmz" in dns_results
 def test_check_config():
     """
     Input: None
