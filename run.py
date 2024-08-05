@@ -8,7 +8,8 @@ Install Info:
       
 """
 # imports
-from tests import test_gen_urls
+
+import crawl.gen_urls as gen_urls
 
 # constants
 
@@ -22,8 +23,10 @@ def main():
     output--> 
     details-> 
     """
+    config_name = "config.ini"
+    max_threads = 32
+    dns_results = gen_urls.get_dns_list(config_name, max_threads)
     
-    pass
 # functions
 def function():
     """
