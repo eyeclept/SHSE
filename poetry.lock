@@ -906,16 +906,6 @@ pluggy = ">=1.5,<2"
 dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "pygments (>=2.7.2)", "requests", "setuptools", "xmlschema"]
 
 [[package]]
-name = "python-nmap"
-version = "0.7.1"
-description = "This is a python class to use nmap and access scan results from python3"
-optional = false
-python-versions = "*"
-files = [
-    {file = "python-nmap-0.7.1.tar.gz", hash = "sha256:f75af6b91dd8e3b0c31f869db32163f62ada686945e5b7c25f84bc0f7fad3b64"},
-]
-
-[[package]]
 name = "queuelib"
 version = "1.7.0"
 description = "Collection of persistent (disk-based) and non-persistent (memory-based) queues"
@@ -1241,4 +1231,4 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "9110e78463314d2be7c0cdbe7a12c77ad3d04df4d1f90ef31554a37babaf5854"
+content-hash = "2b4712d129e43f4680dd97ecf73503d281dc0c2d8a0838915cf3835401fb63cf"
