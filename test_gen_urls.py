@@ -3,14 +3,13 @@ Author: Richard Baldwin
 Date:   2024
 E-mail: eyeclept@pm.me
 
-#
 """
 
 # Imports
 import pytest
 import configparser
 import ipaddress
-import crawl.gen_urls as gen_urls
+import gen_urls
 
 # Constants
 
