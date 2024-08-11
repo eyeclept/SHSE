@@ -9,7 +9,7 @@ Install Info:
 """
 # imports
 
-import crawl.gen_urls as gen_urls
+import gen_urls
 
 # constants
 
