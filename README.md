@@ -11,7 +11,7 @@ Key components:
 - **Elasticsearch** – Indexing and search
 - **Python Controller** – Config-driven CLI for crawling and scheduling
 - **Flask Web App** – Minimal search interface and results display
-- **Optional MariaDB** – For metadata, last crawl times, or authentication
+- **MariaDB** – For metadata, last crawl times, or authentication
 
 ---
 

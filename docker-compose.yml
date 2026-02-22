@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.4
+    container_name: elasticsearch
+    environment:
+      # Single‑node mode for development
+      - discovery.type=single-node
+      # Disable built‑in security for local use
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.enrollment.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - shse_net
+
+  mariadb:
+    image: mariadb:11
+    container_name: mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: example_root_password
+      MYSQL_DATABASE: shse
+      MYSQL_USER: shse_user
+      MYSQL_PASSWORD: example_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - shse_net
+
+  nutch:
+    image: apache/nutch:latest
+    container_name: nutch
+    restart: unless-stopped
+    # If you need to exec into Nutch to run crawl commands,
+    # container stays running via tail
+    command: tail -f /dev/null
+    volumes:
+      # Mount a host folder for seeds, configs, crawl data
+      - ./nutch_data:/nutch_data
+    networks:
+      - shse_net
+
+volumes:
+  es_data:
+  mariadb_data:
+
+networks:
+  shse_net:
