@@ -17,3 +17,6 @@ TODO
 - setup docker container with just the SHSE app for use with external containers
 - Figure out min reqs
   - note: min requs scale based on parallelization and file type (pdfs are heavy for Tika (in Nutch))
+
+  * [x] Completed task
+* [ ] Incomplete task
