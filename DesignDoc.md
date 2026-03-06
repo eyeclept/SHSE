@@ -22,6 +22,7 @@ Homelab operators lack a purpose-built search engine for their internal infrastr
 - Internet search / public web indexing
 - Full AI chat mode (deferred moonshot; OpenWebUI covers this)
 - Network diagram software integration (v1 out of scope)
+- MCP chat integration (post-MVP; see §13)
 
 ---
 
@@ -112,7 +113,7 @@ Single index with the following core fields:
 
 ### 4.3 Apache Nutch
 
-- Can be deployed on the Crawl-Index VM
+- Deployed on the Crawl-Index VM
 - Celery triggers crawls via Nutch REST API
 - Nutch outputs crawled text + metadata; Celery consumes and pipelines to ES
 - TLS handling: see §8
@@ -179,7 +180,7 @@ Flask calls Ollama directly at query time (for summaries). Celery calls Ollama d
 
 ## 6. Crawler Configuration Format
 
-YAML
+YAML. INI/ConfigParser cannot represent nested structures (schedule blocks, typed targets) without awkward workarounds.
 
 ```yaml
 defaults:
@@ -381,7 +382,54 @@ SSO_CLIENT_SECRET=
 
 ---
 
-## 12. Open Questions
+## 13. MCP Integration (Post-MVP)
+
+### Overview
+
+After MVP, SHSE can expose its search index as an MCP (Model Context Protocol) tool. This allows any MCP-compatible client — OpenWebUI, Continue, or any other local AI frontend — to query the homelab index as a context source for a local model, without any changes to the core crawl-index pipeline.
+
+### Architecture
+
+A small, standalone MCP server wraps the existing ES query logic and exposes it as an MCP tool. It is a separate service with its own configurable host entry.
+
+```mermaid
+graph TD
+    OWU["OpenWebUI\n(or any MCP client)"]
+    MCP["SHSE MCP Server\n(configurable host)"]
+    ES["Elasticsearch\n(shared index)"]
+
+    OWU -->|MCP tool call: search_homelab| MCP
+    MCP -->|BM25 + vector query| ES
+    ES -->|top-k chunks| MCP
+    MCP -->|context chunks| OWU
+```
+
+### MCP Server
+
+- Lightweight FastAPI service
+- Exposes a single MCP tool: `search_homelab(query: str) -> list[str]`
+- Internally runs the same BM25 + optional vector query already used by Flask
+- Returns top-k text chunks as context strings for the calling model
+- Stateless — no DB dependency, connects only to ES
+
+### Deployment
+
+Add to `.env`:
+
+```ini
+MCP_HOST=0.0.0.0
+MCP_PORT=8100
+```
+
+Add to `docker-compose.yml` as an optional service. The MCP server shares the ES endpoint config with the rest of the stack.
+
+### Prerequisites
+
+This section is intentionally deferred until after MVP. The following must be complete first:
+- ES index and query logic (Sprint 3)
+- Ollama embedding + vector search (Sprint 8)
+
+No changes to the crawl-index pipeline or Flask app are required.
 
 1. **Nutch version**: 1.x server mode vs. 2.x — different REST APIs. Confirm before starting Nutch integration.
 2. **ES hosting**: On Search VM, Crawl-Index VM, or its own VM? Affects network topology and latency for both systems.
