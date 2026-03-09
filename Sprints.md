@@ -13,9 +13,9 @@
 ### Sprint 1 — Foundation (8h)
 *Goal: Repo structure, config, DB, and a running Flask shell*
 
-* [ ] Read Flask app factory pattern and blueprints (~1h familiarization, not a task but budget it)
-* [ ] Set up repo structure (Flask app factory pattern, blueprints for `search`, `admin`, `auth`)
-* [ ] Define `.env.example` with all service endpoint variables
+* [x] Read Flask app factory pattern and blueprints (~1h familiarization, not a task but budget it)
+* [x] Set up repo structure (Flask app factory pattern, blueprints for `search`, `admin`, `auth`)
+* [x] Define `.env.example` with all service endpoint variables
 * [ ] Write `docker-compose.yml` reference stack (all services co-located)
 * [ ] Design and write MariaDB schema (`users`, `search_history`, `crawler_targets`, `crawl_jobs`)
 * [ ] Write SQLAlchemy models for all tables
