@@ -36,7 +36,7 @@ SHSE is composed of discrete, network-addressable services. Each can run on its 
 |---|---|
 | **Frontend** | Nginx, Flask |
 | **Crawl-Index** | Celery Worker, Celery Beat, Redis |
-| **External Services** | Apache Nutch, Ollama, Elasticsearch, MariaDB |
+| **External Services** | Apache Nutch, Ollama, OpenSearch, MariaDB |
 | **Auth (optional)** | SSO provider (e.g. Authentik, Keycloak, Authelia) |
 
 All services are assumed to be independently hosted and reachable over the network. They may be co-located or run standalone. The SSO provider is optional; if disabled, Flask handles auth locally against MariaDB.
@@ -48,7 +48,7 @@ graph TD
     Nginx["Nginx\n(configurable host)"]
     Flask["Flask\n(configurable host)"]
     MariaDB["MariaDB\n(configurable host)"]
-    ES["Elasticsearch\n(configurable host)"]
+    OS["OpenSearch\n(configurable host)"]
     Redis["Redis\n(configurable host)"]
     Celery["Celery Worker\n(configurable host)"]
     Beat["Celery Beat\n(configurable host)"]
@@ -59,7 +59,7 @@ graph TD
     User -->|HTTPS| Nginx
     Nginx -->|proxy| Flask
     Flask <-->|auth, history, config| MariaDB
-    Flask -->|search query| ES
+    Flask -->|search query| OS
     Flask -->|dispatch task| Redis
     Flask -->|AI summary at query time| Ollama
     Flask <-->|OIDC auth flow - if SSO enabled| SSO
@@ -69,7 +69,7 @@ graph TD
     Celery -->|trigger crawl| Nutch
     Nutch -->|crawled content| Celery
     Celery -->|embed chunks| Ollama
-    Celery -->|index documents| ES
+    Celery -->|index documents| OS
 ```
 
 ---
@@ -92,7 +92,7 @@ graph TD
 - Index management (reindex, vectorize deferred docs)
 - System health indicators (ES, Nutch, Ollama, Redis connectivity)
 
-### 4.2 Elasticsearch
+### 4.2 OpenSearch
 
 Single index with the following core fields:
 
@@ -246,7 +246,7 @@ Homelab services commonly use self-signed certs. Two layers need handling:
 - SHSE will generate a `nutch-site.xml` patch that disables hostname verification when `tls_verify: false` is set on a target
 - Long-term recommended approach: mount your homelab CA cert into the Nutch container's JVM trust store (`cacerts`)
 
-**Flask (internal service calls to ES, Ollama, Nutch):**
+**Flask (internal service calls to OpenSearch, Ollama, Nutch):**
 - Per-service `verify=False` on `requests` calls when configured
 - Global flag `INTERNAL_TLS_VERIFY = false` available for fully trusted LAN environments
 - Admin UI shows a warning banner when TLS verification is disabled anywhere
@@ -267,7 +267,7 @@ sequenceDiagram
     participant Celery
     participant Nutch
     participant Ollama
-    participant ES
+    participant OS
 
     Admin->>Flask: "Crawl and index this target"
     Flask->>Redis: Dispatch crawl_target task
@@ -279,9 +279,9 @@ sequenceDiagram
     alt Ollama available
         Celery->>Ollama: Embed chunks
         Ollama-->>Celery: Embeddings
-        Celery->>ES: Index (text + embedding, vectorized=true)
+        Celery->>OS: Index (text + embedding, vectorized=true)
     else Ollama unavailable
-        Celery->>ES: Index (text only, vectorized=false)
+        Celery->>OS: Index (text only, vectorized=false)
     end
 ```
 
@@ -294,16 +294,16 @@ sequenceDiagram
     participant Redis
     participant Celery
     participant Ollama
-    participant ES
+    participant OS
 
     Admin->>Flask: "Vectorize deferred documents"
     Flask->>Redis: Dispatch vectorize_pending task
     Redis->>Celery: Pick up task
-    Celery->>ES: Query vectorized=false docs (paginated)
+    Celery->>OS: Query vectorized=false docs (paginated)
     loop Each batch
         Celery->>Ollama: Embed batch
         Ollama-->>Celery: Embeddings
-        Celery->>ES: Update embedding + vectorized=true
+        Celery->>OS: Update embedding + vectorized=true
     end
 ```
 
@@ -313,18 +313,18 @@ sequenceDiagram
 sequenceDiagram
     participant User
     participant Flask
-    participant ES
+    participant OS
     participant Ollama
     participant MariaDB
 
     User->>Flask: Submit query
-    Flask->>ES: BM25 query on text field
-    ES-->>Flask: Top-k results
+    Flask->>OS: BM25 query on text field
+    OS-->>Flask: Top-k results
     alt AI Summary enabled and Ollama available
         Flask->>Ollama: Embed query
         Ollama-->>Flask: Query embedding
-        Flask->>ES: Vector search (cosine sim)
-        ES-->>Flask: Top-k semantic results
+        Flask->>OS: Vector search (cosine sim)
+        OS-->>Flask: Top-k semantic results
         Flask->>Ollama: Generate summary (RAG context + query)
         Ollama-->>Flask: AI summary
     end
@@ -344,20 +344,20 @@ Example config surface (`.env` or config file):
 FLASK_HOST=0.0.0.0
 FLASK_PORT=5000
 
-MARIADB_HOST=192.168.1.10
-MARIADB_PORT=3306
-
-ES_HOST=192.168.1.20
-ES_PORT=9200
-
-REDIS_HOST=192.168.1.30
-REDIS_PORT=6379
-
-NUTCH_HOST=192.168.1.40
-NUTCH_PORT=8080
-
-OLLAMA_HOST=192.168.1.50
-OLLAMA_PORT=11434
+    MARIADB_HOST=192.168.1.10
+    MARIADB_PORT=3306
+    
+    OPENSEARCH_HOST=192.168.1.20
+    OPENSEARCH_PORT=9200
+    
+    REDIS_HOST=192.168.1.30
+    REDIS_PORT=6379
+    
+    NUTCH_HOST=192.168.1.40
+    NUTCH_PORT=8080
+    
+    OLLAMA_HOST=192.168.1.50
+    OLLAMA_PORT=11434
 
 # SSO — leave blank to disable
 SSO_ENABLED=false
@@ -367,7 +367,7 @@ SSO_CLIENT_SECRET=
 ```
 
 **Resource notes:**
-- Elasticsearch: set `ES_JAVA_OPTS=-Xms1g -Xmx1g` minimum; increase for large indexes
+- OpenSearch: set `OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g` minimum; increase for large indexes
 - Ollama: GPU passthrough strongly recommended for acceptable embedding throughput
 - Celery Beat handles all scheduled crawls from the YAML config; no external cron needed
 
@@ -396,11 +396,11 @@ A small, standalone MCP server wraps the existing ES query logic and exposes it 
 graph TD
     OWU["OpenWebUI\n(or any MCP client)"]
     MCP["SHSE MCP Server\n(configurable host)"]
-    ES["Elasticsearch\n(shared index)"]
+    OS["OpenSearch\n(shared index)"]
 
     OWU -->|MCP tool call: search_homelab| MCP
-    MCP -->|BM25 + vector query| ES
-    ES -->|top-k chunks| MCP
+    MCP -->|BM25 + vector query| OS
+    OS -->|top-k chunks| MCP
     MCP -->|context chunks| OWU
 ```
 
@@ -410,7 +410,7 @@ graph TD
 - Exposes a single MCP tool: `search_homelab(query: str) -> list[str]`
 - Internally runs the same BM25 + optional vector query already used by Flask
 - Returns top-k text chunks as context strings for the calling model
-- Stateless — no DB dependency, connects only to ES
+- Stateless — no DB dependency, connects only to OpenSearch
 
 ### Deployment
 
@@ -426,11 +426,11 @@ Add to `docker-compose.yml` as an optional service. The MCP server shares the ES
 ### Prerequisites
 
 This section is intentionally deferred until after MVP. The following must be complete first:
-- ES index and query logic (Sprint 3)
+- OpenSearch index and query logic (Sprint 3)
 - Ollama embedding + vector search (Sprint 8)
 
 No changes to the crawl-index pipeline or Flask app are required.
 
 1. **Nutch version**: 1.x server mode vs. 2.x — different REST APIs. Confirm before starting Nutch integration.
-2. **ES hosting**: On Search VM, Crawl-Index VM, or its own VM? Affects network topology and latency for both systems.
+2. **OpenSearch hosting**: On Search VM, Crawl-Index VM, or its own VM? Affects network topology and latency for both systems.
 3. **Celery Beat persistence**: Beat's schedule state is in-memory by default; use `django-celery-beat` DB backend or a flat file schedule to survive restarts.

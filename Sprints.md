@@ -16,7 +16,7 @@
 * [x] Read Flask app factory pattern and blueprints (~1h familiarization, not a task but budget it)
 * [x] Set up repo structure (Flask app factory pattern, blueprints for `search`, `admin`, `auth`)
 * [x] Define `.env.example` with all service endpoint variables
-* [ ] Write `docker-compose.yml` reference stack (all services co-located)
+* [X] Write `docker-compose.yml` reference stack (all services co-located)
 * [ ] Design and write MariaDB schema (`users`, `search_history`, `crawler_targets`, `crawl_jobs`)
 * [ ] Write SQLAlchemy models for all tables
 * [ ] Implement database migrations (Flask-Migrate / Alembic)
@@ -35,10 +35,10 @@
 
 ---
 
-### Sprint 3 — Elasticsearch (8h)
+### Sprint 3 — OpenSearch (8h)
 *Goal: Index defined, BM25 search working end-to-end*
 
-* [ ] Spend time with ES docs on index mappings and the Python client before coding (~1h)
+* [ ] Spend time with OpenSearch docs on index mappings and the Python client before coding (~1h)
 * [ ] Confirm Nutch version (1.x vs 2.x) and REST API surface — **blocker for Sprint 5**
 * [ ] Define index mapping (`url`, `port`, `text`, `embedding`, `title`, `crawled_at`, `service_nickname`, `content_type`, `vectorized`)
 * [ ] Implement index creation on first run
@@ -56,7 +56,7 @@
 * [ ] Implement BM25 result rendering
 * [ ] Save each query to `search_history` in MariaDB
 * [ ] Build search history view for logged-in users
-* [ ] Build system health panel (ES, Nutch, Ollama, Redis connectivity)
+* [ ] Build system health panel (OpenSearch, Nutch, Ollama, Redis connectivity)
 * [ ] Surface connectivity status in admin UI health panel
 * [ ] Add Nginx config with reverse proxy and TLS termination
 
