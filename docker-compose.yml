@@ -1,24 +1,27 @@
-version: "3.9"
-
 services:
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.4
-    container_name: elasticsearch
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    container_name: opensearch
+    restart: unless-stopped
     environment:
-      # Single‑node mode for development
-      - discovery.type=single-node
-      # Disable built‑in security for local use
-      - xpack.security.enabled=false
-      - xpack.security.http.ssl.enabled=false
-      - xpack.security.enrollment.enabled=false
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node
+      - discovery.seed_hosts=opensearch
+      - cluster.initial_master_nodes=opensearch-node
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=CHANGEME
     ports:
       - "9200:9200"
-      - "9300:9300"
+      # - "9600:9600"  # Only needed for Performance Analyzer
     volumes:
-      - es_data:/usr/share/elasticsearch/data
-    networks:
-      - shse_net
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -u admin:CHANGEME https://localhost:9200 -k || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
   mariadb:
     image: mariadb:11
@@ -33,25 +36,42 @@ services:
       - "3306:3306"
     volumes:
       - mariadb_data:/var/lib/mysql
-    networks:
-      - shse_net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Ollama is already set up on the local host — uncomment if needed
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
 
   nutch:
     image: apache/nutch:latest
     container_name: nutch
     restart: unless-stopped
-    # If you need to exec into Nutch to run crawl commands,
-    # container stays running via tail
+    # Keeps container alive for manual crawl execution via docker exec
     command: tail -f /dev/null
     volumes:
-      # Mount a host folder for seeds, configs, crawl data
       - ./nutch_data:/nutch_data
-    networks:
-      - shse_net
+    # No HTTP server in this image; healthcheck tests that the tail process is alive
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "tail"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      opensearch:
+        condition: service_healthy
 
 volumes:
-  es_data:
+  opensearch_data:
   mariadb_data:
-
-networks:
-  shse_net:
+  # ollama_data:
