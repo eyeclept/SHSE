@@ -1,0 +1,33 @@
+defaults:
+  service: http
+  port: 80
+  route: /
+  schedule:
+    frequency: weekly
+    day: sunday
+    time: "02:00"
+    timezone: UTC
+  tls_verify: true  # set false per-target for self-signed certs
+
+targets:
+  - type: network
+    network: 192.168.1.0/24
+    schedule:
+      frequency: weekly
+      day: sunday
+      time: "02:00"
+      timezone: America/New_York
+
+  - type: service
+    nickname: myblog
+    url: blog.homelab.lan
+    ip: 192.168.1.23
+    service: http
+    port: 80
+    route: /
+    tls_verify: false   # override for self-signed cert
+    schedule:
+      frequency: monthly
+      day: 1
+      time: "01:00"
+      timezone: America/New_York

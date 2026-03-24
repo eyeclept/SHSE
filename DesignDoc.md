@@ -90,7 +90,7 @@ graph TD
 - Crawl action buttons (see §7)
 - Crawl job status dashboard
 - Index management (reindex, vectorize deferred docs)
-- System health indicators (ES, Nutch, Ollama, Redis connectivity)
+- System health indicators (OpenSearch, Nutch, Ollama, Redis connectivity)
 
 ### 4.2 OpenSearch
 
@@ -115,7 +115,7 @@ Single index with the following core fields:
 
 - Deployed on the Crawl-Index VM
 - Celery triggers crawls via Nutch REST API
-- Nutch outputs crawled text + metadata; Celery consumes and pipelines to ES
+- Nutch outputs crawled text + metadata; Celery consumes and pipelines to OpenSearch
 - TLS handling: see §8
 
 ### 4.4 Celery + Redis
@@ -228,12 +228,12 @@ Any omitted field inherits from the `defaults` block, which itself falls back to
 |---|---|---|
 | Crawl this target | `crawl_target(id)` | Single target |
 | Crawl all targets | `crawl_all()` | All targets |
-| Reindex this target | Delete ES docs for target → re-crawl → re-index | Single target |
-| Reindex all | Wipe ES index → crawl all → index all | Full index |
+| Reindex this target | Delete OpenSearch docs for target → re-crawl → re-index | Single target |
+| Reindex all | Wipe OpenSearch index → crawl all → index all | Full index |
 | Vectorize deferred docs | `vectorize_pending()` — finds `vectorized: false`, batches through Ollama | Full index |
 | Check job status | Poll Celery task state via task ID stored in `crawl_jobs` | Per-job |
 
-All buttons are disabled with a warning if the relevant service (Nutch, Ollama, ES) is unreachable.
+All buttons are disabled with a warning if the relevant service (Nutch, Ollama, OpenSearch) is unreachable.
 
 ---
 
@@ -390,7 +390,7 @@ After MVP, SHSE can expose its search index as an MCP (Model Context Protocol) t
 
 ### Architecture
 
-A small, standalone MCP server wraps the existing ES query logic and exposes it as an MCP tool. It is a separate service with its own configurable host entry.
+A small, standalone MCP server wraps the existing OpenSearch query logic and exposes it as an MCP tool. It is a separate service with its own configurable host entry.
 
 ```mermaid
 graph TD
@@ -421,7 +421,7 @@ MCP_HOST=0.0.0.0
 MCP_PORT=8100
 ```
 
-Add to `docker-compose.yml` as an optional service. The MCP server shares the ES endpoint config with the rest of the stack.
+Add to `docker-compose.yml` as an optional service. The MCP server shares the OpenSearch endpoint config with the rest of the stack.
 
 ### Prerequisites
 

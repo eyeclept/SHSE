@@ -10,14 +10,14 @@ services:
       - discovery.seed_hosts=opensearch
       - cluster.initial_master_nodes=opensearch-node
       - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=CHANGEME
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=REDACTED
     ports:
       - "9200:9200"
       # - "9600:9600"  # Only needed for Performance Analyzer
     volumes:
       - opensearch_data:/usr/share/opensearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs -u admin:CHANGEME https://localhost:9200 -k || exit 1"]
+      test: ["CMD-SHELL", "curl -fs -u admin:REDACTED https://localhost:9200 -k || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
