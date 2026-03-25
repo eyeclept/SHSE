@@ -17,7 +17,7 @@ services:
     volumes:
       - opensearch_data:/usr/share/opensearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs -u admin:REDACTED https://localhost:9200 -k || exit 1"]
+      test: ["CMD-SHELL", "curl -fs -u admin:$$OPENSEARCH_INITIAL_ADMIN_PASSWORD https://localhost:9200 -k || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
