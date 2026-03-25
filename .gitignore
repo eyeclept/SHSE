@@ -3,6 +3,7 @@ commands.txt
 base.py
 TODO.md
 progress.md
+sessionInfo.md
 # --- Python ---
 __pycache__/
 *.py[cod]
