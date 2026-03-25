@@ -10,7 +10,7 @@ services:
       - discovery.seed_hosts=opensearch
       - cluster.initial_master_nodes=opensearch-node
       - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=REDACTED
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
     ports:
       - "9200:9200"
       # - "9600:9600"  # Only needed for Performance Analyzer
@@ -28,10 +28,10 @@ services:
     container_name: mariadb
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: REDACTED
-      MYSQL_DATABASE: shse
-      MYSQL_USER: shse_user
-      MYSQL_PASSWORD: REDACTED
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MARIADB_DB:-shse}
+      MYSQL_USER: ${MARIADB_USER:-shse_user}
+      MYSQL_PASSWORD: ${MARIADB_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
