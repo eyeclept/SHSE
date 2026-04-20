@@ -1,9 +1,5 @@
-test.md
-commands.txt
-base.py
-TODO.md
-progress.md
-sessionInfo.md
+Assist
+.claude
 # --- Python ---
 __pycache__/
 *.py[cod]

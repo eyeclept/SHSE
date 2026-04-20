@@ -29,7 +29,7 @@ class Config:
     MARIADB_USER = os.environ.get("MARIADB_USER", "shse_user")
     MARIADB_PASSWORD = os.environ.get("MARIADB_PASSWORD", "")
     SQLALCHEMY_DATABASE_URI = (
-        f"mysql+mysqlclient://{MARIADB_USER}:{MARIADB_PASSWORD}"
+        f"mysql+pymysql://{MARIADB_USER}:{MARIADB_PASSWORD}"
         f"@{MARIADB_HOST}:{MARIADB_PORT}/{MARIADB_DB}"
     )
 
