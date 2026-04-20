@@ -8,13 +8,34 @@ Description:
     and crawler config editing. All routes require admin role.
 """
 # Imports
-from flask import Blueprint
+from functools import wraps
+from flask import Blueprint, abort, redirect, url_for
+from flask_login import current_user
 
 # Globals
 admin_bp = Blueprint("admin", __name__)
 
+
+def admin_required(f):
+    """
+    Input: view function
+    Output: decorated view function
+    Details:
+        Redirects unauthenticated users to login.
+        Returns 403 for authenticated non-admin users.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for("auth.login"))
+        if current_user.role != "admin":
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
 # Functions
 @admin_bp.route("/")
+@admin_required
 def index():
     """
     Input: None
@@ -26,6 +47,7 @@ def index():
 
 
 @admin_bp.route("/targets")
+@admin_required
 def targets():
     """
     Input: None
@@ -37,6 +59,7 @@ def targets():
 
 
 @admin_bp.route("/targets/<int:target_id>/crawl", methods=["POST"])
+@admin_required
 def crawl_target(target_id):
     """
     Input: target_id (URL param)
@@ -49,6 +72,7 @@ def crawl_target(target_id):
 
 
 @admin_bp.route("/crawl-all", methods=["POST"])
+@admin_required
 def crawl_all():
     """
     Input: None
@@ -60,6 +84,7 @@ def crawl_all():
 
 
 @admin_bp.route("/targets/<int:target_id>/reindex", methods=["POST"])
+@admin_required
 def reindex_target(target_id):
     """
     Input: target_id (URL param)
@@ -72,6 +97,7 @@ def reindex_target(target_id):
 
 
 @admin_bp.route("/reindex-all", methods=["POST"])
+@admin_required
 def reindex_all():
     """
     Input: None
@@ -84,6 +110,7 @@ def reindex_all():
 
 
 @admin_bp.route("/vectorize", methods=["POST"])
+@admin_required
 def vectorize_pending():
     """
     Input: None
@@ -96,6 +123,7 @@ def vectorize_pending():
 
 
 @admin_bp.route("/jobs")
+@admin_required
 def jobs():
     """
     Input: None
@@ -107,6 +135,7 @@ def jobs():
 
 
 @admin_bp.route("/config", methods=["GET", "POST"])
+@admin_required
 def crawler_config():
     """
     Input: yaml_config (file upload or inline text POST)

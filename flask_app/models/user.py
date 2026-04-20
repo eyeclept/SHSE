@@ -8,6 +8,7 @@ Description:
     Roles: admin (full access) | user (search only).
 """
 # Imports
+import bcrypt as _bcrypt
 from flask_login import UserMixin
 from flask_app import db
 
@@ -31,6 +32,30 @@ class User(UserMixin, db.Model):
     sso_identity = db.Column(db.String(256))
 
     search_history = db.relationship("SearchHistory", backref="user", lazy=True)
+
+    def set_password(self, password):
+        """
+        Input: plaintext password string
+        Output: None (sets self.password_hash)
+        Details:
+            Hashes password with bcrypt (random salt per call) and stores the
+            result as a UTF-8 string in password_hash.
+        """
+        self.password_hash = _bcrypt.hashpw(
+            password.encode(), _bcrypt.gensalt()
+        ).decode()
+
+    def check_password(self, password):
+        """
+        Input: plaintext password string
+        Output: bool
+        Details:
+            Returns True if password matches the stored bcrypt hash.
+            Returns False when password_hash is not set.
+        """
+        if not self.password_hash:
+            return False
+        return _bcrypt.checkpw(password.encode(), self.password_hash.encode())
 
 
 if __name__ == "__main__":

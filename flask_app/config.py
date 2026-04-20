@@ -36,6 +36,8 @@ class Config:
     # OpenSearch
     OPENSEARCH_HOST = os.environ.get("OPENSEARCH_HOST", "localhost")
     OPENSEARCH_PORT = int(os.environ.get("OPENSEARCH_PORT", 9200))
+    OPENSEARCH_USER = os.environ.get("OPENSEARCH_USER", "admin")
+    OPENSEARCH_PASSWORD = os.environ.get("OPENSEARCH_INITIAL_ADMIN_PASSWORD", "")
 
     # Redis / Celery
     REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
@@ -58,6 +60,7 @@ class Config:
     SSO_PROVIDER_URL = os.environ.get("SSO_PROVIDER_URL", "")
     SSO_CLIENT_ID = os.environ.get("SSO_CLIENT_ID", "")
     SSO_CLIENT_SECRET = os.environ.get("SSO_CLIENT_SECRET", "")
+    SSO_ADMIN_GROUP = os.environ.get("SSO_ADMIN_GROUP", "admin")
     AUTH_LOCAL_ENABLED = os.environ.get("AUTH_LOCAL_ENABLED", "true").lower() == "true"
 
 

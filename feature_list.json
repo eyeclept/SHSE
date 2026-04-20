@@ -40,31 +40,31 @@
   "epic_4_authentication": {
     "description": "bcrypt, login/logout/register routes, RBAC, SSO",
     "items": {
-      "bcrypt_hashing": { "passes": false },
-      "login_route": { "passes": false },
-      "logout_route": { "passes": false },
-      "register_route": { "passes": false },
-      "setup_route": { "passes": false },
-      "admin_rbac": { "passes": false },
-      "oidc_sso": { "passes": false },
-      "sso_role_mapping": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_auth_md": { "passes": false }
+      "bcrypt_hashing": { "passes": true },
+      "login_route": { "passes": true },
+      "logout_route": { "passes": true },
+      "register_route": { "passes": true },
+      "setup_route": { "passes": true },
+      "admin_rbac": { "passes": true },
+      "oidc_sso": { "passes": true },
+      "sso_role_mapping": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_auth_md": { "passes": true }
     }
   },
   "epic_5_opensearch": {
     "description": "Index creation, BM25, vector search, chunking, deferred indexing",
     "items": {
-      "index_created": { "passes": false },
-      "bm25_search": { "passes": false },
-      "document_indexing_chunked": { "passes": false },
-      "deferred_index_path": { "passes": false },
-      "vector_search": { "passes": false },
-      "delete_by_nickname": { "passes": false },
-      "wipe_index": { "passes": false },
-      "paginate_unvectorized": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_opensearch_md": { "passes": false }
+      "index_created": { "passes": true },
+      "bm25_search": { "passes": true },
+      "document_indexing_chunked": { "passes": true },
+      "deferred_index_path": { "passes": true },
+      "vector_search": { "passes": true },
+      "delete_by_nickname": { "passes": true },
+      "wipe_index": { "passes": true },
+      "paginate_unvectorized": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_opensearch_md": { "passes": true }
     }
   },
   "epic_6_nutch": {
