@@ -90,6 +90,43 @@ services:
       mariadb:
         condition: service_healthy
 
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    container_name: celery_beat
+    restart: unless-stopped
+    command: ["python", "-m", "celery", "-A", "celery_worker.app.celery", "beat", "--loglevel=info"]
+    env_file: .env
+    environment:
+      - MARIADB_HOST=mariadb
+      - REDIS_HOST=redis
+      - OPENSEARCH_HOST=opensearch
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      mariadb:
+        condition: service_healthy
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    container_name: celery_worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - MARIADB_HOST=mariadb
+      - REDIS_HOST=redis
+      - OPENSEARCH_HOST=opensearch
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      mariadb:
+        condition: service_healthy
+
   nutch:
     image: apache/nutch:latest
     container_name: nutch

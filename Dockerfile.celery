@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY flask_app/ flask_app/
+COPY celery_worker/ celery_worker/
+
+CMD ["python", "-m", "celery", "-A", "celery_worker.app.celery", "worker", "--loglevel=info"]
