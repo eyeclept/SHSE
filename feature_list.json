@@ -1,0 +1,192 @@
+{
+  "epic_1_project_setup": {
+    "description": "Python venv, dependencies, .env, init.sh, Docker",
+    "items": {
+      "venv_created": { "passes": true },
+      "dependencies_installed": { "passes": true },
+      "env_configured": { "passes": true },
+      "init_sh_executable": { "passes": true },
+      "docker_verified": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_setup_md": { "passes": true }
+    }
+  },
+  "epic_2_docker_compose": {
+    "description": "All services defined in docker-compose.yml with healthchecks",
+    "items": {
+      "redis_service": { "passes": true },
+      "flask_service": { "passes": true },
+      "celery_worker_service": { "passes": true },
+      "celery_beat_service": { "passes": true },
+      "nginx_service": { "passes": true },
+      "healthchecks_wired": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_docker_md": { "passes": true }
+    }
+  },
+  "epic_3_database": {
+    "description": "Flask-Migrate, all migrations, live DB verified",
+    "items": {
+      "flask_migrate_init": { "passes": true },
+      "migration_users": { "passes": true },
+      "migration_search_history": { "passes": true },
+      "migration_crawler_targets": { "passes": true },
+      "migration_crawl_jobs": { "passes": true },
+      "migrations_applied": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_database_md": { "passes": true }
+    }
+  },
+  "epic_4_authentication": {
+    "description": "bcrypt, login/logout/register routes, RBAC, SSO",
+    "items": {
+      "bcrypt_hashing": { "passes": false },
+      "login_route": { "passes": false },
+      "logout_route": { "passes": false },
+      "register_route": { "passes": false },
+      "setup_route": { "passes": false },
+      "admin_rbac": { "passes": false },
+      "oidc_sso": { "passes": false },
+      "sso_role_mapping": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_auth_md": { "passes": false }
+    }
+  },
+  "epic_5_opensearch": {
+    "description": "Index creation, BM25, vector search, chunking, deferred indexing",
+    "items": {
+      "index_created": { "passes": false },
+      "bm25_search": { "passes": false },
+      "document_indexing_chunked": { "passes": false },
+      "deferred_index_path": { "passes": false },
+      "vector_search": { "passes": false },
+      "delete_by_nickname": { "passes": false },
+      "wipe_index": { "passes": false },
+      "paginate_unvectorized": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_opensearch_md": { "passes": false }
+    }
+  },
+  "epic_6_nutch": {
+    "description": "Nutch REST client, crawl trigger, fetch results, TLS patch",
+    "items": {
+      "api_documented": { "passes": false },
+      "trigger_crawl": { "passes": false },
+      "fetch_results": { "passes": false },
+      "tls_patch": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_nutch_md": { "passes": false }
+    }
+  },
+  "epic_7_ollama": {
+    "description": "Embedding calls, generative summary, fallback when unreachable",
+    "items": {
+      "get_embedding": { "passes": false },
+      "generate_summary": { "passes": false },
+      "fallback_on_unreachable": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_ollama_md": { "passes": false }
+    }
+  },
+  "epic_8_yaml_config": {
+    "description": "YAML parser, defaults inheritance, persist to DB, Celery Beat entries",
+    "items": {
+      "defaults_inheritance": { "passes": false },
+      "service_target_parsing": { "passes": false },
+      "network_target_parsing": { "passes": false },
+      "schedule_parsing": { "passes": false },
+      "persist_targets": { "passes": false },
+      "celery_beat_entries": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_config_md": { "passes": false }
+    }
+  },
+  "epic_9_celery_tasks": {
+    "description": "crawl_target, crawl_all, reindex, vectorize_pending, CrawlJob lifecycle",
+    "items": {
+      "crawl_target_task": { "passes": false },
+      "crawl_all_task": { "passes": false },
+      "reindex_target_task": { "passes": false },
+      "reindex_all_task": { "passes": false },
+      "vectorize_pending_task": { "passes": false },
+      "scheduled_crawl_task": { "passes": false },
+      "crawl_job_lifecycle": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_tasks_md": { "passes": false }
+    }
+  },
+  "epic_10_search_ui": {
+    "description": "Search, login, register, settings, history pages",
+    "items": {
+      "base_html": { "passes": false },
+      "search_html": { "passes": false },
+      "search_bm25_route": { "passes": false },
+      "ai_summary_card": { "passes": false },
+      "ai_summary_ollama": { "passes": false },
+      "login_html": { "passes": false },
+      "register_html": { "passes": false },
+      "settings_html": { "passes": false },
+      "history_write": { "passes": false },
+      "history_page": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_search_ui_md": { "passes": false }
+    }
+  },
+  "epic_11_admin_ui": {
+    "description": "Admin dashboard, health checks, config upload, job management",
+    "items": {
+      "admin_index_html": { "passes": false },
+      "health_checks": { "passes": false },
+      "targets_html": { "passes": false },
+      "config_html": { "passes": false },
+      "config_upload": { "passes": false },
+      "jobs_html": { "passes": false },
+      "action_buttons": { "passes": false },
+      "disable_on_unreachable": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_admin_ui_md": { "passes": false }
+    }
+  },
+  "epic_12_nginx": {
+    "description": "SSL cert mount, reverse proxy, admin restriction",
+    "items": {
+      "ssl_cert_mount": { "passes": false },
+      "reverse_proxy": { "passes": false },
+      "admin_restriction": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_nginx_md": { "passes": false }
+    }
+  },
+  "epic_13_tls": {
+    "description": "Per-service TLS bypass, global flag, warning banner",
+    "items": {
+      "per_service_tls_bypass": { "passes": false },
+      "global_tls_flag": { "passes": false },
+      "tls_warning_banner": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_tls_md": { "passes": false }
+    }
+  },
+  "epic_14_testing": {
+    "description": "All test suites passing, docs/testing.md",
+    "items": {
+      "unit_yaml": { "passes": false },
+      "unit_opensearch": { "passes": false },
+      "unit_auth": { "passes": false },
+      "unit_tasks": { "passes": false },
+      "unit_vectorize": { "passes": false },
+      "docs_testing_md": { "passes": false }
+    }
+  },
+  "epic_15_mcp_server": {
+    "description": "Post-MVP FastAPI MCP server with search_homelab tool",
+    "items": {
+      "fastapi_skeleton": { "passes": false },
+      "search_homelab_tool": { "passes": false },
+      "mcp_in_compose": { "passes": false },
+      "env_keys_added": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_mcp_md": { "passes": false }
+    }
+  }
+}
