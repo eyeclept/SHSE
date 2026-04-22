@@ -7,18 +7,211 @@ Description:
     Nutch REST API client. Used by Celery workers to trigger crawl jobs
     and retrieve crawled content. TLS verification is controlled per-target
     via the tls_verify flag on the CrawlerTarget model.
+
+    REST base URL: http://{NUTCH_HOST}:{NUTCH_PORT}
+    Default port:  8081 (NutchServer default)
+
+    Crawl pipeline:
+        seed/create → INJECT → GENERATE → FETCH → PARSE → UPDATEDB
 """
 # Imports
+import os
+import time
+import uuid
+import requests
 
 # Globals
+NUTCH_HOST = os.environ.get("NUTCH_HOST", "localhost")
+NUTCH_PORT = int(os.environ.get("NUTCH_PORT", 8081))
+
+_PIPELINE = ["INJECT", "GENERATE", "FETCH", "PARSE", "UPDATEDB"]
+_TERMINAL_STATES = {"FINISHED", "FAILED", "KILLED"}
+
+# job_type → extra args included in the job create body
+_JOB_ARGS = {
+    "INJECT":   {"depth": 1},
+    "GENERATE": {},
+    "FETCH":    {},
+    "PARSE":    {},
+    "UPDATEDB": {},
+}
 
 # Functions
+def get_session():
+    """
+    Input: None
+    Output: requests.Session
+    Details:
+        Returns a new Session. Injectable in tests via the session parameter
+        on trigger_crawl / fetch_results.
+    """
+    return requests.Session()
+
+
+def _base_url():
+    """
+    Input: None
+    Output: str — base URL for the Nutch REST API
+    Details:
+        Reads NUTCH_HOST and NUTCH_PORT from the module globals (set from env
+        at import time).
+    """
+    return f"http://{NUTCH_HOST}:{NUTCH_PORT}"
+
+
+def _wait_for_job(session, base_url, crawl_id, job_id, poll_interval=2, timeout=300):
+    """
+    Input:  session: requests.Session
+            base_url: str
+            crawl_id: str
+            job_id: str
+            poll_interval: int — seconds between polls
+            timeout: int — max seconds to wait
+    Output: str — terminal state ("FINISHED", "FAILED", or "KILLED")
+    Details:
+        Polls GET /job/{job_id}?crawlId= until the job reaches a terminal
+        state or the timeout expires. Raises TimeoutError on timeout.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        resp = session.get(
+            f"{base_url}/job/{job_id}", params={"crawlId": crawl_id}
+        )
+        resp.raise_for_status()
+        state = resp.json().get("state", "")
+        if state in _TERMINAL_STATES:
+            return state
+        time.sleep(poll_interval)
+    raise TimeoutError(f"Job {job_id} did not complete within {timeout}s")
+
+
+def trigger_crawl(seed_urls, crawl_id=None, tls_verify=True, session=None):
+    """
+    Input:  seed_urls: list[str] — seed URLs to crawl
+            crawl_id: str|None — identifier reused across pipeline steps; generated if None
+            tls_verify: bool — TLS verification for Nutch API requests (not the crawl targets)
+            session: requests.Session|None — injectable for tests
+    Output: str — crawl_id used for this crawl
+    Details:
+        Runs the full pipeline: seed/create → INJECT → GENERATE → FETCH →
+        PARSE → UPDATEDB. Each step blocks until the job reaches a terminal
+        state. Raises RuntimeError if any step ends in FAILED or KILLED.
+    """
+    if session is None:
+        session = get_session()
+    if crawl_id is None:
+        crawl_id = str(uuid.uuid4())[:8]
+
+    base = _base_url()
+
+    # When TLS verification is disabled for this target, override the config
+    # property on the server before submitting any jobs. The property is
+    # already false by default in Nutch 1.23, but this makes the intent explicit
+    # and handles cases where an operator has re-enabled checking globally.
+    if not tls_verify:
+        tls_resp = session.put(
+            f"{base}/config/default/http.tls.certificates.check",
+            data="false",
+            headers={"Content-Type": "text/plain"},
+        )
+        tls_resp.raise_for_status()
+
+    # Create seed file; response body is the seed directory path (plain text)
+    seed_resp = session.post(
+        f"{base}/seed/create",
+        json={
+            "name": crawl_id,
+            "seedUrls": [{"url": u} for u in seed_urls],
+        },
+    )
+    seed_resp.raise_for_status()
+    seed_path = seed_resp.text.strip()
+
+    # Run pipeline steps in order
+    for job_type in _PIPELINE:
+        args = dict(_JOB_ARGS[job_type])
+        if job_type == "INJECT":
+            args["seedDir"] = seed_path
+
+        job_resp = session.post(
+            f"{base}/job/create",
+            json={
+                "crawlId": crawl_id,
+                "type": job_type,
+                "confId": "default",
+                "args": args,
+            },
+        )
+        job_resp.raise_for_status()
+        job_id = job_resp.json().get("id")
+        state = _wait_for_job(session, base, crawl_id, job_id)
+        if state != "FINISHED":
+            raise RuntimeError(
+                f"Nutch {job_type} job {job_id} ended in state {state}"
+            )
+
+    return crawl_id
+
+
+def fetch_results(crawl_id, page_size=500, session=None):
+    """
+    Input:  crawl_id: str — crawl identifier (used for crawldb stats query)
+            page_size: int — max nodes to retrieve from the in-memory fetchdb
+            session: requests.Session|None — injectable for tests
+    Output: dict with keys:
+                "nodes"  — list of fetched URL records from GET /db/fetchdb
+                           each record: {url, status, num_outlinks, outlinks: [{url, anchor}]}
+                "stats"  — crawl DB statistics dict from POST /db/crawldb?type=stats
+    Details:
+        Calls two endpoints:
+        1. GET /db/fetchdb?from=0&to=<page_size>
+           Returns in-memory fetch results populated during the most recent crawl
+           session on this server instance. Contains url, HTTP status, and outlink
+           graph. Does NOT contain page text (text lives in Nutch segments on disk).
+        2. POST /db/crawldb with type=stats and crawlId=<crawl_id>
+           Returns aggregate counts (total URLs, per-status breakdown).
+        Raises requests.HTTPError on non-2xx responses.
+    """
+    if session is None:
+        session = get_session()
+
+    base = _base_url()
+
+    nodes_resp = session.get(
+        f"{base}/db/fetchdb", params={"from": 0, "to": page_size}
+    )
+    nodes_resp.raise_for_status()
+    raw_nodes = nodes_resp.json() or []
+
+    normalized = [
+        {
+            "url": node.get("url"),
+            "status": node.get("status"),
+            "num_outlinks": node.get("numOfOutlinks", 0),
+            "outlinks": [
+                {"url": c.get("childUrl"), "anchor": c.get("anchorText")}
+                for c in (node.get("children") or [])
+            ],
+        }
+        for node in raw_nodes
+    ]
+
+    stats_resp = session.post(
+        f"{base}/db/crawldb",
+        json={"crawlId": crawl_id, "type": "stats", "confId": "default", "args": {}},
+    )
+    stats_resp.raise_for_status()
+    stats = stats_resp.json() or {}
+
+    return {"nodes": normalized, "stats": stats}
+
+
 def main():
     """
     Input: None
     Output: None
     Details:
-        Placeholder entry point.
+        Placeholder entry point. Call trigger_crawl() directly from Celery tasks.
     """
     pass
 

@@ -70,12 +70,12 @@
   "epic_6_nutch": {
     "description": "Nutch REST client, crawl trigger, fetch results, TLS patch",
     "items": {
-      "api_documented": { "passes": false },
-      "trigger_crawl": { "passes": false },
-      "fetch_results": { "passes": false },
-      "tls_patch": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_nutch_md": { "passes": false }
+      "api_documented": { "passes": true },
+      "trigger_crawl": { "passes": true },
+      "fetch_results": { "passes": true },
+      "tls_patch": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_nutch_md": { "passes": true }
     }
   },
   "epic_7_ollama": {
