@@ -1,0 +1,77 @@
+services:
+
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    container_name: opensearch
+    restart: unless-stopped
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node
+      - discovery.seed_hosts=opensearch
+      - cluster.initial_master_nodes=opensearch-node
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+    ports:
+      - "9200:9200"
+      # - "9600:9600"  # Only needed for Performance Analyzer
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -u admin:$$OPENSEARCH_INITIAL_ADMIN_PASSWORD https://localhost:9200 -k || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  mariadb:
+    image: mariadb:11
+    container_name: mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MARIADB_DB:-shse}
+      MYSQL_USER: ${MARIADB_USER:-shse_user}
+      MYSQL_PASSWORD: ${MARIADB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Ollama is already set up on the local host — uncomment if needed
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+
+  nutch:
+    image: apache/nutch:latest
+    container_name: nutch
+    restart: unless-stopped
+    # Keeps container alive for manual crawl execution via docker exec
+    command: tail -f /dev/null
+    volumes:
+      - ./nutch_data:/nutch_data
+    # No HTTP server in this image; healthcheck tests that the tail process is alive
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "tail"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      opensearch:
+        condition: service_healthy
+
+volumes:
+  opensearch_data:
+  mariadb_data:
+  # ollama_data:
