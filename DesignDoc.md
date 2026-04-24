@@ -1,12 +1,10 @@
 # Self-Hosted Search Engine (SHSE) — Design Document
-### University Research Lab Edition
 
 ---
 
 ## 1. Problem Statement
 
-University research lab networks host a broad ecosystem of internal services — wikis, repositories, LMS content, forums, media, academic archives, and publishing platforms — with no unified search surface across them. Existing self-hosted search engines target internet-wide indexing; none are designed to crawl, index, and query the services running on a private research network. SHSE fills this gap, acting as the internal equivalent of Google: indexing only what is genuinely public within the network, and presenting a single query interface over the result.
-
+Homelab operators lack a purpose-built search engine for their internal infrastructure. Existing self-hosted search engines target internet-wide indexing; none are designed to crawl, index, and query the services, docs, and pages running on a private network. SHSE fills this gap.
 ---
 
 ## 2. Goals & Non-Goals

@@ -5,7 +5,7 @@ Email: eyeclept@pm.me
 
 Description:
     Vectorize task. Backfills embeddings for documents that were indexed
-    without a vector (vectorized=false) because Ollama was unavailable at
+    without a vector (vectorized=false) because the LLM API was unavailable at
     index time.
 """
 # Imports
@@ -21,7 +21,7 @@ def vectorize_pending():
     Output: None
     Details:
         Paginates through OpenSearch docs where vectorized=false.
-        Batches text chunks through Ollama embedding model.
+        Batches text chunks through the LLM API embedding endpoint.
         Updates each doc with the resulting embedding and sets vectorized=true.
     """
     pass

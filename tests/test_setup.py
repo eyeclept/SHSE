@@ -77,7 +77,7 @@ def test_init_sh():
         Requires the Docker stack to be running.
     """
     result = subprocess.run(
-        ["bash", "init.sh"],
+        ["bash", "Assist/init.sh"],
         cwd=PROJECT_ROOT,
         capture_output=True,
     )

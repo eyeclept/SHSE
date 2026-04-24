@@ -41,7 +41,7 @@ def index():
     Input: None
     Output: rendered admin dashboard
     Details:
-        Shows system health indicators for OpenSearch, Nutch, Ollama, and Redis.
+        Shows system health indicators for OpenSearch, Nutch, LLM API, and Redis.
     """
     pass
 
@@ -117,7 +117,7 @@ def vectorize_pending():
     Output: redirect to jobs page
     Details:
         Dispatches vectorize_pending Celery task. Finds all docs with
-        vectorized=false and batches them through Ollama for embedding.
+        vectorized=false and batches them through the LLM API for embedding.
     """
     pass
 

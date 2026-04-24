@@ -53,11 +53,13 @@
     }
   },
   "epic_5_opensearch": {
-    "description": "Index creation, BM25, vector search, chunking, deferred indexing",
+    "description": "Index creation, BM25, vector search, chunking, deferred indexing, idempotent upsert, stale removal",
     "items": {
       "index_created": { "passes": true },
       "bm25_search": { "passes": true },
       "document_indexing_chunked": { "passes": true },
+      "idempotent_upsert": { "passes": true },
+      "stale_removal": { "passes": true },
       "deferred_index_path": { "passes": true },
       "vector_search": { "passes": true },
       "delete_by_nickname": { "passes": true },
@@ -78,14 +80,14 @@
       "docs_nutch_md": { "passes": true }
     }
   },
-  "epic_7_ollama": {
+  "epic_7_llm_api": {
     "description": "Embedding calls, generative summary, fallback when unreachable",
     "items": {
       "get_embedding": { "passes": false },
       "generate_summary": { "passes": false },
       "fallback_on_unreachable": { "passes": false },
       "tests_written": { "passes": false },
-      "docs_ollama_md": { "passes": false }
+      "docs_llm_md": { "passes": false }
     }
   },
   "epic_8_yaml_config": {
@@ -122,7 +124,7 @@
       "search_html": { "passes": false },
       "search_bm25_route": { "passes": false },
       "ai_summary_card": { "passes": false },
-      "ai_summary_ollama": { "passes": false },
+      "ai_summary_llm": { "passes": false },
       "login_html": { "passes": false },
       "register_html": { "passes": false },
       "settings_html": { "passes": false },

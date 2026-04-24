@@ -20,8 +20,8 @@ def index():
     Output: rendered search results page
     Details:
         Runs BM25 query against OpenSearch.
-        If AI summary is enabled and Ollama is reachable, also runs vector search
-        and generates a summary card above the results.
+        If AI summary is enabled and the LLM API is reachable, also runs vector
+        search and generates a summary card above the results.
         Saves query to search_history on success.
     """
     pass
@@ -41,10 +41,10 @@ def history():
 @search_bp.route("/settings", methods=["GET", "POST"])
 def settings():
     """
-    Input: ai_summary_enabled, ollama_model (form POST)
+    Input: ai_summary_enabled, llm_gen_model (form POST)
     Output: rendered settings page
     Details:
-        Allows users to toggle AI summary and select the Ollama generative model.
+        Allows users to toggle AI summary and select the LLM generative model.
     """
     pass
 

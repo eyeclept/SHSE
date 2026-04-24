@@ -16,7 +16,9 @@ Description:
         crawled_at      date        ingest timestamp
         service_nickname keyword    user-defined label
         content_type    keyword     MIME type
-        vectorized      boolean     false until Ollama processes the chunk
+        vectorized      boolean     false until LLM API processes the chunk
+        source_type     keyword     ingest method (nutch, oai-pmh, rss, api-push)
+        content_hash    keyword     sha256 of chunk text; used for idempotent upsert
 
     Chunk size: 800 tokens
     Embedding model: nomic-embed-text (768 dimensions)
@@ -48,6 +50,8 @@ INDEX_BODY = {
             "service_nickname": {"type": "keyword"},
             "content_type":     {"type": "keyword"},
             "vectorized":       {"type": "boolean"},
+            "source_type":      {"type": "keyword"},
+            "content_hash":     {"type": "keyword"},
         }
     },
 }
@@ -111,27 +115,43 @@ def _chunk_text(text, chunk_size=800):
 
 
 def index_document(url, port, title, crawled_at, service_nickname, content_type, text,
-                   embeddings=None, chunk_size=800, client=None):
+                   embeddings=None, chunk_size=800, source_type=None, client=None):
     """
     Input: url, port, title, crawled_at, service_nickname, content_type — document metadata;
            text — full document text to chunk and index;
            embeddings — optional list of vectors, one per chunk; None triggers deferred path;
            chunk_size — tokens per chunk (default 800);
+           source_type — ingest method label (e.g. "nutch", "oai-pmh", "rss", "api-push");
            client — optional OpenSearch client
-    Output: list of OpenSearch index response dicts, one per chunk
+    Output: list of OpenSearch index response dicts, one per written chunk; skipped chunks absent
     Details:
-        Splits text into chunk_size-word chunks. When embeddings is provided, each
-        chunk is stored with its vector and vectorized=true. When embeddings is None
-        (Ollama unavailable or not yet run), every chunk is stored with embedding=null
-        and vectorized=false so the deferred vectorization task can process them later.
-        Indexing always proceeds regardless of embedding availability.
+        Splits text into chunk_size-word chunks. Document ID is sha256(url + chunk_index),
+        making every write an idempotent upsert. If an existing document with the same ID
+        already holds the same content_hash, the write is skipped (no-op). When embeddings
+        is provided, each chunk is stored with its vector and vectorized=true. When None
+        (LLM API unavailable or not yet run), chunks are stored with embedding=null and
+        vectorized=false for deferred processing. Indexing always proceeds regardless of
+        embedding availability.
     """
+    import hashlib
+    from opensearchpy.exceptions import NotFoundError
+
     if client is None:
         client = get_client()
 
     chunks = _chunk_text(text, chunk_size)
     responses = []
     for i, chunk in enumerate(chunks):
+        doc_id = hashlib.sha256(f"{url}{i}".encode()).hexdigest()
+        content_hash = hashlib.sha256(chunk.encode()).hexdigest()
+
+        try:
+            existing = client.get(index=INDEX_NAME, id=doc_id)
+            if existing["_source"].get("content_hash") == content_hash:
+                continue
+        except NotFoundError:
+            pass
+
         if embeddings is not None and i < len(embeddings):
             embedding = embeddings[i]
             vectorized = True
@@ -149,8 +169,10 @@ def index_document(url, port, title, crawled_at, service_nickname, content_type,
             "text": chunk,
             "embedding": embedding,
             "vectorized": vectorized,
+            "source_type": source_type,
+            "content_hash": content_hash,
         }
-        resp = client.index(index=INDEX_NAME, body=doc)
+        resp = client.index(index=INDEX_NAME, id=doc_id, body=doc)
         responses.append(resp)
     return responses
 
@@ -273,6 +295,36 @@ def delete_by_nickname(service_nickname, client=None):
         "query": {
             "term": {
                 "service_nickname": service_nickname,
+            }
+        }
+    }
+
+    return client.delete_by_query(index=INDEX_NAME, body=body)
+
+
+def delete_stale(service_nickname, run_start, client=None):
+    """
+    Input: service_nickname — keyword value identifying the target;
+           run_start — ISO 8601 timestamp string marking the beginning of the crawl run;
+           client — optional OpenSearch client
+    Output: dict — OpenSearch delete-by-query response (includes 'deleted' count)
+    Details:
+        Deletes all documents for a given service_nickname whose crawled_at timestamp
+        is strictly before run_start. Call this at the end of a crawl run after all
+        current pages have been upserted so that removed pages are purged from the index.
+        Uses a bool/must query combining a term filter on service_nickname and a range
+        filter on crawled_at.
+    """
+    if client is None:
+        client = get_client()
+
+    body = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"term": {"service_nickname": service_nickname}},
+                    {"range": {"crawled_at": {"lt": run_start}}},
+                ]
             }
         }
     }

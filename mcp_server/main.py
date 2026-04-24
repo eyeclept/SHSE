@@ -9,13 +9,13 @@ Description:
     Lightweight FastAPI service that exposes the homelab search index as an
     MCP tool. Stateless; no DB dependency, connects only to OpenSearch.
 
-    Tool: search_homelab(query: str) -> list[str]
+    Tool: search_lab(query: str) -> list[str]
     Runs BM25 + optional vector query and returns top-k text chunks as
     context strings for the calling model.
 
     Prerequisites:
-        - OpenSearch index and query logic (Sprint 3)
-        - Ollama embedding + vector search (Sprint 8)
+        - OpenSearch index and query logic (Epic 5)
+        - LLM API embedding + vector search (Epic 7)
 """
 # Imports
 

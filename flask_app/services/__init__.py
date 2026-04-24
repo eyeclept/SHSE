@@ -4,7 +4,7 @@ Date:   2026
 Email: eyeclept@pm.me
 
 Description:
-    Services package. Contains clients for OpenSearch, Ollama, and Nutch.
+    Services package. Contains clients for OpenSearch, LLM API, and Nutch.
 """
 # Imports
 

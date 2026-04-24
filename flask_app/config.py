@@ -18,7 +18,7 @@ class Config:
     Input: Environment variables
     Output: Configuration object consumed by Flask
     Details:
-        Covers MariaDB, OpenSearch, Redis, Nutch, Ollama, TLS, and SSO settings.
+        Covers MariaDB, OpenSearch, Redis, Nutch, LLM API, TLS, and SSO settings.
     """
     SECRET_KEY = os.environ.get("SECRET_KEY", "change-me")
 
@@ -48,9 +48,10 @@ class Config:
     NUTCH_HOST = os.environ.get("NUTCH_HOST", "localhost")
     NUTCH_PORT = int(os.environ.get("NUTCH_PORT", 8080))
 
-    # Ollama
-    OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "localhost")
-    OLLAMA_PORT = int(os.environ.get("OLLAMA_PORT", 11434))
+    # LLM API (OpenAI-compatible endpoint; in the lab stack this is LiteLLM)
+    LLM_API_BASE = os.environ.get("LLM_API_BASE", "http://localhost:11434/v1")
+    LLM_EMBED_MODEL = os.environ.get("LLM_EMBED_MODEL", "nomic-embed-text")
+    LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "llama3")
 
     # TLS
     INTERNAL_TLS_VERIFY = os.environ.get("INTERNAL_TLS_VERIFY", "true").lower() == "true"

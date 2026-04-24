@@ -5,7 +5,7 @@ Email: eyeclept@pm.me
 
 Description:
     Index tasks. Chunks crawled content at 800 tokens and writes documents
-    to OpenSearch. Embedding is deferred (vectorized=false) when Ollama
+    to OpenSearch. Embedding is deferred (vectorized=false) when the LLM API
     is unavailable.
 """
 # Imports

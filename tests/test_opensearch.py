@@ -9,8 +9,10 @@ Description:
     paginated unvectorized query.
 """
 # Imports
-from unittest.mock import MagicMock, patch
+import hashlib
+from unittest.mock import MagicMock, patch, call
 import pytest
+from opensearchpy.exceptions import NotFoundError
 
 from flask_app.services.opensearch import (
     INDEX_NAME,
@@ -22,6 +24,7 @@ from flask_app.services.opensearch import (
     index_document,
     _chunk_text,
     delete_by_nickname,
+    delete_stale,
     wipe_index,
     get_unvectorized,
 )
@@ -85,8 +88,9 @@ def test_index_schema_fields():
     Input: None
     Output: None
     Details:
-        Verifies the mapping constant contains all nine required fields with
-        correct types. This test runs without a network connection.
+        Verifies the mapping constant contains all eleven required fields with
+        correct types, including source_type and content_hash. Runs without a
+        network connection.
     """
     props = INDEX_BODY["mappings"]["properties"]
 
@@ -100,6 +104,8 @@ def test_index_schema_fields():
     assert props["service_nickname"]["type"] == "keyword"
     assert props["content_type"]["type"] == "keyword"
     assert props["vectorized"]["type"] == "boolean"
+    assert props["source_type"]["type"] == "keyword"
+    assert props["content_hash"]["type"] == "keyword"
 
 
 def test_bm25(mock_client):
@@ -209,6 +215,8 @@ def test_index_doc(mock_client):
         assert doc["service_nickname"] == "test-svc"
         chunk_words = len(doc["text"].split())
         assert chunk_words == 800
+        assert "content_hash" in doc
+        assert len(doc["content_hash"]) == 64  # sha256 hex digest
 
 
 def test_deferred_index(mock_client):
@@ -216,7 +224,7 @@ def test_deferred_index(mock_client):
     Input: mock_client fixture
     Output: None
     Details:
-        Verifies that when embeddings=None (Ollama unavailable), index_document
+        Verifies that when embeddings=None (LLM API unavailable), index_document
         stores every chunk with vectorized=false and embedding=null and still
         calls client.index for each chunk without raising an exception.
     """
@@ -243,6 +251,8 @@ def test_deferred_index(mock_client):
     doc = mock_client.index.call_args.kwargs.get("body") or mock_client.index.call_args.args[0]
     assert doc["vectorized"] is False
     assert doc["embedding"] is None
+    assert "content_hash" in doc
+    assert len(doc["content_hash"]) == 64
 
 
 def test_index_doc_with_embeddings(mock_client):
@@ -274,6 +284,85 @@ def test_index_doc_with_embeddings(mock_client):
     doc = mock_client.index.call_args.kwargs.get("body") or mock_client.index.call_args.args[0]
     assert doc["vectorized"] is True
     assert doc["embedding"] == fake_embedding
+
+
+def test_idempotent_upsert(mock_client):
+    """
+    Input: mock_client fixture
+    Output: None
+    Details:
+        Verifies that re-indexing a chunk whose content_hash is unchanged produces
+        no second write (client.index not called again). Also verifies that a chunk
+        with a changed content_hash is written with its deterministic document ID.
+    """
+    chunk_text = "word " * 10
+    chunk_text = chunk_text.strip()
+    expected_hash = hashlib.sha256(chunk_text.encode()).hexdigest()
+    doc_id = hashlib.sha256(f"http://host/page0".encode()).hexdigest()
+
+    # Simulate existing document with matching content_hash — should skip
+    mock_client.get.return_value = {"_source": {"content_hash": expected_hash}}
+    mock_client.index.return_value = {"result": "updated", "_id": doc_id}
+
+    responses = index_document(
+        url="http://host/page",
+        port=80,
+        title="Test",
+        crawled_at="2026-04-23T00:00:00",
+        service_nickname="svc",
+        content_type="text/html",
+        text=chunk_text,
+        chunk_size=800,
+        client=mock_client,
+    )
+
+    # content_hash matches — write must be skipped
+    mock_client.index.assert_not_called()
+    assert responses == []
+
+    # Now simulate stale document (different hash) — write must proceed
+    mock_client.reset_mock()
+    mock_client.get.return_value = {"_source": {"content_hash": "stale_hash"}}
+    mock_client.index.return_value = {"result": "updated", "_id": doc_id}
+
+    responses = index_document(
+        url="http://host/page",
+        port=80,
+        title="Test",
+        crawled_at="2026-04-23T00:00:00",
+        service_nickname="svc",
+        content_type="text/html",
+        text=chunk_text,
+        chunk_size=800,
+        client=mock_client,
+    )
+
+    mock_client.index.assert_called_once()
+    call_kwargs = mock_client.index.call_args
+    assert call_kwargs.kwargs.get("id") == doc_id or call_kwargs.args[1] == doc_id
+    written_doc = call_kwargs.kwargs.get("body") or call_kwargs.args[2]
+    assert written_doc["content_hash"] == expected_hash
+    assert len(responses) == 1
+
+    # New document (NotFoundError on get) — write must proceed
+    mock_client.reset_mock()
+    mock_client.get.side_effect = NotFoundError(404, "not found", {})
+    mock_client.index.return_value = {"result": "created", "_id": doc_id}
+
+    responses = index_document(
+        url="http://host/page",
+        port=80,
+        title="Test",
+        crawled_at="2026-04-23T00:00:00",
+        service_nickname="svc",
+        content_type="text/html",
+        text=chunk_text,
+        chunk_size=800,
+        client=mock_client,
+    )
+
+    mock_client.index.assert_called_once()
+    assert len(responses) == 1
 
 
 def test_vector_search(mock_client):
@@ -376,6 +465,34 @@ def test_delete_by_nickname(mock_client):
     assert call_args.kwargs.get("index") == INDEX_NAME or call_args.args[0] == INDEX_NAME
     assert body["query"]["term"]["service_nickname"] == "my-service"
     assert result["deleted"] == 3
+    assert result["failures"] == []
+
+
+def test_stale_removal(mock_client):
+    """
+    Input: mock_client fixture
+    Output: None
+    Details:
+        Verifies delete_stale sends a bool/must query combining a term filter on
+        service_nickname and a range filter on crawled_at lt run_start, targeting
+        the correct index. Confirms the deleted count is returned.
+    """
+    run_start = "2026-04-23T10:00:00"
+    mock_client.delete_by_query.return_value = {"deleted": 5, "failures": []}
+
+    result = delete_stale("my-svc", run_start, client=mock_client)
+
+    call_args = mock_client.delete_by_query.call_args
+    index_arg = call_args.kwargs.get("index") or call_args.args[0]
+    body = call_args.kwargs.get("body") or call_args.args[1]
+
+    assert index_arg == INDEX_NAME
+    must = body["query"]["bool"]["must"]
+    term_clause = next(c for c in must if "term" in c)
+    range_clause = next(c for c in must if "range" in c)
+    assert term_clause["term"]["service_nickname"] == "my-svc"
+    assert range_clause["range"]["crawled_at"]["lt"] == run_start
+    assert result["deleted"] == 5
     assert result["failures"] == []
 
 
