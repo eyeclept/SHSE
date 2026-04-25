@@ -184,8 +184,10 @@ def test_index_doc(mock_client):
     Details:
         Verifies index_document splits text into 800-word chunks, calls
         client.index once per chunk, and stores vectorized=false and
-        embedding=null on every chunk.
+        embedding=null on every chunk. client.get raises NotFoundError to
+        simulate new documents (no prior version to compare hashes against).
     """
+    mock_client.get.side_effect = NotFoundError(404, "not found", {})
     mock_client.index.return_value = {"result": "created", "_id": "abc"}
 
     words = ["token"] * 1600
@@ -227,7 +229,9 @@ def test_deferred_index(mock_client):
         Verifies that when embeddings=None (LLM API unavailable), index_document
         stores every chunk with vectorized=false and embedding=null and still
         calls client.index for each chunk without raising an exception.
+        client.get raises NotFoundError to simulate new documents.
     """
+    mock_client.get.side_effect = NotFoundError(404, "not found", {})
     mock_client.index.return_value = {"result": "created", "_id": "xyz"}
 
     words = ["word"] * 800
@@ -262,7 +266,9 @@ def test_index_doc_with_embeddings(mock_client):
     Details:
         Verifies that when embeddings are supplied, each chunk is stored with
         vectorized=true and the correct embedding vector.
+        client.get raises NotFoundError to simulate new documents.
     """
+    mock_client.get.side_effect = NotFoundError(404, "not found", {})
     mock_client.index.return_value = {"result": "created", "_id": "xyz"}
 
     fake_embedding = [0.1] * EMBEDDING_DIM

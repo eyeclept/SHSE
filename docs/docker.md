@@ -13,6 +13,24 @@
 | `celery_beat` | `Dockerfile.celery` | Scheduled task dispatcher |
 | `nginx` | `nginx:1.27-alpine` | TLS termination and reverse proxy |
 
+### Test-only services
+
+The following services are gated behind a Docker Compose profile and are **not started** during a normal `docker compose up`. Start them explicitly when needed.
+
+| Service | Profile | Image | Purpose |
+|---|---|---|---|
+| `kiwix` | `test` | `ghcr.io/kiwix/kiwix-serve:latest` | Wikipedia ZIM server for end-to-end crawl testing |
+
+```bash
+# Start the Kiwix test server
+docker compose --profile test up kiwix -d
+
+# Stop it
+docker compose --profile test down kiwix
+```
+
+The Kiwix server serves `wikipedia_en_100_nopic_2026-04.zim` (100 Wikipedia articles) at `http://localhost:8082`. Add it as a `type: service` crawler target to test the full indexing pipeline.
+
 ## Health Check Configuration
 
 Each service with a standard probe endpoint has a `healthcheck` block.

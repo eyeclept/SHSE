@@ -83,46 +83,46 @@
   "epic_7_llm_api": {
     "description": "Embedding calls, generative summary, fallback when unreachable",
     "items": {
-      "get_embedding": { "passes": false },
-      "generate_summary": { "passes": false },
-      "fallback_on_unreachable": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_llm_md": { "passes": false }
+      "get_embedding": { "passes": true },
+      "generate_summary": { "passes": true },
+      "fallback_on_unreachable": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_llm_md": { "passes": true }
     }
   },
   "epic_8_yaml_config": {
     "description": "YAML parser, defaults inheritance, persist to DB, Celery Beat entries",
     "items": {
-      "defaults_inheritance": { "passes": false },
-      "service_target_parsing": { "passes": false },
-      "network_target_parsing": { "passes": false },
-      "schedule_parsing": { "passes": false },
-      "persist_targets": { "passes": false },
-      "celery_beat_entries": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_config_md": { "passes": false }
+      "defaults_inheritance": { "passes": true },
+      "service_target_parsing": { "passes": true },
+      "network_target_parsing": { "passes": true },
+      "schedule_parsing": { "passes": true },
+      "persist_targets": { "passes": true },
+      "celery_beat_entries": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_config_md": { "passes": true }
     }
   },
   "epic_9_celery_tasks": {
     "description": "crawl_target, crawl_all, reindex, vectorize_pending, CrawlJob lifecycle",
     "items": {
-      "crawl_target_task": { "passes": false },
-      "crawl_all_task": { "passes": false },
-      "reindex_target_task": { "passes": false },
-      "reindex_all_task": { "passes": false },
-      "vectorize_pending_task": { "passes": false },
-      "scheduled_crawl_task": { "passes": false },
-      "crawl_job_lifecycle": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_tasks_md": { "passes": false }
+      "crawl_target_task": { "passes": true },
+      "crawl_all_task": { "passes": true },
+      "reindex_target_task": { "passes": true },
+      "reindex_all_task": { "passes": true },
+      "vectorize_pending_task": { "passes": true },
+      "scheduled_crawl_task": { "passes": true },
+      "crawl_job_lifecycle": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_tasks_md": { "passes": true }
     }
   },
   "epic_10_search_ui": {
     "description": "Search, login, register, settings, history pages",
     "items": {
-      "base_html": { "passes": false },
-      "search_html": { "passes": false },
-      "search_bm25_route": { "passes": false },
+      "base_html": { "passes": true },
+      "search_html": { "passes": true },
+      "search_bm25_route": { "passes": true },
       "ai_summary_card": { "passes": false },
       "ai_summary_llm": { "passes": false },
       "login_html": { "passes": false },

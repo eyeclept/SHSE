@@ -1,0 +1,22 @@
+{#
+  Top bar partial — sticky header used on every non-home page.
+  Expects the template to have done: {% import "_icons.html" as icon %}
+#}
+<header class="shse-topbar"
+  style="display:flex; align-items:center; gap:16px;
+         padding:12px 24px;
+         border-bottom:1px solid var(--shse-border);
+         background:var(--shse-surface);
+         position:sticky; top:0; z-index:10;">
+  <a href="{{ url_for('search.home') }}"
+     style="display:inline-flex; text-decoration:none; border:none; background:none; padding:0;"
+     aria-label="SHSE home">
+    {{ icon.logo(22) }}
+  </a>
+
+  {% block topbar_center %}{% endblock %}
+
+  <div style="flex:1;"></div>
+
+  {% include "_hamburger.html" %}
+</header>

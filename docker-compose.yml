@@ -153,6 +153,25 @@ services:
       flask:
         condition: service_healthy
 
+  # Test-only service. Not started during normal stack boot.
+  # Start with: docker compose --profile test up kiwix -d
+  kiwix:
+    image: ghcr.io/kiwix/kiwix-serve:latest
+    container_name: kiwix
+    restart: unless-stopped
+    profiles: ["test"]
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./wikipedia_en_100_nopic_2026-04.zim:/data/wikipedia_en_100_nopic_2026-04.zim:ro
+    command: wikipedia_en_100_nopic_2026-04.zim
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
   nutch:
     image: apache/nutch:latest
     container_name: nutch

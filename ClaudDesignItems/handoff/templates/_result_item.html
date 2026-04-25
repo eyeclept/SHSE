@@ -1,0 +1,48 @@
+{#
+  Single result row partial.
+  Porting reference: src/screens/results.jsx <ShseResultItem>
+
+  Loop-local:
+    r = { id, title, url, service, service_label, port, crawled_at,
+          content_type, snippet_html, chunks, vectorized }
+
+  snippet_html MUST be pre-highlighted by the server — wrap matched
+  terms with <strong class="shse-hit"> so styling lives in tokens.css.
+  Never pass raw user input through {{ r.snippet_html | safe }} — the
+  server-side highlighter must escape first then inject the tags.
+#}
+<li>
+  <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+    <div aria-hidden="true"
+         style="width:18px; height:18px; border-radius:4px;
+                background:var(--shse-surface-2); border:1px solid var(--shse-border);
+                display:grid; place-items:center;
+                font-size:10px; font-weight:700; color:var(--shse-text-muted);">
+      {{ r.service[0] | upper }}
+    </div>
+    <span style="font-size:13px; color:var(--shse-text-muted);">{{ r.service_label }}</span>
+    <span style="font-size:12px; color:var(--shse-text-faint);">· :{{ r.port }}</span>
+    {% if not r.vectorized %}
+      <span class="shse-pill shse-pill-warn" style="font-size:10px; padding:1px 6px;"
+            title="This document hasn't been embedded yet — semantic search skips it.">
+        BM25 only
+      </span>
+    {% endif %}
+  </div>
+
+  <a href="{{ r.url }}" rel="noopener"
+     style="font-size:18px; font-weight:500; display:block; margin-bottom:4px;">
+    {{ r.title }}
+  </a>
+
+  <p style="margin:0; font-size:14px; color:var(--shse-text-muted); line-height:1.55;">
+    {{ r.snippet_html | safe }}
+  </p>
+
+  <div style="display:flex; gap:12px; margin-top:6px;
+              font-size:12px; color:var(--shse-text-faint);">
+    <span>crawled {{ r.crawled_at }}</span>
+    <span>· {{ r.chunks }} chunks</span>
+    <span>· {{ r.content_type }}</span>
+  </div>
+</li>

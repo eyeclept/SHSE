@@ -5,9 +5,10 @@
 | Method | Path | Blueprint | Auth required | Description |
 |---|---|---|---|---|
 | GET / POST | `/login` | auth | No | Local username/password login |
-| GET | `/logout` | auth | No | Clear session and redirect to login |
+| GET / POST | `/logout` | auth | No | Clear session and redirect to login |
 | GET / POST | `/register` | auth | No | Create account with role `user` |
 | GET / POST | `/setup` | auth | No | First-run admin creation (redirects if admin exists) |
+| POST | `/theme` | auth | No | Toggle session theme between light and dark |
 | GET | `/sso/login` | auth | No | Initiate OIDC SSO flow (requires `SSO_ENABLED=true`) |
 | GET | `/sso/callback` | auth | No | OIDC callback — exchange code, create/sync user |
 | GET / POST | `/admin/*` | admin | admin role | All admin routes enforced by `@admin_required` |
@@ -59,7 +60,7 @@ SHSE has two roles stored in `users.role` (ENUM `'admin'`, `'user'`):
 
 ### `@admin_required` decorator
 
-Defined in `flask_app/routes/admin.py`. Applied to all nine routes in the admin blueprint.
+Defined in `flask_app/routes/admin.py`. Applied to all routes in the admin blueprint.
 
 - Unauthenticated request → 302 redirect to `/login`
 - Authenticated non-admin → 403 Forbidden

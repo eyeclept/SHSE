@@ -1,0 +1,129 @@
+{#
+  Hamburger menu — avatar + popover with navigation and theme toggle.
+  Porting reference: src/shell.jsx <ShseHamburger>.
+
+  Pure HTML + a tiny click handler. No HTMX needed — the menu just
+  toggles a data-open attribute. Theme toggle and sign-out POST to
+  their routes so the server can mutate session state.
+
+  Context:
+    current_user.username, current_user.role, current_user.is_authenticated
+    session.theme ('light' | 'dark')
+
+  Prod wiring (Sprint 1):
+    POST /theme    → flips session['theme'], 204 No Content (HTMX)
+    POST /logout   → Flask-Login logout_user(), redirect('/login')
+#}
+{% set u = current_user if current_user and current_user.is_authenticated else None %}
+{% set initial = (u.username[0] if u else 'g') | upper %}
+{% set is_dark = session.get('theme') == 'dark' %}
+
+<div class="shse-hamburger" data-open="false"
+     style="position:relative;"
+     x-data="{ open: false }">
+
+  <button type="button"
+          class="shse-btn shse-btn-ghost shse-hamburger-btn"
+          aria-label="Menu" aria-expanded="false"
+          onclick="(function(b){
+            var r = b.closest('.shse-hamburger');
+            var open = r.getAttribute('data-open') === 'true';
+            r.setAttribute('data-open', (!open).toString());
+            b.setAttribute('aria-expanded', (!open).toString());
+          })(this)"
+          style="padding:6px 8px 6px 10px; gap:8px;">
+    <span aria-hidden="true"
+          style="width:26px; height:26px; border-radius:50%;
+                 background:var(--shse-accent); color:var(--shse-accent-fg);
+                 display:grid; place-items:center;
+                 font-size:12px; font-weight:600;">{{ initial }}</span>
+    {{ icon.menu(16) }}
+  </button>
+
+  <div class="shse-hamburger-menu" role="menu"
+       style="position:absolute; right:0; top:calc(100% + 6px); min-width:240px;
+              background:var(--shse-surface); border:1px solid var(--shse-border);
+              border-radius:12px; box-shadow:var(--shse-shadow-md);
+              padding:6px; z-index:60; display:none;">
+    <div style="padding:10px 12px 6px;">
+      <div style="font-size:13px; font-weight:600;">{{ u.username if u else 'guest' }}</div>
+      <div style="font-size:11px; color:var(--shse-text-faint); margin-top:2px;">
+        {% if u %}Signed in · {{ u.role }}{% else %}Not signed in{% endif %}
+      </div>
+    </div>
+    <div style="height:1px; background:var(--shse-border); margin:4px 0;"></div>
+
+    {% macro _mi(href, label, svg, active=False) -%}
+      <a href="{{ href }}" role="menuitem" class="shse-menu-item"
+         data-active="{{ 'true' if active else 'false' }}"
+         style="display:flex; align-items:center; gap:10px; padding:8px 10px;
+                border-radius:6px; font-size:13px;
+                color:{{ 'var(--shse-accent)' if active else 'var(--shse-text)' }};
+                background:{{ 'var(--shse-accent-soft)' if active else 'transparent' }};
+                font-weight:{{ 600 if active else 400 }}; text-decoration:none;">
+        <span style="color:{{ 'var(--shse-accent)' if active else 'var(--shse-text-muted)' }}; display:flex;">{{ svg }}</span>
+        {{ label }}
+      </a>
+    {%- endmacro %}
+
+    {{ _mi(url_for('home'),      'Search',         icon.search(14),  request.endpoint == 'home') }}
+    {{ _mi(url_for('history'),   'Search history', icon.history(14), request.endpoint == 'history') }}
+    {{ _mi(url_for('settings'),  'Settings',       icon.gear(14),    request.endpoint == 'settings') }}
+    {% if u and u.role == 'admin' %}
+      {{ _mi(url_for('admin_overview'), 'Admin',   icon.shield(14),  request.endpoint.startswith('admin_')) }}
+    {% endif %}
+
+    <div style="height:1px; background:var(--shse-border); margin:4px 0;"></div>
+
+    {# Theme toggle — POSTs to /theme; server flips session and returns redirect. #}
+    <form method="post" action="{{ url_for('toggle_theme') }}" style="margin:0;">
+      <button type="submit" role="menuitem" class="shse-menu-item"
+              style="display:flex; align-items:center; gap:10px; width:100%;
+                     padding:8px 10px; background:transparent; border:none;
+                     border-radius:6px; font-size:13px; color:var(--shse-text);
+                     text-align:left; cursor:pointer;">
+        <span style="color:var(--shse-text-muted); display:flex;">
+          {{ icon.sun(14) if is_dark else icon.moon(14) }}
+        </span>
+        {{ 'Light theme' if is_dark else 'Dark theme' }}
+      </button>
+    </form>
+
+    {% if u %}
+    <form method="post" action="{{ url_for('logout') }}" style="margin:0;">
+      <button type="submit" role="menuitem" class="shse-menu-item"
+              style="display:flex; align-items:center; gap:10px; width:100%;
+                     padding:8px 10px; background:transparent; border:none;
+                     border-radius:6px; font-size:13px; color:var(--shse-text);
+                     text-align:left; cursor:pointer;">
+        <span style="color:var(--shse-text-muted); display:flex;">{{ icon.logout(14) }}</span>
+        Sign out
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+  .shse-hamburger[data-open="true"] .shse-hamburger-menu { display:block; }
+  .shse-hamburger[data-open="true"] .shse-hamburger-btn  { background:var(--shse-surface-2); }
+  .shse-menu-item:hover[data-active="false"] { background:var(--shse-surface-2); }
+  .shse-menu-item:hover                     { text-decoration:none; }
+</style>
+
+<script>
+  /* Click-outside dismiss. Idempotent — safe on every include. */
+  (function () {
+    if (window.__shseHamburgerBound) return;
+    window.__shseHamburgerBound = true;
+    document.addEventListener('mousedown', function (e) {
+      document.querySelectorAll('.shse-hamburger[data-open="true"]').forEach(function (h) {
+        if (!h.contains(e.target)) {
+          h.setAttribute('data-open', 'false');
+          var btn = h.querySelector('.shse-hamburger-btn');
+          if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    });
+  })();
+</script>

@@ -1,0 +1,195 @@
+/* SHSE design tokens — ported verbatim from src/theme.jsx
+ * Apply via [data-theme="light"] / [data-theme="dark"] on a wrapper
+ * element (typically <html> or <body>). Everything else in the app
+ * references these vars; swap data-theme to toggle.
+ */
+
+[data-theme="light"] {
+  --shse-bg:            #f6f7f4;
+  --shse-surface:       #ffffff;
+  --shse-surface-2:     #eef1ec;
+  --shse-surface-3:     #e3e8e1;
+  --shse-border:        #dce2d9;
+  --shse-border-strong: #c2ccbd;
+  --shse-text:          #121813;
+  --shse-text-muted:    #4d5a4f;
+  --shse-text-faint:    #7f8d82;
+  --shse-link:          #0c6a3a;
+  --shse-link-visited:  #4b3b8a;
+  --shse-accent:        #0f7a3f;
+  --shse-accent-soft:   #dff1e5;
+  --shse-accent-fg:     #ffffff;
+  --shse-success:       #0f7a3f;
+  --shse-success-soft:  #dff1e5;
+  --shse-warning:       #a05a00;
+  --shse-warning-soft:  #fdecd0;
+  --shse-danger:        #b53129;
+  --shse-danger-soft:   #fbe1df;
+  --shse-focus-ring:    rgba(15,122,63,0.32);
+  --shse-shadow-sm:     0 1px 2px rgba(15,20,25,0.04), 0 1px 1px rgba(15,20,25,0.03);
+  --shse-shadow-md:     0 2px 6px rgba(15,20,25,0.06), 0 8px 24px rgba(15,20,25,0.05);
+  --shse-shadow-lg:     0 4px 12px rgba(15,20,25,0.08), 0 16px 48px rgba(15,20,25,0.08);
+}
+
+[data-theme="dark"] {
+  --shse-bg:            #0d1411;
+  --shse-surface:       #121a16;
+  --shse-surface-2:     #18221d;
+  --shse-surface-3:     #1f2a24;
+  --shse-border:        #253029;
+  --shse-border-strong: #36443c;
+  --shse-text:          #e4ebe5;
+  --shse-text-muted:    #95a69a;
+  --shse-text-faint:    #6a7970;
+  --shse-link:          #6fd89a;
+  --shse-link-visited:  #b3a6e8;
+  --shse-accent:        #5bc98a;
+  --shse-accent-soft:   #15301f;
+  --shse-accent-fg:     #0a1a10;
+  --shse-success:       #5bc98a;
+  --shse-success-soft:  #15301f;
+  --shse-warning:       #e8b766;
+  --shse-warning-soft:  #2a2110;
+  --shse-danger:        #e77264;
+  --shse-danger-soft:   #2a1715;
+  --shse-focus-ring:    rgba(91,201,138,0.38);
+  --shse-shadow-sm:     0 1px 2px rgba(0,0,0,0.4);
+  --shse-shadow-md:     0 2px 6px rgba(0,0,0,0.45), 0 8px 24px rgba(0,0,0,0.35);
+  --shse-shadow-lg:     0 4px 12px rgba(0,0,0,0.5), 0 16px 48px rgba(0,0,0,0.45);
+}
+
+/* ── Base styles ──────────────────────────────────────────────────── */
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--shse-bg);
+  color: var(--shse-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+button { font-family: inherit; cursor: pointer; }
+input, textarea, select { font-family: inherit; }
+a { color: var(--shse-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.shse-serif { font-family: 'Instrument Serif', 'Times New Roman', serif; font-weight: 400; letter-spacing: -0.01em; }
+.shse-mono  { font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace; }
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+
+.shse-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 8px;
+  border: 1px solid var(--shse-border);
+  background: var(--shse-surface); color: var(--shse-text);
+  font-size: 14px; font-weight: 500;
+  transition: background .12s, border-color .12s, box-shadow .12s, transform .06s;
+}
+.shse-btn:hover { background: var(--shse-surface-2); border-color: var(--shse-border-strong); }
+.shse-btn:active { transform: translateY(1px); }
+.shse-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.shse-btn-primary {
+  background: var(--shse-accent); color: var(--shse-accent-fg);
+  border-color: transparent;
+}
+.shse-btn-primary:hover { background: color-mix(in oklab, var(--shse-accent) 88%, black); border-color: transparent; }
+.shse-btn-ghost { background: transparent; border-color: transparent; }
+.shse-btn-ghost:hover { background: var(--shse-surface-2); }
+.shse-btn-danger {
+  background: var(--shse-danger); color: white; border-color: transparent;
+}
+.shse-btn-danger:hover { background: color-mix(in oklab, var(--shse-danger) 90%, black); }
+
+/* ── Pills / badges ───────────────────────────────────────────────── */
+
+.shse-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 500; line-height: 1.4;
+  background: var(--shse-surface-2); color: var(--shse-text-muted);
+  border: 1px solid var(--shse-border);
+}
+.shse-pill-ok     { background: var(--shse-success-soft); color: var(--shse-success); border-color: transparent; }
+.shse-pill-warn   { background: var(--shse-warning-soft); color: var(--shse-warning); border-color: transparent; }
+.shse-pill-danger { background: var(--shse-danger-soft);  color: var(--shse-danger);  border-color: transparent; }
+.shse-pill-accent { background: var(--shse-accent-soft);  color: var(--shse-accent);  border-color: transparent; }
+
+/* ── Inputs ───────────────────────────────────────────────────────── */
+
+.shse-input {
+  width: 100%; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--shse-border);
+  background: var(--shse-surface); color: var(--shse-text);
+  font-size: 14px;
+  transition: border-color .12s, box-shadow .12s;
+}
+.shse-input:focus {
+  outline: none; border-color: var(--shse-accent);
+  box-shadow: 0 0 0 3px var(--shse-focus-ring);
+}
+.shse-input::placeholder { color: var(--shse-text-faint); }
+
+/* ── Cards ────────────────────────────────────────────────────────── */
+
+.shse-card {
+  background: var(--shse-surface);
+  border: 1px solid var(--shse-border);
+  border-radius: 12px;
+}
+
+/* ── Status dots ──────────────────────────────────────────────────── */
+
+.shse-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--shse-text-faint);
+}
+.shse-dot-ok     { background: var(--shse-success); }
+.shse-dot-warn   { background: var(--shse-warning); }
+.shse-dot-danger { background: var(--shse-danger); }
+.shse-dot-pulse  { animation: shse-pulse 1.6s ease-in-out infinite; }
+@keyframes shse-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .45; transform: scale(.8); }
+}
+
+/* ── Scrollbars ───────────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--shse-border-strong); border-radius: 999px;
+  border: 2px solid transparent; background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--shse-text-faint); background-clip: content-box;
+  border: 2px solid transparent;
+}
+
+/* ── Tabs (results page) ──────────────────────────────────────────── */
+
+.shse-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 2px; margin-right: 22px;
+  font-size: 14px; color: var(--shse-text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer; transition: color .12s;
+  text-decoration: none;
+}
+.shse-tab:hover { color: var(--shse-text); text-decoration: none; }
+.shse-tab[aria-selected="true"] {
+  color: var(--shse-accent); border-bottom-color: var(--shse-accent); font-weight: 500;
+}
+
+/* ── Keycap hint ──────────────────────────────────────────────────── */
+
+.shse-kbd {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  padding: 1px 5px; border-radius: 4px;
+  background: var(--shse-surface-2); border: 1px solid var(--shse-border);
+  color: var(--shse-text-muted);
+}

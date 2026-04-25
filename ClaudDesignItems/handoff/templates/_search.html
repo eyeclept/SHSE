@@ -1,0 +1,74 @@
+{#
+  Search box partial.
+  Porting reference: src/shell.jsx <ShseSearchBox>.
+
+  Params:
+    size   — 'sm' | 'md' | 'lg' (defaults to 'md')
+    q      — current query string (optional)
+    autofocus — bool (defaults to false)
+
+  Usage:
+    {% with size='lg', q='', autofocus=True %}{% include "_search.html" %}{% endwith %}
+#}
+{% set size = size | default('md') %}
+{% set q = q | default('') %}
+{% set autofocus = autofocus | default(false) %}
+
+{% set _heights  = {'sm': 42, 'md': 48, 'lg': 58} %}
+{% set _fontpx   = {'sm': 14, 'md': 15, 'lg': 17} %}
+{% set _iconpx   = {'sm': 16, 'md': 16, 'lg': 20} %}
+{% set h   = _heights[size] %}
+{% set fs  = _fontpx[size] %}
+{% set ips = _iconpx[size] %}
+
+<form method="get" action="{{ url_for('search') }}" class="shse-searchbox"
+      style="display:flex; align-items:center; height:{{ h }}px;
+             background:var(--shse-surface);
+             border:1px solid var(--shse-border);
+             border-radius:{{ (h / 2)|round|int }}px;
+             padding:0 {{ (h / 4)|round|int }}px 0 {{ (h / 3)|round|int }}px;
+             box-shadow:var(--shse-shadow-sm);
+             transition:border-color .12s, box-shadow .12s;">
+  <span style="color:var(--shse-text-faint); display:flex; flex-shrink:0;">{{ icon.search(ips) }}</span>
+  <input type="search" name="q" value="{{ q }}"
+         {% if autofocus %}autofocus{% endif %}
+         autocomplete="off"
+         placeholder="Search your homelab…"
+         aria-label="Search query"
+         style="flex:1; border:none; outline:none; background:transparent;
+                color:var(--shse-text); padding:0 12px;
+                font-size:{{ fs }}px; height:100%;">
+  {% if q %}
+    <a href="{{ url_for(request.endpoint or 'home') }}"
+       class="shse-btn shse-btn-ghost"
+       style="padding:6px; border-radius:999px;" aria-label="Clear query">
+      {{ icon.close(14) }}
+    </a>
+  {% endif %}
+  <button type="submit" class="shse-btn shse-btn-primary"
+          style="height:{{ h - 10 }}px;
+                 border-radius:{{ ((h - 10) / 2)|round|int }}px;
+                 padding:0 {{ 18 if size == 'lg' else 14 }}px;">
+    {{ icon.search(14) }}
+  </button>
+</form>
+
+<script>
+  /* Focus-ring glow on the surrounding shell. Idempotent. */
+  (function () {
+    if (window.__shseSearchBound) return;
+    window.__shseSearchBound = true;
+    document.addEventListener('focusin', function (e) {
+      var f = e.target.closest && e.target.closest('.shse-searchbox');
+      if (!f) return;
+      f.style.borderColor = 'var(--shse-accent)';
+      f.style.boxShadow = '0 0 0 4px var(--shse-focus-ring)';
+    });
+    document.addEventListener('focusout', function (e) {
+      var f = e.target.closest && e.target.closest('.shse-searchbox');
+      if (!f) return;
+      f.style.borderColor = 'var(--shse-border)';
+      f.style.boxShadow = 'var(--shse-shadow-sm)';
+    });
+  })();
+</script>

@@ -16,7 +16,11 @@ By default the server listens on `localhost:8081`. To expose it to other contain
 /root/nutch_source/runtime/local/bin/nutch startserver -host 0.0.0.0 -port 8081
 ```
 
-> **Note:** The container currently runs `tail -f /dev/null` (keeps the container alive without starting the HTTP server). The REST server must be started explicitly via `docker exec nutch ...` or by changing the `command` in `docker-compose.yml`. This is intentional for the current dev phase; Epic 9 Celery tasks will start crawls via this server.
+> **Note:** The container runs `tail -f /dev/null` to stay alive without auto-starting the HTTP server. Start the REST server before triggering crawls:
+> ```bash
+> docker exec nutch /root/nutch_source/runtime/local/bin/nutch startserver -host 0.0.0.0 -port 8081
+> ```
+> `flask_app/services/nutch.py` connects to this server when dispatching crawl tasks.
 
 ---
 
@@ -133,9 +137,13 @@ Nutch performs outbound HTTP/HTTPS requests to crawl targets. For targets with s
 
 The `nutch/nutch-site.xml` file in this repo is the override configuration template. To disable TLS verification for a crawl:
 
-1. Set `http.tls.certificates.insecure` to `true` in `nutch-site.xml` (or pass it as a config property via `PUT /config/{configId}/{propertyId}`).
-2. Mount the updated `nutch-site.xml` into the container at `/root/nutch_source/runtime/local/conf/nutch-site.xml`.
+1. The property `http.tls.certificates.check` controls TLS verification in Nutch 1.23. Set it to `false` via the config API before triggering a crawl:
+   ```
+   PUT /config/default/http.tls.certificates.check
+   Body: false   (Content-Type: text/plain)
+   ```
+2. Alternatively, set the property in `nutch/nutch-site.xml` and mount it into the container at `/root/nutch_source/runtime/local/conf/nutch-site.xml`.
 
-This is applied per-crawl by Epic 6 Step 4 (`flask_app/services/nutch.py` sets the property via the config API before triggering the crawl when `tls_verify=false` is set on a target).
+`flask_app/services/nutch.py` applies this override automatically at the start of `trigger_crawl()` when the target has `tls_verify=false`. The override is scoped to the `default` config and persists for the lifetime of the Nutch server process.
 
-> **Security:** Only disable TLS verification for specific internal targets. The `tls_verify` field on `crawler_targets` rows controls this per-target. A global override (`INTERNAL_TLS_VERIFY=false` env var) is handled in Epic 13.
+> **Security:** Only disable TLS verification for specific internal targets with known self-signed certificates. The `tls_verify` field on `crawler_targets` rows controls this per-target.

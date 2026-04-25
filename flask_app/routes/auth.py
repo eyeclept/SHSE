@@ -34,12 +34,12 @@ def login():
         ).scalar_one_or_none()
         if user and user.check_password(password):
             login_user(user)
-            return redirect(url_for("search.index"))
+            return redirect(url_for("search.home"))
         return render_template("login.html", error="Invalid credentials"), 401
     return render_template("login.html")
 
 
-@auth_bp.route("/logout")
+@auth_bp.route("/logout", methods=["GET", "POST"])
 def logout():
     """
     Input: None
@@ -162,7 +162,21 @@ def sso_callback():
         user.role = role
     db.session.commit()
     login_user(user)
-    return redirect(url_for("search.index"))
+    return redirect(url_for("search.home"))
+
+
+@auth_bp.route("/theme", methods=["POST"])
+def toggle_theme():
+    """
+    Input: None (reads session['theme'])
+    Output: redirect back to referring page
+    Details:
+        Flips the session theme between light and dark. Called by the hamburger menu.
+    """
+    from flask import session
+    session["theme"] = "dark" if session.get("theme") != "dark" else "light"
+    referrer = request.referrer or url_for("search.home")
+    return redirect(referrer)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,8 @@ Email: eyeclept@pm.me
 
 Description:
     CrawlerTarget model. Stores parsed crawler target configuration.
-    Targets are either type 'service' (specific host) or 'network' (subnet scan).
+    Target types: service (Nutch crawl), network (subnet scan), oai-pmh (Metha
+    harvest), feed (RSS/Atom/ActivityPub), api-push (custom adapter).
 """
 # Imports
 from flask_app import db
@@ -25,7 +26,10 @@ class CrawlerTarget(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nickname = db.Column(db.String(128))
-    target_type = db.Column(db.Enum("service", "network"), nullable=False)
+    target_type = db.Column(
+        db.Enum("service", "network", "oai-pmh", "feed", "api-push"),
+        nullable=False,
+    )
     url = db.Column(db.String(512))
     ip = db.Column(db.String(64))
     network = db.Column(db.String(64))
@@ -33,6 +37,9 @@ class CrawlerTarget(db.Model):
     route = db.Column(db.String(256), default="/")
     service = db.Column(db.String(32), default="http")
     tls_verify = db.Column(db.Boolean, default=True)
+    endpoint = db.Column(db.String(256))   # oai-pmh OAI endpoint path
+    feed_path = db.Column(db.String(256))  # feed RSS/Atom path
+    adapter = db.Column(db.String(256))    # api-push adapter script name
     schedule_yaml = db.Column(db.Text)
     yaml_source = db.Column(db.Text)
 

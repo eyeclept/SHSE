@@ -147,5 +147,17 @@ def crawler_config():
     pass
 
 
+@admin_bp.route("/index")
+@admin_required
+def index_ops():
+    """
+    Input: None
+    Output: rendered index operations page (stub)
+    Details:
+        Shows vectorize and reindex controls. Template pending Claude Design.
+    """
+    pass
+
+
 if __name__ == "__main__":
     pass

@@ -1,0 +1,256 @@
+{#
+  Results page — classic two-column (BM25 primary, semantic rail).
+  Porting reference: src/screens/results.jsx
+
+  Route contract (../app.py):
+    GET /search?q=<query>&tab=<all|docs|web|code>&page=<n>
+      → renders this; see context below.
+
+  Context:
+    q             str                 current query (may be empty)
+    tab           str                 one of 'all'|'docs'|'web'|'code'
+    results       list[Result]        BM25 hits for current tab+page
+    total         int                 result count for the tab
+    took_ms       int                 OpenSearch `took` value
+    page          int                 1-indexed page number
+    page_count    int                 total pages
+    tab_counts    dict[str, int]      {'all':N, 'docs':N, ...}
+    related       list[str]           query suggestions (unused in classic)
+    vector_hits   list[VectorHit]     top semantic matches for right rail
+    keyword_chips list[str]           AI-suggested keywords (may be [])
+    sources       list[{name, n}]     'Sources hit' facet
+    ai_summary    {html, sources}|None   None = AI summary disabled
+    show_bm25_warning  bool           true when vector search unavailable
+
+  Result shape:
+    { id, title, url, service, service_label, port, crawled_at,
+      content_type, snippet_html, chunks, vectorized }
+    - snippet_html is pre-highlighted server-side; see results macro.
+#}
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+
+{% block title %}{{ q or 'Search' }}{% endblock %}
+
+{% block chrome %}
+  {#
+    Results has its own minimal chrome — search box only, no full top bar
+    and no logo on this row (matches the prototype exactly).
+
+    The hamburger floats top-right so users can still navigate; logo moves
+    into the search row's top-left slot in a future redesign.
+  #}
+  <div style="display:flex; align-items:center; gap:22px;
+              padding:16px 28px 12px;
+              border-bottom:1px solid var(--shse-border);
+              background:var(--shse-surface);">
+    <a href="{{ url_for('home') }}" style="flex-shrink:0;" aria-label="SHSE home">
+      {{ icon.glyph(28) }}
+    </a>
+    <div style="flex:0 1 640px;">
+      {% with size='sm', q=q, autofocus=false %}{% include "_search.html" %}{% endwith %}
+    </div>
+    <div style="flex:1;"></div>
+    {% include "_hamburger.html" %}
+  </div>
+
+  {# Tab strip + filter/sort controls #}
+  <div style="display:flex; align-items:center; gap:6px;
+              padding:0 28px;
+              border-bottom:1px solid var(--shse-border);
+              background:var(--shse-surface);">
+    {% for t in [('all','All'),('docs','Documentation'),('web','Web UIs'),('code','Code')] %}
+      <a href="{{ url_for('search', q=q, tab=t[0]) }}"
+         role="tab" aria-selected="{{ 'true' if tab == t[0] else 'false' }}"
+         class="shse-tab">
+        {{ t[1] }}
+        <span style="font-size:11px; color:var(--shse-text-faint);">{{ tab_counts.get(t[0], 0) }}</span>
+      </a>
+    {% endfor %}
+    <div style="flex:1;"></div>
+    <button class="shse-btn shse-btn-ghost" style="font-size:13px;" type="button">
+      {{ icon.filter(14) }} Filters
+    </button>
+    <button class="shse-btn shse-btn-ghost" style="font-size:13px;" type="button">
+      {{ icon.sort(14) }} Relevance
+    </button>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div style="display:grid; grid-template-columns:1fr 320px; gap:40px;
+            max-width:1180px; margin:0 auto;
+            padding:22px 28px 80px;">
+
+  {# ══════ Primary column ══════════════════════════════════════════ #}
+  <div>
+    <div style="font-size:12px; color:var(--shse-text-faint); margin-bottom:14px;">
+      About {{ "{:,}".format(total) }} results · {{ took_ms }}ms
+    </div>
+
+    {% if show_bm25_warning %}
+      <div class="shse-card" style="padding:10px 14px; margin-bottom:14px;
+                                    border-color:var(--shse-warning);
+                                    background:var(--shse-warning-soft);">
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+          <span style="color:var(--shse-warning); flex-shrink:0; margin-top:2px;">{{ icon.alert(14) }}</span>
+          <div style="font-size:12.5px; color:var(--shse-text-muted);">
+            <strong style="color:var(--shse-warning);">Keyword-only results.</strong>
+            Vector search is unavailable — semantic matches are hidden.
+            <a href="{{ url_for('admin_index_ops') }}">Check index health →</a>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if not results %}
+      {# ── Empty state ───────────────────────────────────────────── #}
+      <div style="padding:60px 20px; text-align:center;">
+        <div style="display:inline-flex; width:56px; height:56px;
+                    border-radius:14px; background:var(--shse-surface-2);
+                    align-items:center; justify-content:center;
+                    color:var(--shse-text-faint); margin-bottom:16px;">
+          {{ icon.search(26) }}
+        </div>
+        <h2 class="shse-serif" style="margin:0 0 6px; font-size:24px; font-weight:400;">
+          No results for "{{ q }}"
+        </h2>
+        <p style="margin:0 auto; max-width:420px; font-size:14px; color:var(--shse-text-muted);">
+          Try different keywords, remove filters, or check whether the service
+          has been crawled recently.
+        </p>
+        <div style="margin-top:20px; display:flex; gap:10px; justify-content:center;">
+          <a href="{{ url_for('home') }}" class="shse-btn">Start over</a>
+          <a href="{{ url_for('admin_targets') }}" class="shse-btn shse-btn-ghost">
+            {{ icon.server(14) }} Check crawl targets
+          </a>
+        </div>
+      </div>
+    {% else %}
+      <ul style="list-style:none; padding:0; margin:0;
+                 display:flex; flex-direction:column; gap:22px;">
+        {% for r in results %}
+          {% include "_result_item.html" %}
+        {% endfor %}
+      </ul>
+
+      {# ── Pagination ───────────────────────────────────────────── #}
+      {% if page_count > 1 %}
+      <nav style="display:flex; justify-content:center; margin-top:40px; gap:6px;"
+           aria-label="Results pages">
+        {% for n in range(1, page_count + 1) %}
+          {% if n <= 5 %}
+            <a href="{{ url_for('search', q=q, tab=tab, page=n) }}"
+               class="shse-btn {{ 'shse-btn-primary' if n == page else 'shse-btn-ghost' }}"
+               style="min-width:36px; justify-content:center;"
+               aria-current="{{ 'page' if n == page else '' }}">{{ n }}</a>
+          {% endif %}
+        {% endfor %}
+        {% if page < page_count %}
+          <a href="{{ url_for('search', q=q, tab=tab, page=page+1) }}"
+             class="shse-btn shse-btn-ghost" aria-label="Next page">
+            {{ icon.chev_r(14) }}
+          </a>
+        {% endif %}
+      </nav>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  {# ══════ Right rail ══════════════════════════════════════════════ #}
+  <aside style="display:flex; flex-direction:column; gap:22px;">
+
+    {% if ai_summary %}
+      {# AI summary (collapsible). Server renders .html pre-sanitised. #}
+      <details class="shse-card"
+               style="padding:0; overflow:hidden;
+                      border-color:color-mix(in oklab, var(--shse-accent) 30%, var(--shse-border));">
+        <summary style="display:flex; align-items:center; gap:8px;
+                        padding:10px 14px; cursor:pointer; list-style:none;">
+          <span style="color:var(--shse-accent); display:flex;">{{ icon.spark(14) }}</span>
+          <span style="font-size:12px; font-weight:600;
+                       text-transform:uppercase; letter-spacing:0.04em;">AI summary</span>
+        </summary>
+        <div style="border-top:1px solid var(--shse-border); padding:10px 14px 14px;">
+          <div style="font-size:12.5px; color:var(--shse-text); line-height:1.6;">
+            {{ ai_summary.html | safe }}
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:12px; flex-wrap:wrap;">
+            <span style="font-size:11px; color:var(--shse-text-faint);">sources:</span>
+            {% for s in ai_summary.sources %}
+              <span class="shse-pill" style="font-size:10px; padding:1px 6px;">{{ s }}</span>
+            {% endfor %}
+            <div style="flex:1;"></div>
+            <button class="shse-btn shse-btn-ghost" style="padding:4px 8px; font-size:11px;" type="button">
+              {{ icon.copy(12) }} Copy
+            </button>
+          </div>
+        </div>
+      </details>
+    {% endif %}
+
+    {% if keyword_chips %}
+    <div>
+      <div style="font-size:12px; color:var(--shse-text-faint);
+                  text-transform:uppercase; letter-spacing:0.08em; margin-bottom:10px;">
+        AI keyword suggestions
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        {% for k in keyword_chips %}
+          <a href="{{ url_for('search', q=(q ~ ' ' ~ k)) }}"
+             class="shse-pill shse-pill-accent"
+             style="cursor:pointer; text-decoration:none;">{{ k }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if vector_hits %}
+    <div class="shse-card" style="padding:14px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <span style="color:var(--shse-accent); display:flex;">{{ icon.spark(14) }}</span>
+        <span style="font-size:12px; font-weight:600; letter-spacing:0.04em;
+                     text-transform:uppercase; color:var(--shse-text-muted);">Top semantic matches</span>
+      </div>
+      <ul style="list-style:none; padding:0; margin:0;
+                 display:flex; flex-direction:column; gap:14px;">
+        {% for v in vector_hits %}
+        <li>
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:2px;">
+            <span class="shse-pill shse-pill-accent" style="font-size:10px; padding:1px 6px;">
+              {{ "%.2f"|format(v.score) }}
+            </span>
+            <span style="font-size:11px; color:var(--shse-text-faint);">{{ v.service }}</span>
+          </div>
+          <a href="{{ v.url }}" style="font-size:13px; font-weight:500; display:block;">{{ v.title }}</a>
+          <p class="shse-mono" style="margin:3px 0 0; font-size:11px;
+                                       color:var(--shse-text-muted); line-height:1.45;">{{ v.snippet }}</p>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if sources %}
+    <div class="shse-card" style="padding:14px;">
+      <div style="font-size:12px; color:var(--shse-text-faint); margin-bottom:10px;
+                  text-transform:uppercase; letter-spacing:0.08em;">Sources hit</div>
+      {% set max_n = sources | map(attribute='n') | max %}
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        {% for s in sources %}
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="flex:1; font-size:13px; color:var(--shse-text-muted);">{{ s.name }}</div>
+          <div style="font-size:12px; color:var(--shse-text-faint);">{{ s.n }}</div>
+          <div style="width:60px; height:4px; background:var(--shse-surface-2);
+                      border-radius:2px; overflow:hidden;">
+            <div style="width:{{ (s.n / max_n * 100)|round|int }}%;
+                        height:100%; background:var(--shse-accent);"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

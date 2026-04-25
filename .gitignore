@@ -1,5 +1,7 @@
 Assist
 .claude
+odd-test*
+*.zim
 # --- Python ---
 __pycache__/
 *.py[cod]

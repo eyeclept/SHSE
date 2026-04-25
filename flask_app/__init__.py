@@ -57,10 +57,12 @@ def create_app():
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
     from flask_app.routes.admin import admin_bp
+    from flask_app.routes.api import api_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
+    app.register_blueprint(api_bp)
 
     return app
 

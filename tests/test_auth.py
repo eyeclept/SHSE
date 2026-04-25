@@ -403,6 +403,40 @@ def test_register(sqlite_app):
     assert response.status_code == 400
 
 
+def test_toggle_theme(sqlite_app):
+    """
+    Input: sqlite_app fixture
+    Output: None
+    Details:
+        POST /theme flips session['theme'] from light to dark and back.
+        Unauthenticated access is allowed (theme is a user preference, not gated).
+        Response redirects to referrer or to / when no referrer is set.
+    """
+    client = sqlite_app.test_client()
+
+    with client:
+        # Default (no theme set) → should become dark
+        response = client.post("/theme")
+        from flask import session
+        assert response.status_code == 302
+        assert session.get("theme") == "dark"
+
+    with client:
+        # dark → should become light
+        with client.session_transaction() as sess:
+            sess["theme"] = "dark"
+        response = client.post("/theme")
+        from flask import session
+        assert response.status_code == 302
+        assert session.get("theme") == "light"
+
+    # Redirects to Referer header when present
+    with client:
+        response = client.post("/theme", headers={"Referer": "http://localhost/search"})
+        assert response.status_code == 302
+        assert "/search" in response.headers["Location"]
+
+
 def test_logout(sqlite_app):
     """
     Input: sqlite_app fixture

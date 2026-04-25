@@ -1,0 +1,104 @@
+{#
+  Home / landing page — Startpage layout (locked variant).
+  Porting reference: src/screens/home.jsx
+
+  Route contract (see ../app.py):
+    GET /         → renders this; stats passed via context
+    POST /search  → form action; redirects to /search?q=…
+
+  Context variables:
+    stats = { docs: int, services: int, last_crawl: "5h ago" }
+    user  = current_user  (Flask-Login)
+#}
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+
+{% block title %}Search{% endblock %}
+
+{% block chrome %}
+  {# Home has no top bar — only a floating hamburger in the corner.
+     See shell.jsx <ShseHamburger>. Until that partial exists, this
+     is a placeholder link to settings/admin. #}
+  <div style="position:absolute; top:14px; right:22px; z-index:30;">
+    {% include "_hamburger.html" ignore missing %}
+  </div>
+{% endblock %}
+
+{% block content %}
+<main style="min-height: calc(100vh - 70px);
+             display:flex; flex-direction:column; align-items:center;
+             padding-top: 14vh; padding-bottom: 40px;">
+
+  <div style="margin-bottom: 36px; text-align: center;">
+    {{ icon.logo(76) }}
+    <p style="margin: 22px 0 0; font-size: 15px; color: var(--shse-text-muted);">
+      Search across every service running on your network.
+    </p>
+  </div>
+
+  {# ── Search box. Matches <ShseSearchBox size="lg"> in shell.jsx. ── #}
+  <form method="get" action="{{ url_for('search') }}"
+        class="shse-home-search"
+        style="width: min(640px, 92vw); display:flex; align-items:center;
+               height:58px; background:var(--shse-surface);
+               border:1px solid var(--shse-border); border-radius:29px;
+               padding:0 14px 0 19px; box-shadow:var(--shse-shadow-sm);
+               transition:border-color .12s, box-shadow .12s;">
+    <span style="color:var(--shse-text-faint); display:flex;">{{ icon.search(20) }}</span>
+    <input type="search" name="q" autofocus autocomplete="off"
+           placeholder="Search your homelab…"
+           style="flex:1; border:none; outline:none; background:transparent;
+                  color:var(--shse-text); padding:0 12px; font-size:17px;
+                  height:100%;">
+    <button type="submit" class="shse-btn shse-btn-primary"
+            style="height:48px; border-radius:24px; padding:0 18px;">
+      {{ icon.search(14) }}
+    </button>
+  </form>
+
+  {# Focus ring via JS — matches the prototype's glow-on-focus behavior. #}
+  <script>
+    (function () {
+      var f = document.querySelector('.shse-home-search');
+      if (!f) return;
+      var input = f.querySelector('input');
+      input.addEventListener('focus', function () {
+        f.style.borderColor = 'var(--shse-accent)';
+        f.style.boxShadow = '0 0 0 4px var(--shse-focus-ring)';
+      });
+      input.addEventListener('blur', function () {
+        f.style.borderColor = 'var(--shse-border)';
+        f.style.boxShadow = 'var(--shse-shadow-sm)';
+      });
+    })();
+  </script>
+
+  {# ── Quick links row ────────────────────────────────────────────── #}
+  <div style="margin-top: 48px; display:flex; gap:16px; flex-wrap:wrap; justify-content:center;">
+    <a class="shse-btn shse-btn-ghost" style="color:var(--shse-text-muted); padding:6px 10px;"
+       href="{{ url_for('admin_targets') }}">
+      {{ icon.server(14) }} Indexed services
+    </a>
+    <a class="shse-btn shse-btn-ghost" style="color:var(--shse-text-muted); padding:6px 10px;"
+       href="{{ url_for('history') }}">
+      {{ icon.history(14) }} Recent searches
+    </a>
+    <a class="shse-btn shse-btn-ghost" style="color:var(--shse-text-muted); padding:6px 10px;"
+       href="{{ url_for('settings') }}">
+      {{ icon.gear(14) }} Settings
+    </a>
+  </div>
+
+  <div style="flex:1;"></div>
+
+  {# ── Footer stat strip. Pulled from /admin/stats (cached). ──────── #}
+  <div style="margin-top:48px; font-size:12px; color:var(--shse-text-faint);
+              display:flex; gap:18px; align-items:center;">
+    <span>{{ "{:,}".format(stats.docs) }} documents indexed</span>
+    <span style="width:3px; height:3px; border-radius:50%; background:currentColor;"></span>
+    <span>{{ stats.services }} services</span>
+    <span style="width:3px; height:3px; border-radius:50%; background:currentColor;"></span>
+    <span>last crawl {{ stats.last_crawl }}</span>
+  </div>
+</main>
+{% endblock %}
