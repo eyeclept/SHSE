@@ -1,0 +1,46 @@
+{#
+  Health grid partial — extracted so HTMX can re-render it independently
+  on /admin/_health.
+
+  Context: health = dict per admin/index.html.
+#}
+{% import "_icons.html" as icon %}
+{% set _palette = {
+  'up':       ('var(--shse-success)', 'var(--shse-success-soft)', 'Up'),
+  'degraded': ('var(--shse-warning)', 'var(--shse-warning-soft)', 'Degraded'),
+  'down':     ('var(--shse-danger)',  'var(--shse-danger-soft)',  'Down'),
+  'unknown':  ('var(--shse-text-faint)', 'var(--shse-surface-2)', 'Unknown'),
+} %}
+
+{% for key, label in [
+  ('opensearch', 'OpenSearch'),
+  ('nutch',      'Nutch'),
+  ('llm_api',    'LLM API'),
+  ('redis',      'Redis'),
+  ('mariadb',    'MariaDB'),
+  ('celery',     'Celery workers'),
+] %}
+  {% set s = health.get(key, {'status': 'unknown', 'latency_ms': None, 'message': None}) %}
+  {% set color, soft, text = _palette[s.status] %}
+  <div class="shse-card" style="padding:14px;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+      <span style="width:8px; height:8px; border-radius:50%; background:{{ color }};
+                   box-shadow: 0 0 0 4px {{ soft }};"></span>
+      <span style="font-size:13px; font-weight:500;">{{ label }}</span>
+      <div style="flex:1;"></div>
+      <span style="font-size:11px; color:{{ color }};
+                   text-transform:uppercase; letter-spacing:0.04em;">{{ text }}</span>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;
+                font-size:11px; color:var(--shse-text-faint);">
+      {% if s.latency_ms is not none %}
+        <span class="shse-mono">{{ s.latency_ms }}ms</span>
+      {% endif %}
+      {% if s.message %}
+        <span style="color:{{ 'var(--shse-danger)' if s.status == 'down' else 'var(--shse-text-muted)' }};">
+          {{ s.message }}
+        </span>
+      {% endif %}
+    </div>
+  </div>
+{% endfor %}

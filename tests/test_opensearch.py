@@ -113,8 +113,9 @@ def test_bm25(mock_client):
     Input: mock_client fixture
     Output: None
     Details:
-        Verifies bm25_search sends a match query against the text field and
-        returns the hits list from the response.
+        Verifies bm25_search sends a multi_match best_fields query across
+        text and title (title boosted 2x) with fuzziness=AUTO and
+        prefix_length=1, and returns the hits list.
     """
     fake_hits = [
         {"_score": 1.5, "_source": {"text": "hello world", "url": "http://a"}},
@@ -125,9 +126,15 @@ def test_bm25(mock_client):
     results = bm25_search("hello", k=5, client=mock_client)
 
     call_args = mock_client.search.call_args
-    body = call_args.kwargs.get("body") or call_args.args[0] if call_args.args else call_args.kwargs["body"]
+    body = call_args.kwargs.get("body") or call_args.kwargs["body"]
     assert body["size"] == 5
-    assert body["query"]["match"]["text"]["query"] == "hello"
+    mmq = body["query"]["multi_match"]
+    assert mmq["query"] == "hello"
+    assert "title^2" in mmq["fields"]
+    assert "text" in mmq["fields"]
+    assert mmq["fuzziness"] == "AUTO"
+    assert mmq["prefix_length"] == 1
+    assert mmq["type"] == "best_fields"
     assert results == fake_hits
 
 

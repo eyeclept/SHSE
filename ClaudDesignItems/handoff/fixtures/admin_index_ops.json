@@ -1,0 +1,15 @@
+{
+  "_doc": "Mock /admin/index (index ops) data.",
+  "opensearch_up": true,
+  "llm_api_up": true,
+  "running_jobs": [],
+  "index_stats": {
+    "docs": 1402198,
+    "vectorized": 1149612,
+    "vector_coverage_pct": 82,
+    "shards": 3,
+    "replicas": 1,
+    "store_size_mb": 4218,
+    "last_modified": "5m ago"
+  }
+}

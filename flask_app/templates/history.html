@@ -1,0 +1,85 @@
+{#
+  Search history. Porting reference: src/screens/settings.jsx <ShseHistory>
+
+  Route contract:
+    GET  /history            → render full list, optionally ?q= filtered
+    POST /history/clear      → confirm + DELETE FROM search_history
+    GET  /history/_filter    → HTMX endpoint, returns ONLY <ul> for live filter
+
+  Context:
+    history = list of { q, when, results } sorted DESC by created_at
+    q       = filter string (or "")
+#}
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% import "_macros.html" as macros %}
+
+{% block title %}Search history{% endblock %}
+
+{% block chrome %}
+  {% include "_topbar.html" %}
+{% endblock %}
+
+{% block content %}
+<main id="shse-main" role="main" style="max-width:820px; margin:0 auto; padding:32px 28px 80px;">
+  <header style="display:flex; align-items:flex-end; gap:16px; margin-bottom:18px;">
+    <div>
+      <h1 class="shse-serif" style="margin:0; font-size:28px; font-weight:400;
+                                    letter-spacing:-0.01em;">Search history</h1>
+      <p style="margin:4px 0 0; font-size:14px; color:var(--shse-text-muted);">
+        Queries you've run. Stored per-account in MariaDB.
+      </p>
+    </div>
+    <div style="flex:1;"></div>
+    {% if history %}
+    <form method="post" action="{{ url_for('search.history_clear') }}"
+          onsubmit="return confirm('Delete all your saved searches?');">
+      <button type="submit" class="shse-btn">{{ icon.trash(14) }} Clear all</button>
+    </form>
+    {% endif %}
+  </header>
+
+  <div style="margin-bottom:18px;">
+    <input class="shse-input" type="search" name="q" placeholder="Filter history…"
+           value="{{ q or '' }}"
+           hx-get="{{ url_for('search.history_filter') }}" hx-target="#history-list"
+           hx-trigger="input changed delay:200ms, search"
+           autocomplete="off">
+  </div>
+
+  <div id="history-list">
+    {% if history %}
+      <ul class="shse-card" style="list-style:none; padding:0; margin:0;">
+        {% for h in history %}
+          <li style="border-top:1px solid var(--shse-border);
+                     {% if loop.first %}border-top:none;{% endif %}">
+            <a href="{{ url_for('search.results', q=h.q) }}"
+               style="display:flex; align-items:center; gap:14px;
+                      padding:14px 18px; color:var(--shse-text);
+                      text-decoration:none;"
+               onmouseover="this.style.background='var(--shse-surface-2)'"
+               onmouseout="this.style.background='transparent'">
+              <span style="color:var(--shse-text-faint);">{{ icon.history(16) }}</span>
+              <span style="flex:1;">
+                <span style="display:block; font-size:14px;">{{ h.q }}</span>
+                <span style="display:block; font-size:12px;
+                             color:var(--shse-text-faint); margin-top:2px;">
+                  {{ h.when }} · {{ h.results }} results
+                </span>
+              </span>
+              <span style="color:var(--shse-text-faint);">{{ icon.arrow(14) }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      {{ macros.empty_state(
+        title="No history yet",
+        body="Searches you run will show up here once you have history saving enabled in Settings.",
+        action_label="Search now", action_href=url_for('search.home'),
+        icon_name="history"
+      ) }}
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

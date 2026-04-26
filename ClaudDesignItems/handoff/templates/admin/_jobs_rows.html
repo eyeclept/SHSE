@@ -1,0 +1,70 @@
+{#
+  <tbody> for the jobs table — extracted so HTMX can poll just the rows.
+  Returned standalone from /admin/jobs/_table.
+
+  Context: jobs, filter (per admin/jobs.html).
+#}
+{% import "_icons.html" as icon %}
+{% import "_macros.html" as macros %}
+
+<tbody id="jobs-tbody"
+       hx-get="{{ url_for('admin_jobs_table', status=filter) }}"
+       hx-trigger="every 2s"
+       hx-swap="outerHTML">
+  {% for j in jobs %}
+  <tr style="border-top:1px solid var(--shse-border);">
+    <td style="padding:12px 14px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="color:var(--shse-text-faint);">
+          {% if j.kind == 'crawl' %}{{ icon.refresh(13) }}
+          {% elif j.kind == 'reindex' %}{{ icon.database(13) }}
+          {% elif j.kind == 'vectorize' %}{{ icon.spark(13) }}
+          {% endif %}
+        </span>
+        <span style="font-weight:500; text-transform:capitalize;">{{ j.kind }}</span>
+        <span class="shse-pill {{
+          'shse-pill-warning' if j.status == 'running' else
+          'shse-pill-success' if j.status == 'done' else
+          'shse-pill-danger'  if j.status == 'failed' else
+          '' }}" style="font-size:10px;">
+          {{ j.status }}
+        </span>
+      </div>
+      {% if j.message and j.status == 'failed' %}
+      <div style="font-size:11px; color:var(--shse-danger);
+                  margin-top:4px;">{{ j.message }}</div>
+      {% endif %}
+    </td>
+    <td style="padding:12px 14px; color:var(--shse-text-muted);">{{ j.target }}</td>
+    <td style="padding:12px 14px; min-width:160px;">
+      {% if j.status == 'running' %}
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div style="flex:1; height:4px; background:var(--shse-surface-2);
+                      border-radius:2px; overflow:hidden;">
+            <div style="width:{{ j.progress }}%; height:100%;
+                        background:var(--shse-accent); transition:width .4s;"></div>
+          </div>
+          <span class="shse-mono" style="font-size:11px;
+                color:var(--shse-text-muted);">{{ j.progress }}%</span>
+        </div>
+      {% else %}
+        <span style="color:var(--shse-text-faint);">—</span>
+      {% endif %}
+    </td>
+    <td style="padding:12px 14px; color:var(--shse-text-muted);">{{ j.started_at }}</td>
+    <td class="shse-mono" style="padding:12px 14px; text-align:right;
+                                  color:var(--shse-text-muted);">{{ j.took or '—' }}</td>
+    <td style="padding:12px 14px; text-align:right; white-space:nowrap;">
+      <a href="{{ url_for('admin_job_detail', job_id=j.id) }}"
+         class="shse-btn shse-btn-ghost" style="font-size:12px;">Logs</a>
+      {% if j.status in ('queued', 'running') %}
+        <form method="post" action="{{ url_for('admin_job_cancel', job_id=j.id) }}"
+              style="display:inline;">
+          <button type="submit" class="shse-btn shse-btn-ghost"
+                  style="font-size:12px; color:var(--shse-danger);">Cancel</button>
+        </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</tbody>

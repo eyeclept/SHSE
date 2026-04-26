@@ -114,10 +114,12 @@ a:hover { text-decoration: underline; }
   background: var(--shse-surface-2); color: var(--shse-text-muted);
   border: 1px solid var(--shse-border);
 }
-.shse-pill-ok     { background: var(--shse-success-soft); color: var(--shse-success); border-color: transparent; }
-.shse-pill-warn   { background: var(--shse-warning-soft); color: var(--shse-warning); border-color: transparent; }
-.shse-pill-danger { background: var(--shse-danger-soft);  color: var(--shse-danger);  border-color: transparent; }
-.shse-pill-accent { background: var(--shse-accent-soft);  color: var(--shse-accent);  border-color: transparent; }
+.shse-pill-ok      { background: var(--shse-success-soft); color: var(--shse-success); border-color: transparent; }
+.shse-pill-warn    { background: var(--shse-warning-soft); color: var(--shse-warning); border-color: transparent; }
+.shse-pill-success { background: var(--shse-success-soft); color: var(--shse-success); border-color: transparent; }
+.shse-pill-warning { background: var(--shse-warning-soft); color: var(--shse-warning); border-color: transparent; }
+.shse-pill-danger  { background: var(--shse-danger-soft);  color: var(--shse-danger);  border-color: transparent; }
+.shse-pill-accent  { background: var(--shse-accent-soft);  color: var(--shse-accent);  border-color: transparent; }
 
 /* ── Inputs ───────────────────────────────────────────────────────── */
 
@@ -181,9 +183,34 @@ a:hover { text-decoration: underline; }
   text-decoration: none;
 }
 .shse-tab:hover { color: var(--shse-text); text-decoration: none; }
-.shse-tab[aria-selected="true"] {
+.shse-tab[aria-selected="true"],
+.shse-tab[aria-current="page"] {
   color: var(--shse-accent); border-bottom-color: var(--shse-accent); font-weight: 500;
 }
+
+/* ── Animations used by macros (spinner, skeleton shimmer) ──────── */
+@keyframes shse-spin     { to { transform: rotate(360deg); } }
+@keyframes shse-shimmer  { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+/* ── Visible focus ring for keyboard nav ─────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--shse-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.shse-btn:focus-visible,
+.shse-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--shse-focus-ring);
+}
+
+/* ── Skip link (accessibility) ───────────────────────────────────── */
+.shse-skip {
+  position: absolute; left: -999px; top: 8px; z-index: 999;
+  background: var(--shse-accent); color: var(--shse-accent-fg);
+  padding: 8px 14px; border-radius: 8px; font-weight: 500;
+}
+.shse-skip:focus { left: 8px; }
 
 /* ── Keycap hint ──────────────────────────────────────────────────── */
 

@@ -1,0 +1,26 @@
+{
+  "_doc": "Mock data for /admin and /admin/_health. Keys mirror what render_template('admin/index.html', ...) expects.",
+  "stats": {
+    "docs": 1402198,
+    "services": 6,
+    "last_crawl": "5h ago",
+    "queue_depth": 3,
+    "indexed_24h": 18204,
+    "vector_coverage_pct": 82
+  },
+  "health": {
+    "opensearch": { "status": "up",       "latency_ms": 12,   "message": null },
+    "nutch":      { "status": "up",       "latency_ms": 41,   "message": null },
+    "llm_api":    { "status": "degraded", "latency_ms": 1840, "message": "Slow embeddings (queue=14)" },
+    "redis":      { "status": "up",       "latency_ms": 2,    "message": null },
+    "mariadb":    { "status": "up",       "latency_ms": 7,    "message": null },
+    "celery":     { "status": "up",       "latency_ms": null, "message": "3 workers, 1 active" }
+  },
+  "activity": [
+    { "kind": "crawl",     "label": "prometheus.lab.local: 412 docs added",            "when": "5m ago",  "status": "ok" },
+    { "kind": "vectorize", "label": "Embedded 18,204 chunks (gemma3:1b)",              "when": "32m ago", "status": "ok" },
+    { "kind": "config",    "label": "lyle@ updated crawler.yml — added wiki.lab",      "when": "2h ago",  "status": "ok" },
+    { "kind": "crawl",     "label": "grafana.lab.local: timeout on /api/dashboards",   "when": "4h ago",  "status": "fail" },
+    { "kind": "reindex",   "label": "Full reindex completed in 6m12s",                 "when": "1d ago",  "status": "ok" }
+  ]
+}

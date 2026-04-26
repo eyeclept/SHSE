@@ -1,0 +1,90 @@
+{#
+  Reusable form widgets + small UI macros.
+
+    {% import "_macros.html" as macros %}
+    {{ macros.toggle(form.ai_summary) }}
+    {{ macros.empty_state(...) }}
+#}
+
+{# Toggle switch — bound to a BooleanField. Renders a hidden checkbox
+   for accessibility + form submission, plus a styled visual. The
+   <label> wraps both so clicking the switch toggles the input. #}
+{% macro toggle(field) %}
+<label class="shse-toggle" style="display:inline-block; cursor:pointer;
+       width:38px; height:22px; border-radius:999px; padding:2px;
+       background: var(--shse-surface-3); position:relative;
+       transition: background .14s;">
+  <input type="checkbox" name="{{ field.name }}" id="{{ field.id }}"
+         {% if field.data %}checked{% endif %}
+         style="position:absolute; opacity:0; pointer-events:none;"
+         onchange="this.parentElement.style.background = this.checked ? 'var(--shse-accent)' : 'var(--shse-surface-3)';
+                   this.nextElementSibling.style.transform = 'translateX(' + (this.checked ? 16 : 0) + 'px)';">
+  <span style="display:block; width:18px; height:18px; border-radius:50%;
+               background:white; box-shadow:0 1px 3px rgba(0,0,0,.15);
+               transition:transform .14s;
+               transform:translateX({{ '16px' if field.data else '0' }});"></span>
+</label>
+<script>
+  (function () {
+    var t = document.getElementById('{{ field.id }}');
+    if (t && t.checked) t.parentElement.style.background = 'var(--shse-accent)';
+  })();
+</script>
+{% endmacro %}
+
+{# Empty state — used across history/search/jobs/targets when no rows. #}
+{% macro empty_state(title, body, action_label=None, action_href=None, icon_name="search") %}
+{% import "_icons.html" as icon %}
+<div role="status" style="text-align:center; padding:60px 24px;
+     background:var(--shse-surface); border:1px dashed var(--shse-border);
+     border-radius:12px;">
+  <div style="display:inline-flex; width:52px; height:52px; border-radius:50%;
+              background:var(--shse-surface-2); align-items:center;
+              justify-content:center; color:var(--shse-text-muted);
+              margin-bottom:14px;">
+    {{ icon[icon_name](22) }}
+  </div>
+  <div class="shse-serif" style="font-size:20px; margin-bottom:6px;">{{ title }}</div>
+  <p style="margin:0 auto; max-width:380px; font-size:14px; color:var(--shse-text-muted);">{{ body }}</p>
+  {% if action_label and action_href %}
+    <a href="{{ action_href }}" class="shse-btn shse-btn-primary"
+       style="margin-top:16px; text-decoration:none;">{{ action_label }}</a>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# Skeleton row — used during HTMX loads / lazy panels. #}
+{% macro skeleton_row(height=14, width="100%") %}
+<div aria-hidden="true"
+     style="height:{{ height }}px; width:{{ width }};
+            background:linear-gradient(90deg,
+              var(--shse-surface-2) 0%,
+              var(--shse-surface-3) 50%,
+              var(--shse-surface-2) 100%);
+            background-size:200% 100%;
+            animation: shse-shimmer 1.4s linear infinite;
+            border-radius:4px;"></div>
+{% endmacro %}
+
+{# Loading spinner. #}
+{% macro spinner(size=16) %}
+<span aria-hidden="true" class="shse-spinner"
+      style="display:inline-block; width:{{ size }}px; height:{{ size }}px;
+             border:2px solid var(--shse-border-strong); border-top-color:var(--shse-accent);
+             border-radius:50%; animation: shse-spin .9s linear infinite;"></span>
+{% endmacro %}
+
+{# Inline error block — for validation summaries / RPC failures. #}
+{% macro error_block(message, title="Something went wrong") %}
+{% import "_icons.html" as icon %}
+<div role="alert"
+     style="padding:14px 16px; border-radius:10px;
+            background:var(--shse-danger-soft); color:var(--shse-danger);
+            display:flex; gap:12px; align-items:flex-start; font-size:13px;">
+  <span style="flex-shrink:0; margin-top:1px;">{{ icon.alert(16) }}</span>
+  <div>
+    <div style="font-weight:600; margin-bottom:2px;">{{ title }}</div>
+    <div style="color:var(--shse-text-muted);">{{ message }}</div>
+  </div>
+</div>
+{% endmacro %}

@@ -123,47 +123,47 @@
       "base_html": { "passes": true },
       "search_html": { "passes": true },
       "search_bm25_route": { "passes": true },
-      "ai_summary_card": { "passes": false },
-      "ai_summary_llm": { "passes": false },
-      "login_html": { "passes": false },
-      "register_html": { "passes": false },
-      "settings_html": { "passes": false },
-      "history_write": { "passes": false },
-      "history_page": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_search_ui_md": { "passes": false }
+      "ai_summary_card": { "passes": true },
+      "ai_summary_llm": { "passes": true },
+      "login_html": { "passes": true },
+      "register_html": { "passes": true },
+      "settings_html": { "passes": true },
+      "history_write": { "passes": true },
+      "history_page": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_search_ui_md": { "passes": true }
     }
   },
   "epic_11_admin_ui": {
     "description": "Admin dashboard, health checks, config upload, job management",
     "items": {
-      "admin_index_html": { "passes": false },
-      "health_checks": { "passes": false },
-      "targets_html": { "passes": false },
-      "config_html": { "passes": false },
-      "config_upload": { "passes": false },
-      "jobs_html": { "passes": false },
-      "action_buttons": { "passes": false },
-      "disable_on_unreachable": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_admin_ui_md": { "passes": false }
+      "admin_index_html": { "passes": true },
+      "health_checks": { "passes": true },
+      "targets_html": { "passes": true },
+      "config_html": { "passes": true },
+      "config_upload": { "passes": true },
+      "jobs_html": { "passes": true },
+      "action_buttons": { "passes": true },
+      "disable_on_unreachable": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_admin_ui_md": { "passes": true }
     }
   },
   "epic_12_nginx": {
     "description": "SSL cert mount, reverse proxy, admin restriction",
     "items": {
-      "ssl_cert_mount": { "passes": false },
-      "reverse_proxy": { "passes": false },
-      "admin_restriction": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_nginx_md": { "passes": false }
+      "ssl_cert_mount": { "passes": true },
+      "reverse_proxy": { "passes": true },
+      "admin_restriction": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_nginx_md": { "passes": true }
     }
   },
   "epic_13_tls": {
     "description": "Per-service TLS bypass, global flag, warning banner",
     "items": {
-      "per_service_tls_bypass": { "passes": false },
-      "global_tls_flag": { "passes": false },
+      "per_service_tls_bypass": { "passes": true },
+      "global_tls_flag": { "passes": true },
       "tls_warning_banner": { "passes": false },
       "tests_written": { "passes": false },
       "docs_tls_md": { "passes": false }
@@ -172,11 +172,11 @@
   "epic_14_testing": {
     "description": "All test suites passing, docs/testing.md",
     "items": {
-      "unit_yaml": { "passes": false },
-      "unit_opensearch": { "passes": false },
-      "unit_auth": { "passes": false },
-      "unit_tasks": { "passes": false },
-      "unit_vectorize": { "passes": false },
+      "unit_yaml": { "passes": true },
+      "unit_opensearch": { "passes": true },
+      "unit_auth": { "passes": true },
+      "unit_tasks": { "passes": true },
+      "unit_vectorize": { "passes": true },
       "docs_testing_md": { "passes": false }
     }
   },

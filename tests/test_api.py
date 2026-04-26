@@ -27,15 +27,20 @@ _STATIC_DIR = os.path.join(_PROJECT_ROOT, "flask_app", "static")
 def api_app():
     """
     Input: None
-    Output: Flask test app with the api blueprint registered
+    Output: Flask test app with api and auth blueprints registered
     Details:
-        Uses SQLite in-memory to avoid requiring MariaDB.
+        Uses SQLite in-memory. Includes auth_bp and login_manager so
+        current_user is available in the admin-check route.
     """
     from flask_app.models.user import User                     # noqa: F401
     from flask_app.models.search_history import SearchHistory  # noqa: F401
     from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
     from flask_app.models.crawl_job import CrawlJob            # noqa: F401
     from flask_app.routes.api import api_bp
+    from flask_app.routes.auth import auth_bp
+    from flask_app.routes.search import search_bp
+    from flask_app.routes.admin import admin_bp
+    from flask_app import login_manager
 
     app = Flask(
         "test_api",
@@ -46,8 +51,13 @@ def api_app():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "test"
+    app.config["SSO_ENABLED"] = False
     db.init_app(app)
+    login_manager.init_app(app)
     app.register_blueprint(api_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(search_bp)
+    app.register_blueprint(admin_bp, url_prefix="/admin")
 
     with app.app_context():
         db.create_all()
@@ -284,3 +294,91 @@ def test_highlight_stripped_of_html_tags(client):
     snippet = r.get_json()["results"][0]["snippet"]
     assert "<" not in snippet
     assert ">" not in snippet
+
+
+def test_search_returns_vector_hits_and_ai_summary(client):
+    """
+    Input: GET /api/search?q=animal — semantic_results returns data
+    Output: vector_hits non-empty, ai_summary non-null
+    Details:
+        Verifies the response includes semantic results when the LLM API is available.
+    """
+    os_resp = _fake_os_response([])
+
+    fake_vector_hits = [{"score": 0.95, "service": "kiwix", "url": "http://k/Animal",
+                         "title": "Animal", "snippet": "Animals are..."}]
+    fake_summary = {"html": "Animals are organisms.", "sources": ["kiwix"]}
+
+    with patch("flask_app.routes.api.get_client") as mock_gc, \
+         patch("flask_app.routes.api.semantic_results",
+               return_value=(fake_vector_hits, fake_summary, False)):
+        mock_gc.return_value = MagicMock(**{"search.return_value": os_resp})
+        r = client.get("/api/search?q=animal")
+
+    data = r.get_json()
+    assert data["vector_hits"] == fake_vector_hits
+    assert data["ai_summary"] == fake_summary
+    assert data["show_bm25_warning"] is False
+
+
+def test_search_shows_bm25_warning_when_llm_unavailable(client):
+    """
+    Input: GET /api/search?q=test — semantic_results returns warning flag
+    Output: show_bm25_warning=True, vector_hits empty, ai_summary null
+    """
+    os_resp = _fake_os_response([])
+
+    with patch("flask_app.routes.api.get_client") as mock_gc, \
+         patch("flask_app.routes.api.semantic_results", return_value=([], None, True)):
+        mock_gc.return_value = MagicMock(**{"search.return_value": os_resp})
+        r = client.get("/api/search?q=test")
+
+    data = r.get_json()
+    assert data["show_bm25_warning"] is True
+    assert data["vector_hits"] == []
+    assert data["ai_summary"] is None
+
+
+def test_admin_check_returns_200_for_admin(api_app, client):
+    """
+    Input: GET /api/admin-check as authenticated admin
+    Output: 200
+    """
+    from flask_app.models.user import User
+    with api_app.app_context():
+        u = User(username="admincheck", role="admin")
+        u.set_password("pass")
+        from flask_app import db
+        db.session.add(u)
+        db.session.commit()
+
+    client.post("/login", data={"username": "admincheck", "password": "pass"})
+    r = client.get("/api/admin-check")
+    assert r.status_code == 200
+
+
+def test_admin_check_returns_403_for_user(api_app, client):
+    """
+    Input: GET /api/admin-check as authenticated non-admin
+    Output: 403
+    """
+    from flask_app.models.user import User
+    with api_app.app_context():
+        u = User(username="regularcheck", role="user")
+        u.set_password("pass")
+        from flask_app import db
+        db.session.add(u)
+        db.session.commit()
+
+    client.post("/login", data={"username": "regularcheck", "password": "pass"})
+    r = client.get("/api/admin-check")
+    assert r.status_code == 403
+
+
+def test_admin_check_returns_403_for_anonymous(client):
+    """
+    Input: GET /api/admin-check without session
+    Output: 403
+    """
+    r = client.get("/api/admin-check")
+    assert r.status_code == 403

@@ -1,0 +1,12 @@
+{
+  "_doc": "Mock per-user search history. Used by /history.",
+  "q": "",
+  "history": [
+    { "q": "prometheus alerting rules",   "when": "2m ago",  "results": 47 },
+    { "q": "gitea webhook secret",        "when": "1h ago",  "results": 12 },
+    { "q": "grafana dashboard json",      "when": "3h ago",  "results": 28 },
+    { "q": "alertmanager group_wait",     "when": "yesterday", "results": 19 },
+    { "q": "wiki backup procedure",       "when": "2d ago",  "results": 6 },
+    { "q": "redis maxmemory policy",      "when": "1w ago",  "results": 22 }
+  ]
+}

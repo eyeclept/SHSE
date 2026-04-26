@@ -129,77 +129,8 @@
     {% endif %}
   </div>
 
-  <aside style="display:flex; flex-direction:column; gap:22px;">
-
-    {% if ai_summary %}
-      <details class="shse-card"
-               style="padding:0; overflow:hidden;
-                      border-color:color-mix(in oklab, var(--shse-accent) 30%, var(--shse-border));">
-        <summary style="display:flex; align-items:center; gap:8px;
-                        padding:10px 14px; cursor:pointer; list-style:none;">
-          <span style="color:var(--shse-accent); display:flex;">{{ icon.spark(14) }}</span>
-          <span style="font-size:12px; font-weight:600;
-                       text-transform:uppercase; letter-spacing:0.04em;">AI summary</span>
-        </summary>
-        <div style="border-top:1px solid var(--shse-border); padding:10px 14px 14px;">
-          <div style="font-size:12.5px; color:var(--shse-text); line-height:1.6;">
-            {{ ai_summary.html | safe }}
-          </div>
-          <div style="display:flex; align-items:center; gap:8px; margin-top:12px; flex-wrap:wrap;">
-            <span style="font-size:11px; color:var(--shse-text-faint);">sources:</span>
-            {% for s in ai_summary.sources %}
-              <span class="shse-pill" style="font-size:10px; padding:1px 6px;">{{ s }}</span>
-            {% endfor %}
-            <div style="flex:1;"></div>
-            <button class="shse-btn shse-btn-ghost" style="padding:4px 8px; font-size:11px;" type="button">
-              {{ icon.copy(12) }} Copy
-            </button>
-          </div>
-        </div>
-      </details>
-    {% endif %}
-
-    {% if keyword_chips %}
-    <div>
-      <div style="font-size:12px; color:var(--shse-text-faint);
-                  text-transform:uppercase; letter-spacing:0.08em; margin-bottom:10px;">
-        AI keyword suggestions
-      </div>
-      <div style="display:flex; flex-wrap:wrap; gap:6px;">
-        {% for k in keyword_chips %}
-          <a href="{{ url_for('search.results', q=(q ~ ' ' ~ k)) }}"
-             class="shse-pill shse-pill-accent"
-             style="cursor:pointer; text-decoration:none;">{{ k }}</a>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-
-    {% if vector_hits %}
-    <div class="shse-card" style="padding:14px;">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-        <span style="color:var(--shse-accent); display:flex;">{{ icon.spark(14) }}</span>
-        <span style="font-size:12px; font-weight:600; letter-spacing:0.04em;
-                     text-transform:uppercase; color:var(--shse-text-muted);">Top semantic matches</span>
-      </div>
-      <ul style="list-style:none; padding:0; margin:0;
-                 display:flex; flex-direction:column; gap:14px;">
-        {% for v in vector_hits %}
-        <li>
-          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:2px;">
-            <span class="shse-pill shse-pill-accent" style="font-size:10px; padding:1px 6px;">
-              {{ "%.2f"|format(v.score) }}
-            </span>
-            <span style="font-size:11px; color:var(--shse-text-faint);">{{ v.service }}</span>
-          </div>
-          <a href="{{ v.url }}" style="font-size:13px; font-weight:500; display:block;">{{ v.title }}</a>
-          <p class="shse-mono" style="margin:3px 0 0; font-size:11px;
-                                       color:var(--shse-text-muted); line-height:1.45;">{{ v.snippet }}</p>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
+  {# Right rail: sources (immediate) + semantic rail (async via HTMX) #}
+  <div style="display:flex; flex-direction:column; gap:22px;">
 
     {% if sources %}
     <div class="shse-card" style="padding:14px;">
@@ -221,6 +152,26 @@
       </div>
     </div>
     {% endif %}
-  </aside>
+
+    {# Semantic rail — fetched asynchronously so BM25 renders immediately #}
+    {% if q %}
+    <aside id="semantic-rail"
+           hx-get="{{ url_for('api.semantic', q=q) }}"
+           hx-trigger="load"
+           hx-swap="outerHTML">
+      <div class="shse-card" style="padding:14px;">
+        <div style="display:flex; align-items:center; gap:10px; color:var(--shse-text-muted);">
+          <span aria-hidden="true"
+                style="display:inline-block; width:14px; height:14px; flex-shrink:0;
+                       border:2px solid var(--shse-accent); border-top-color:transparent;
+                       border-radius:50%; animation:shse-spin .7s linear infinite;"></span>
+          <span style="font-size:13px;">Loading AI summary…</span>
+        </div>
+      </div>
+    </aside>
+    <style>@keyframes shse-spin { to { transform:rotate(360deg); } }</style>
+    {% endif %}
+
+  </div>
 </div>
 {% endblock %}

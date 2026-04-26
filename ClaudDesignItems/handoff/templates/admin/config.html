@@ -1,0 +1,108 @@
+{#
+  Crawler YAML config editor. Porting reference: src/screens/admin.jsx <AdminConfig>
+
+  Route contract:
+    GET  /admin/config              → render this with current YAML
+    POST /admin/config              → ConfigForm: textarea OR file upload;
+                                       parse YAML, validate, persist to
+                                       crawler_targets table; flash result
+    POST /admin/config/_validate    → HTMX endpoint; returns ONLY the
+                                       validation panel for live feedback
+                                       (debounce 600ms)
+
+  Context:
+    form        = ConfigForm (yaml: TextAreaField, upload: FileField, csrf)
+    yaml_text   = current YAML (str) — pre-fills the textarea
+    validation  = dict|None — { ok: bool, errors: list[{line, message}], warnings: [...] }
+    last_saved  = str — humanized timestamp
+#}
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% import "_macros.html" as macros %}
+
+{% block title %}Admin · Config{% endblock %}
+
+{% block chrome %}
+  {% include "_topbar.html" %}
+  {% include "admin/_subnav.html" %}
+{% endblock %}
+
+{% block content %}
+<main id="shse-main" role="main" style="max-width:1180px; margin:0 auto; padding:28px 28px 80px;">
+  <header style="display:flex; align-items:flex-end; gap:16px; margin-bottom:18px;">
+    <div>
+      <h1 class="shse-serif" style="margin:0; font-size:28px; font-weight:400;
+                                    letter-spacing:-0.01em;">Crawler config</h1>
+      <p style="margin:4px 0 0; font-size:14px; color:var(--shse-text-muted);">
+        Edit YAML directly or upload a file. Validates as you type.
+        Last saved {{ last_saved }}.
+      </p>
+    </div>
+    <div style="flex:1;"></div>
+    <a href="{{ url_for('admin_targets') }}" class="shse-btn">
+      {{ icon.server(14) }} View targets
+    </a>
+  </header>
+
+  <div style="display:grid; grid-template-columns:1fr 320px; gap:20px;">
+
+    {# ── Editor column ──────────────────────────────────────────── #}
+    <form method="post" action="{{ url_for('admin_config') }}"
+          enctype="multipart/form-data">
+      {{ form.hidden_tag() }}
+
+      <div class="shse-card" style="padding:0; overflow:hidden;">
+        <div style="display:flex; align-items:center; gap:10px;
+                    padding:8px 12px; background:var(--shse-surface-2);
+                    border-bottom:1px solid var(--shse-border);">
+          <span class="shse-mono" style="font-size:11px;
+                color:var(--shse-text-muted);">crawler.yml</span>
+          <div style="flex:1;"></div>
+          <label class="shse-btn shse-btn-ghost" style="font-size:12px;
+                 cursor:pointer; padding:4px 10px;">
+            {{ icon.upload(12) }} Upload file
+            {{ form.upload(style="display:none;",
+                           onchange="this.form.submit()") }}
+          </label>
+        </div>
+
+        {# Textarea is the YAML editor. Replace with CodeMirror in
+           Sprint 7 if desired — keep the name attribute the same. #}
+        {{ form.yaml(
+          class_="shse-mono shse-input",
+          style="border:none; border-radius:0; padding:14px 16px;
+                 font-size:13px; line-height:1.55; min-height:520px;
+                 width:100%; resize:vertical;",
+          spellcheck="false",
+          autocomplete="off",
+          hx_post=url_for('admin_config_validate'),
+          hx_trigger="input changed delay:600ms",
+          hx_target="#yaml-validation",
+          hx_swap="innerHTML"
+        ) }}
+      </div>
+
+      <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
+        <button type="submit" class="shse-btn shse-btn-primary"
+                {{ 'disabled' if validation and not validation.ok }}>
+          Save and apply
+        </button>
+        <button type="reset" class="shse-btn shse-btn-ghost">Discard changes</button>
+        <div style="flex:1;"></div>
+        <a href="https://github.com/your-org/shse/blob/main/docs/crawler-yaml.md"
+           class="shse-btn shse-btn-ghost" style="font-size:12px;"
+           target="_blank" rel="noopener">
+          {{ icon.book(12) }} YAML reference {{ icon.ext(10) }}
+        </a>
+      </div>
+    </form>
+
+    {# ── Validation rail ─────────────────────────────────────────── #}
+    <aside id="yaml-validation"
+           style="display:flex; flex-direction:column; gap:14px;
+                  position:sticky; top:120px; align-self:flex-start;">
+      {% include "admin/_yaml_validation.html" %}
+    </aside>
+  </div>
+</main>
+{% endblock %}

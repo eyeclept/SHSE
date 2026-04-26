@@ -1,3 +1,73 @@
 {% extends "base.html" %}
-{% block title %}Login — SHSE{% endblock %}
-{% block content %}{% endblock %}
+{% import "_icons.html" as icon %}
+
+{% block title %}Sign in{% endblock %}
+
+{% block content %}
+<main id="shse-main" role="main" style="min-height:100vh; display:grid; place-items:center; padding:40px;">
+  <div style="width:min(420px, 96vw);">
+    <div style="text-align:center; margin-bottom:24px;">{{ icon.logo(48) }}</div>
+
+    <div class="shse-card" style="padding:28px;">
+      <h1 class="shse-serif" style="margin:0 0 6px; font-size:26px; font-weight:400;">Sign in</h1>
+      <p style="margin:0 0 22px; font-size:14px; color:var(--shse-text-muted);">
+        Welcome back. Sign in to search your homelab.
+      </p>
+
+      {% if sso_enabled %}
+        <a href="{{ url_for('auth.sso_login') }}" class="shse-btn"
+           style="width:100%; justify-content:center; padding:11px;
+                  text-decoration:none; margin-bottom:14px;">
+          {{ icon.shield(14) }} Continue with SSO {{ icon.ext(12) }}
+        </a>
+        <div style="display:flex; align-items:center; gap:10px;
+                    color:var(--shse-text-faint); font-size:11px;
+                    text-transform:uppercase; letter-spacing:0.06em;
+                    margin:14px 0;">
+          <hr style="flex:1; border:none; border-top:1px solid var(--shse-border);">or
+          <hr style="flex:1; border:none; border-top:1px solid var(--shse-border);">
+        </div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('auth.login') }}" novalidate>
+        {% if error %}
+          <div role="alert" style="padding:10px 12px; margin-bottom:14px;
+                                   border-radius:8px; background:var(--shse-danger-soft);
+                                   color:var(--shse-danger); font-size:13px;
+                                   display:flex; gap:8px; align-items:flex-start;">
+            {{ icon.alert(14) }} <span>{{ error }}</span>
+          </div>
+        {% endif %}
+
+        <label style="display:block; margin-bottom:14px;">
+          <span style="display:block; font-size:12px; font-weight:500;
+                       color:var(--shse-text-muted); margin-bottom:6px;">Username</span>
+          <input type="text" name="username" class="shse-input"
+                 autofocus autocomplete="username"
+                 style="width:100%; box-sizing:border-box;">
+        </label>
+
+        <label style="display:block; margin-bottom:14px;">
+          <span style="display:block; font-size:12px; font-weight:500;
+                       color:var(--shse-text-muted); margin-bottom:6px;">Password</span>
+          <input type="password" name="password" class="shse-input"
+                 autocomplete="current-password"
+                 style="width:100%; box-sizing:border-box;">
+        </label>
+
+        <label style="display:flex; align-items:center; gap:8px;
+                      font-size:13px; color:var(--shse-text-muted); margin-bottom:18px;">
+          <input type="checkbox" name="remember"> Stay signed in on this device
+        </label>
+
+        <button type="submit" class="shse-btn shse-btn-primary"
+                style="width:100%; justify-content:center; padding:12px;">Sign in</button>
+      </form>
+    </div>
+
+    <p style="text-align:center; font-size:12px; color:var(--shse-text-faint); margin-top:18px;">
+      Need an account? <a href="{{ url_for('auth.register') }}">Register</a>
+    </p>
+  </div>
+</main>
+{% endblock %}

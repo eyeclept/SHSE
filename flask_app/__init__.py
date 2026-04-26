@@ -11,6 +11,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from authlib.integrations.flask_client import OAuth
+from jinja2.sandbox import SandboxedEnvironment
 
 # Globals
 db = SQLAlchemy()
@@ -40,6 +41,13 @@ def create_app():
     """
     app = Flask(__name__)
     app.config.from_object("flask_app.config.Config")
+
+    # Sandbox the Jinja2 environment to block attribute/item access to
+    # dangerous Python internals even if user-controlled content were ever
+    # passed to render_template_string(). Flask's auto-escaping for .html
+    # files already prevents XSS via template variables; sandboxing is an
+    # additional defence-in-depth layer.
+    app.jinja_environment = SandboxedEnvironment
 
     db.init_app(app)
     login_manager.init_app(app)

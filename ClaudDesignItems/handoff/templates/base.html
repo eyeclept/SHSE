@@ -28,6 +28,8 @@
   <script defer src="https://unpkg.com/htmx.org@1.9.12"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
+  <a href="#shse-main" class="shse-skip">Skip to main content</a>
+
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <div class="shse-flash-wrap" style="position:fixed; top:16px; right:16px; z-index:200; display:flex; flex-direction:column; gap:8px;">

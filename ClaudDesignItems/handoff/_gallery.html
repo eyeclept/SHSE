@@ -1,0 +1,255 @@
+<!doctype html>
+<!--
+  SHSE design-system gallery — pure static HTML, no Jinja.
+  Open this file directly in a browser to eyeball every primitive
+  defined in static/css/tokens.css. Useful for:
+    1. Verifying tokens.css renders identically after a port
+    2. Sanity-checking dark mode (toggle button top-right)
+    3. Cross-referencing component → CSS class
+
+  Note: this file references tokens.css with a relative path; serve
+  via Flask (`/static/_gallery.html` if dropped in static/) or just
+  open as file:// — both work.
+-->
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>SHSE · Component gallery</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="static/css/tokens.css">
+  <style>
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 28px 80px; }
+    h1.title { font-family: 'Instrument Serif', serif; font-weight: 400;
+               font-size: 38px; margin: 0 0 4px; letter-spacing: -0.01em; }
+    section { margin-top: 36px; }
+    h2 { font-size: 12px; font-weight: 600; text-transform: uppercase;
+         letter-spacing: 0.08em; color: var(--shse-text-muted);
+         margin: 0 0 12px; padding-bottom: 8px;
+         border-bottom: 1px solid var(--shse-border); }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .cell { padding: 14px 16px; border-radius: 10px;
+            background: var(--shse-surface); border: 1px solid var(--shse-border); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .swatch { height: 64px; border-radius: 8px;
+              border: 1px solid var(--shse-border); position: relative; }
+    .swatch span { position: absolute; left: 8px; bottom: 6px;
+                   font-family: 'JetBrains Mono', monospace; font-size: 10px;
+                   color: var(--shse-text-muted); background: var(--shse-bg);
+                   padding: 1px 6px; border-radius: 4px; }
+    .label { font-size: 11px; color: var(--shse-text-muted); margin-top: 6px;
+             font-family: 'JetBrains Mono', monospace; }
+    .toggle-theme { position: fixed; top: 16px; right: 16px; z-index: 50; }
+  </style>
+</head>
+<body>
+  <button class="shse-btn toggle-theme" type="button"
+          onclick="document.documentElement.dataset.theme =
+                   document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">
+    Toggle theme
+  </button>
+
+  <div class="wrap">
+    <header style="margin-bottom:18px;">
+      <h1 class="title">SHSE component gallery</h1>
+      <p style="margin:0; color:var(--shse-text-muted); font-size:14px;">
+        Reference render of every primitive in <code class="shse-mono">tokens.css</code>.
+        Use this to verify your port matches.
+      </p>
+    </header>
+
+    <!-- Type -->
+    <section>
+      <h2>Type</h2>
+      <div class="cell">
+        <div class="shse-serif" style="font-size:48px; line-height:1.1;">Search your homelab</div>
+        <div class="label">Instrument Serif · 48 / 1.1 · -0.01em</div>
+        <hr style="border:none; border-top:1px solid var(--shse-border); margin:14px 0;">
+        <div style="font-size:24px; font-weight:600;">Display Inter 24 / 600</div>
+        <div style="font-size:16px;">Body Inter 16 / 400</div>
+        <div style="font-size:14px; color:var(--shse-text-muted);">Muted Inter 14 / 400</div>
+        <div style="font-size:12px; color:var(--shse-text-faint);">Faint Inter 12 / 400</div>
+        <div class="shse-mono" style="font-size:13px; margin-top:6px;">JetBrains Mono 13 — code & data</div>
+      </div>
+    </section>
+
+    <!-- Colors (light + dark) -->
+    <section>
+      <h2>Colors</h2>
+      <div class="grid-4">
+        <div><div class="swatch" style="background:var(--shse-bg);"><span>--shse-bg</span></div></div>
+        <div><div class="swatch" style="background:var(--shse-surface);"><span>--shse-surface</span></div></div>
+        <div><div class="swatch" style="background:var(--shse-surface-2);"><span>--shse-surface-2</span></div></div>
+        <div><div class="swatch" style="background:var(--shse-surface-3);"><span>--shse-surface-3</span></div></div>
+        <div><div class="swatch" style="background:var(--shse-accent);"><span style="color:white; background:transparent;">--shse-accent</span></div></div>
+        <div><div class="swatch" style="background:var(--shse-accent-soft);"><span>--shse-accent-soft</span></div></div>
+        <div><div class="swatch" style="background:var(--shse-warning);"><span style="color:white; background:transparent;">--shse-warning</span></div></div>
+        <div><div class="swatch" style="background:var(--shse-danger);"><span style="color:white; background:transparent;">--shse-danger</span></div></div>
+      </div>
+    </section>
+
+    <!-- Buttons -->
+    <section>
+      <h2>Buttons</h2>
+      <div class="cell row">
+        <button class="shse-btn shse-btn-primary">Primary action</button>
+        <button class="shse-btn">Default</button>
+        <button class="shse-btn shse-btn-ghost">Ghost</button>
+        <button class="shse-btn shse-btn-danger">Danger</button>
+        <button class="shse-btn" disabled>Disabled</button>
+      </div>
+    </section>
+
+    <!-- Pills -->
+    <section>
+      <h2>Pills / status</h2>
+      <div class="cell row">
+        <span class="shse-pill">default</span>
+        <span class="shse-pill shse-pill-accent">accent</span>
+        <span class="shse-pill shse-pill-success">success</span>
+        <span class="shse-pill shse-pill-warning">warning</span>
+        <span class="shse-pill shse-pill-danger">danger</span>
+        <span class="shse-pill shse-pill-ok">ok (alias)</span>
+        <span class="shse-pill shse-pill-warn">warn (alias)</span>
+      </div>
+      <div class="cell row" style="margin-top:10px;">
+        <span class="shse-dot shse-dot-ok"></span> ok
+        <span class="shse-dot shse-dot-warn"></span> warn
+        <span class="shse-dot shse-dot-danger"></span> danger
+        <span class="shse-dot shse-dot-ok shse-dot-pulse"></span> ok / pulse
+      </div>
+    </section>
+
+    <!-- Inputs -->
+    <section>
+      <h2>Inputs</h2>
+      <div class="cell" style="display:flex; flex-direction:column; gap:10px;">
+        <input class="shse-input" placeholder="A regular input">
+        <input class="shse-input" value="With a value" />
+        <textarea class="shse-input shse-mono" rows="3"
+                  placeholder="Mono textarea (used in YAML editor)"></textarea>
+      </div>
+    </section>
+
+    <!-- Cards -->
+    <section>
+      <h2>Cards</h2>
+      <div class="grid-2">
+        <div class="shse-card" style="padding:16px;">
+          <div style="font-size:13px; font-weight:500;">Plain card</div>
+          <div style="font-size:12px; color:var(--shse-text-muted); margin-top:4px;">
+            Used as the base surface for tables, lists, panels.
+          </div>
+        </div>
+        <div class="shse-card" style="padding:16px; border-color:var(--shse-accent); background:var(--shse-accent-soft);">
+          <div style="font-size:13px; font-weight:500; color:var(--shse-accent);">Highlighted card</div>
+          <div style="font-size:12px; color:var(--shse-text-muted); margin-top:4px;">
+            For confirmations and accent emphasis.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabs -->
+    <section>
+      <h2>Tabs</h2>
+      <div class="cell" style="padding:0 16px;">
+        <nav role="tablist" style="display:flex; gap:0;">
+          <a class="shse-tab" role="tab" aria-selected="true" href="#">All <span style="font-size:11px;color:var(--shse-text-faint);">47</span></a>
+          <a class="shse-tab" role="tab" aria-selected="false" href="#">Documentation <span style="font-size:11px;color:var(--shse-text-faint);">21</span></a>
+          <a class="shse-tab" role="tab" aria-selected="false" href="#">Code <span style="font-size:11px;color:var(--shse-text-faint);">12</span></a>
+          <a class="shse-tab" role="tab" aria-selected="false" href="#">Web UIs <span style="font-size:11px;color:var(--shse-text-faint);">14</span></a>
+        </nav>
+      </div>
+    </section>
+
+    <!-- Shadows -->
+    <section>
+      <h2>Shadows / elevation</h2>
+      <div class="grid-3">
+        <div class="shse-card" style="padding:18px; box-shadow:var(--shse-shadow-sm);">--shse-shadow-sm</div>
+        <div class="shse-card" style="padding:18px; box-shadow:var(--shse-shadow-md);">--shse-shadow-md</div>
+        <div class="shse-card" style="padding:18px; box-shadow:var(--shse-shadow-lg);">--shse-shadow-lg</div>
+      </div>
+    </section>
+
+    <!-- Result snippet (mini) -->
+    <section>
+      <h2>Result snippet (BM25)</h2>
+      <div class="cell">
+        <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--shse-text-muted);">
+          <span class="shse-pill shse-pill-accent" style="font-size:10px;">prometheus</span>
+          <span>prometheus.lab.local</span>
+          <span style="color:var(--shse-text-faint);">· :9090</span>
+          <span class="shse-pill shse-pill-warning" style="font-size:10px;">BM25 only</span>
+        </div>
+        <a href="#" style="display:block; margin-top:4px; font-family:'Instrument Serif',serif;
+                          font-size:20px; color:var(--shse-link);">Defining alerting rules — Prometheus</a>
+        <p style="margin:4px 0 0; font-size:13px; color:var(--shse-text);">
+          Alerting rules allow you to define <mark>alert</mark> conditions based on Prometheus
+          expression language expressions and to send notifications to an external service.
+        </p>
+      </div>
+    </section>
+
+    <!-- Forms (toggle) -->
+    <section>
+      <h2>Toggle / switch</h2>
+      <div class="cell row">
+        <label class="shse-toggle" style="display:inline-block; cursor:pointer;
+               width:38px; height:22px; border-radius:999px; padding:2px;
+               background:var(--shse-accent); position:relative;">
+          <input type="checkbox" checked
+                 style="position:absolute; opacity:0; pointer-events:none;">
+          <span style="display:block; width:18px; height:18px; border-radius:50%;
+                       background:white; transform:translateX(16px);
+                       box-shadow:0 1px 3px rgba(0,0,0,.15);"></span>
+        </label>
+        <label class="shse-toggle" style="display:inline-block; cursor:pointer;
+               width:38px; height:22px; border-radius:999px; padding:2px;
+               background:var(--shse-surface-3); position:relative;">
+          <input type="checkbox"
+                 style="position:absolute; opacity:0; pointer-events:none;">
+          <span style="display:block; width:18px; height:18px; border-radius:50%;
+                       background:white;
+                       box-shadow:0 1px 3px rgba(0,0,0,.15);"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Loaders -->
+    <section>
+      <h2>Loaders</h2>
+      <div class="cell row" style="gap:24px;">
+        <span class="shse-spinner"
+              style="display:inline-block; width:16px; height:16px;
+                     border:2px solid var(--shse-border-strong);
+                     border-top-color:var(--shse-accent);
+                     border-radius:50%; animation:shse-spin .9s linear infinite;"></span>
+        <div style="height:14px; width:240px; border-radius:4px;
+                    background:linear-gradient(90deg,
+                      var(--shse-surface-2) 0%,
+                      var(--shse-surface-3) 50%,
+                      var(--shse-surface-2) 100%);
+                    background-size:200% 100%;
+                    animation:shse-shimmer 1.4s linear infinite;"></div>
+      </div>
+    </section>
+
+    <!-- Keycap -->
+    <section>
+      <h2>Keycap</h2>
+      <div class="cell">
+        Press <span class="shse-kbd">/</span> to focus search,
+        <span class="shse-kbd">Esc</span> to clear,
+        <span class="shse-kbd">⌘ K</span> for the command palette.
+      </div>
+    </section>
+  </div>
+</body>
+</html>

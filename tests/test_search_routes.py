@@ -142,6 +142,10 @@ def test_home_opensearch_unreachable_returns_zeros(client):
 
 # ── results() ─────────────────────────────────────────────────────────────
 
+_SEMANTIC_PATCH = "flask_app.routes.search.semantic_results"
+_SEMANTIC_EMPTY = ([], None, False)
+
+
 def test_results_empty_query_returns_200(client):
     """
     Input: GET /search with no q param

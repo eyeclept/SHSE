@@ -13,14 +13,24 @@ import os
 from celery import Celery
 
 # Globals
+_REDIS_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+
 celery = Celery(
     "shse",
-    broker=os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0"),
+    broker=_REDIS_URL,
     include=[
         "celery_worker.tasks.crawl",
         "celery_worker.tasks.index",
         "celery_worker.tasks.vectorize",
     ],
+)
+
+# Use redbeat for persistent Beat scheduling so run-history survives restarts.
+# Beat will fire any overdue tasks on startup rather than skipping them.
+celery.conf.update(
+    beat_scheduler="redbeat.RedBeatScheduler",
+    redbeat_redis_url=_REDIS_URL,
+    redbeat_lock_timeout=60,   # seconds; prevents stale lock if Beat crashes
 )
 
 

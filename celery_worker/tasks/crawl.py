@@ -15,7 +15,7 @@ Description:
 from datetime import datetime
 
 from celery_worker.app import celery
-from flask_app.services.nutch import trigger_crawl, fetch_results
+from flask_app.services.nutch import trigger_crawl, fetch_results, _fetch_page_text
 from flask_app.services.opensearch import index_document, delete_stale
 
 # Globals
@@ -114,8 +114,12 @@ def _nutch_crawl(target, nutch_session=None, os_client=None):
     )
     results = fetch_results(crawl_id, session=nutch_session)
 
+    tls_ok = bool(target.tls_verify)
     for node in results.get("nodes", []):
         url = node.get("url", "")
+        if not url:
+            continue
+        page_text = _fetch_page_text(url, tls_verify=tls_ok)
         index_document(
             url=url,
             port=target.port or 80,
@@ -123,7 +127,7 @@ def _nutch_crawl(target, nutch_session=None, os_client=None):
             crawled_at=datetime.utcnow().isoformat(),
             service_nickname=nickname,
             content_type="text/html",
-            text=url,  # placeholder: full text requires Nutch segment parsing
+            text=page_text,
             source_type="nutch",
             client=os_client,
         )
@@ -131,22 +135,89 @@ def _nutch_crawl(target, nutch_session=None, os_client=None):
     delete_stale(nickname, run_start, client=os_client)
 
 
+def _oai_fetch(base_url, endpoint, resumption_token=None):
+    """
+    Input:
+        base_url         - str, OAI-PMH repository base URL
+        endpoint         - str, OAI endpoint path (e.g. /oai2d)
+        resumption_token - str|None, pagination token from previous response
+    Output:
+        tuple (records, next_token) where records = list[{url, title, text}]
+        and next_token = str|None
+    Details:
+        Makes a direct HTTP GET to the OAI-PMH ListRecords endpoint.
+        Parses Dublin Core (oai_dc) records with stdlib xml.etree.ElementTree.
+        Follows resumption tokens for paginated repositories.
+    """
+    import xml.etree.ElementTree as ET
+    import urllib.parse
+    import requests as _req
+
+    _NS = {
+        "oai": "http://www.openarchives.org/OAI/2.0/",
+        "dc":  "http://purl.org/dc/elements/1.1/",
+        "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
+    }
+
+    params = {"verb": "ListRecords"}
+    if resumption_token:
+        params["resumptionToken"] = resumption_token
+    else:
+        params["metadataPrefix"] = "oai_dc"
+
+    url = base_url.rstrip("/") + endpoint
+    try:
+        resp = _req.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        root = ET.fromstring(resp.content)
+    except Exception:
+        return [], None
+
+    records = []
+    for record in root.findall(".//oai:record", _NS):
+        header = record.find("oai:header", _NS)
+        metadata = record.find(".//oai_dc:dc", _NS)
+        if header is None or metadata is None:
+            continue
+        identifier = (header.findtext("oai:identifier", default="", namespaces=_NS) or "").strip()
+        title_el = metadata.find("dc:title", _NS)
+        title = (title_el.text or "").strip() if title_el is not None else ""
+        desc_el = metadata.find("dc:description", _NS)
+        description = (desc_el.text or "").strip() if desc_el is not None else ""
+        rec_url = f"{url}?verb=GetRecord&metadataPrefix=oai_dc&identifier={urllib.parse.quote(identifier)}"
+        text = f"{title} {description}".strip() or identifier
+        records.append({"url": rec_url, "title": title, "text": text})
+
+    token_el = root.find(".//oai:resumptionToken", _NS)
+    next_token = (token_el.text or "").strip() if token_el is not None else None
+
+    return records, next_token or None
+
+
 def _harvest_oai_impl(target, os_client=None, _docs=None):
     """
     Input:
         target    - CrawlerTarget ORM object (type oai-pmh)
         os_client - optional OpenSearch client
-        _docs     - injectable doc list for tests; production path uses []
+        _docs     - injectable doc list for tests; None uses real OAI-PMH fetch
     Output: None
     Details:
-        Stub for Metha OAI-PMH harvest. Real integration calls:
-            metha-sync -format oai_dc {target.url}{target.endpoint}
-        then parses ListRecords XML and indexes each record.
-        Indexes any provided records with source_type="oai-pmh".
+        Fetches records via OAI-PMH ListRecords (oai_dc format), following
+        resumption tokens. Indexes each record with source_type="oai-pmh".
     """
     nickname = target.nickname or str(target.id)
     run_start = datetime.utcnow().isoformat()
-    docs = _docs if _docs is not None else []
+
+    if _docs is not None:
+        docs = _docs
+    else:
+        docs = []
+        token = None
+        while True:
+            batch, token = _oai_fetch(target.url or "", target.endpoint or "/oai2d", token)
+            docs.extend(batch)
+            if not token:
+                break
 
     for doc in docs:
         index_document(
@@ -164,21 +235,72 @@ def _harvest_oai_impl(target, os_client=None, _docs=None):
     delete_stale(nickname, run_start, client=os_client)
 
 
+def _feed_fetch(base_url, feed_path):
+    """
+    Input:
+        base_url  - str, site base URL
+        feed_path - str, feed path (e.g. /rss, /feed.atom)
+    Output:
+        list[{url, title, text}] — one entry per feed item
+    Details:
+        Fetches the RSS/Atom feed with stdlib urllib.request and parses with
+        xml.etree.ElementTree. Handles both RSS 2.0 and Atom 1.0 formats.
+    """
+    import xml.etree.ElementTree as ET
+    import urllib.request
+
+    _ATOM = "http://www.w3.org/2005/Atom"
+    feed_url = base_url.rstrip("/") + feed_path
+
+    try:
+        with urllib.request.urlopen(feed_url, timeout=15) as resp:
+            content = resp.read()
+        root = ET.fromstring(content)
+    except Exception:
+        return []
+
+    docs = []
+    # RSS 2.0
+    for item in root.findall(".//item"):
+        link = (item.findtext("link") or "").strip()
+        title = (item.findtext("title") or "").strip()
+        desc = (item.findtext("description") or "").strip()
+        if link:
+            docs.append({"url": link, "title": title, "text": f"{title} {desc}".strip() or link})
+
+    # Atom 1.0
+    for entry in root.findall(f"{{{_ATOM}}}entry"):
+        link_el = entry.find(f"{{{_ATOM}}}link")
+        link = (link_el.get("href", "") if link_el is not None else "").strip()
+        title = (entry.findtext(f"{{{_ATOM}}}title") or "").strip()
+        summary = (entry.findtext(f"{{{_ATOM}}}summary") or "").strip()
+        content_el = entry.find(f"{{{_ATOM}}}content")
+        body = (content_el.text or "").strip() if content_el is not None else ""
+        text = f"{title} {summary} {body}".strip() or link
+        if link:
+            docs.append({"url": link, "title": title, "text": text})
+
+    return docs
+
+
 def _harvest_feeds_impl(target, os_client=None, _docs=None):
     """
     Input:
         target    - CrawlerTarget ORM object (type feed)
         os_client - optional OpenSearch client
-        _docs     - injectable doc list for tests; production path uses []
+        _docs     - injectable doc list for tests; None uses real feed fetch
     Output: None
     Details:
-        Stub for RSS/Atom/ActivityPub feed harvest. Real integration parses
-        {target.url}{target.feed_path} with feedparser and indexes each entry.
-        Indexes any parsed entries with source_type="rss".
+        Fetches RSS 2.0 or Atom 1.0 feed at {target.url}{target.feed_path}
+        using stdlib urllib and indexes each entry with source_type="rss".
     """
     nickname = target.nickname or str(target.id)
     run_start = datetime.utcnow().isoformat()
-    docs = _docs if _docs is not None else []
+
+    if _docs is not None:
+        docs = _docs
+    else:
+        docs = _feed_fetch(target.url or "", target.feed_path or "/rss")
 
     for doc in docs:
         index_document(
@@ -201,16 +323,30 @@ def _push_api_content_impl(target, os_client=None, _docs=None):
     Input:
         target    - CrawlerTarget ORM object (type api-push)
         os_client - optional OpenSearch client
-        _docs     - injectable doc list for tests; production path uses []
+        _docs     - injectable doc list for tests; None uses real adapter fetch
     Output: None
     Details:
-        Stub for custom adapter-based API harvest. Real integration imports
-        the adapter module named in target.adapter and calls its fetch() function.
-        Indexes any returned documents with source_type="api-push".
+        Dynamically imports flask_app.adapters.{target.adapter} and calls
+        its fetch(target) function. The adapter returns a list of
+        {url, title, text} dicts. Each doc is indexed with source_type="api-push".
+        Import errors and fetch failures are swallowed — the task does not fail
+        because of a missing or broken adapter.
     """
     nickname = target.nickname or str(target.id)
     run_start = datetime.utcnow().isoformat()
-    docs = _docs if _docs is not None else []
+
+    if _docs is not None:
+        docs = _docs
+    else:
+        docs = []
+        adapter_name = target.adapter or ""
+        if adapter_name:
+            try:
+                import importlib
+                mod = importlib.import_module(f"flask_app.adapters.{adapter_name}")
+                docs = mod.fetch(target)
+            except Exception:
+                pass
 
     for doc in docs:
         index_document(

@@ -1,3 +1,75 @@
 {% extends "base.html" %}
-{% block title %}Register — SHSE{% endblock %}
-{% block content %}{% endblock %}
+{% import "_icons.html" as icon %}
+
+{% block title %}{{ "First-run setup" if is_first else "Create account" }}{% endblock %}
+
+{% block content %}
+<main id="shse-main" role="main" style="min-height:100vh; display:grid; place-items:center; padding:40px;">
+  <div style="width:min(440px, 96vw);">
+    <div style="text-align:center; margin-bottom:24px;">{{ icon.logo(48) }}</div>
+
+    <div class="shse-card" style="padding:28px;">
+      <h1 class="shse-serif" style="margin:0 0 6px; font-size:26px; font-weight:400;">
+        {{ "First-run setup" if is_first else "Create account" }}
+      </h1>
+      <p style="margin:0 0 22px; font-size:14px; color:var(--shse-text-muted);">
+        {% if is_first %}
+          Create the initial admin account for this instance.
+        {% else %}
+          Register a new account on this SHSE instance.
+        {% endif %}
+      </p>
+
+      <form method="post" action="{{ url_for('auth.register') }}" novalidate>
+        {% if error %}
+          <div role="alert" style="padding:10px 12px; margin-bottom:14px;
+                                   border-radius:8px; background:var(--shse-danger-soft);
+                                   color:var(--shse-danger); font-size:13px;
+                                   display:flex; gap:8px; align-items:flex-start;">
+            {{ icon.alert(14) }} <span>{{ error }}</span>
+          </div>
+        {% endif %}
+
+        <label style="display:block; margin-bottom:14px;">
+          <span style="display:block; font-size:12px; font-weight:500;
+                       color:var(--shse-text-muted); margin-bottom:6px;">Username</span>
+          <input type="text" name="username" class="shse-input"
+                 autofocus autocomplete="username"
+                 style="width:100%; box-sizing:border-box;">
+        </label>
+
+        <label style="display:block; margin-bottom:14px;">
+          <span style="display:block; font-size:12px; font-weight:500;
+                       color:var(--shse-text-muted); margin-bottom:6px;">Password</span>
+          <input type="password" name="password" class="shse-input"
+                 autocomplete="new-password"
+                 style="width:100%; box-sizing:border-box;">
+        </label>
+
+        {% if is_first %}
+        <div style="padding:12px; background:var(--shse-accent-soft);
+                    border-radius:8px; font-size:12.5px;
+                    color:var(--shse-text-muted); margin-bottom:16px;
+                    display:flex; gap:8px;">
+          <span style="flex-shrink:0; margin-top:2px; color:var(--shse-accent);">
+            {{ icon.info(14) }}
+          </span>
+          <span>This account will have
+            <strong style="color:var(--shse-text);">full admin access</strong>.
+            You can add more users later from Admin → Settings.</span>
+        </div>
+        {% endif %}
+
+        <button type="submit" class="shse-btn shse-btn-primary"
+                style="width:100%; justify-content:center; padding:12px; margin-top:4px;">
+          {{ "Create admin account" if is_first else "Create account" }}
+        </button>
+      </form>
+    </div>
+
+    <p style="text-align:center; font-size:12px; color:var(--shse-text-faint); margin-top:18px;">
+      Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a>
+    </p>
+  </div>
+</main>
+{% endblock %}

@@ -1,3 +1,108 @@
+{#
+  Job list. Porting reference: src/screens/admin.jsx <AdminJobs>
+
+  Route contract:
+    GET  /admin/jobs                       → render full page
+    GET  /admin/jobs/_table                → HTMX partial; returns just <tbody>
+                                             so polling doesn't reflow header
+    POST /admin/jobs/<id>/cancel           → revoke Celery task
+    GET  /admin/jobs/<id>                  → job detail (logs, stack trace)
+
+  Polling: <table tbody> hx-trigger="every 2s" hx-swap="outerHTML".
+  Stop polling once filter excludes any active rows; see hx-trigger
+  recipe in HANDOFF.md → "HTMX patterns".
+
+  Context:
+    jobs   = list of crawl_jobs rows; shape:
+               { id, kind: 'crawl'|'reindex'|'vectorize',
+                 target, status: 'queued'|'running'|'done'|'failed'|'cancelled',
+                 progress: 0..100, started_at, finished_at, took, message }
+    filter = current ?status= filter (or 'all')
+    counts = dict { all, queued, running, done, failed }
+#}
 {% extends "base.html" %}
-{% block title %}Jobs — SHSE Admin{% endblock %}
-{% block content %}{% endblock %}
+{% import "_icons.html" as icon %}
+{% import "_macros.html" as macros %}
+
+{% block title %}Admin · Jobs{% endblock %}
+
+{% block chrome %}
+  {% include "_topbar.html" %}
+  {% include "admin/_subnav.html" %}
+{% endblock %}
+
+{% block content %}
+<main id="shse-main" role="main" style="max-width:1180px; margin:0 auto; padding:28px 28px 80px;">
+  <header style="display:flex; align-items:flex-end; gap:16px; margin-bottom:18px;">
+    <div>
+      <h1 class="shse-serif" style="margin:0; font-size:28px; font-weight:400;
+                                    letter-spacing:-0.01em;">Jobs</h1>
+      <p style="margin:4px 0 0; font-size:14px; color:var(--shse-text-muted);">
+        Crawl, reindex, and vectorize tasks. Auto-refreshing.
+      </p>
+    </div>
+    <div style="flex:1;"></div>
+    <span style="font-size:11px; color:var(--shse-text-faint);">
+      {{ macros.spinner(10) }} live
+    </span>
+  </header>
+
+  {# ── Filter chips ───────────────────────────────────────────────── #}
+  <div role="tablist" style="display:flex; gap:6px; margin-bottom:14px;">
+    {% for f, label in [
+      ('all',     'All'),
+      ('queued',  'Queued'),
+      ('running', 'Running'),
+      ('done',    'Done'),
+      ('failed',  'Failed'),
+    ] %}
+      <a href="{{ url_for('admin.jobs', status=f) }}" role="tab"
+         aria-selected="{{ 'true' if filter == f else 'false' }}"
+         class="shse-pill"
+         style="text-decoration:none; cursor:pointer;
+                background: {{ 'var(--shse-accent-soft)' if filter == f else 'var(--shse-surface)' }};
+                color:     {{ 'var(--shse-accent)' if filter == f else 'var(--shse-text-muted)' }};
+                border-color: {{ 'transparent' if filter == f else 'var(--shse-border)' }};">
+        {{ label }} <span style="opacity:0.65;">{{ counts.get(f, 0) }}</span>
+      </a>
+    {% endfor %}
+  </div>
+
+  {% if not jobs %}
+    {{ macros.empty_state(
+      title="No jobs match",
+      body="Trigger a crawl from Targets, or change the filter above.",
+      action_label="Go to Targets", action_href=url_for('admin.targets'),
+      icon_name="play") }}
+  {% else %}
+  <div class="shse-card" style="overflow:hidden;">
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <thead>
+        <tr style="background:var(--shse-surface-2);
+                   color:var(--shse-text-muted); text-align:left;">
+          <th style="padding:10px 14px; font-size:11px; font-weight:500;
+                     text-transform:uppercase; letter-spacing:0.06em;">Job</th>
+          <th style="padding:10px 14px; font-size:11px; font-weight:500;
+                     text-transform:uppercase; letter-spacing:0.06em;">Target</th>
+          <th style="padding:10px 14px; font-size:11px; font-weight:500;
+                     text-transform:uppercase; letter-spacing:0.06em;">Progress</th>
+          <th style="padding:10px 14px; font-size:11px; font-weight:500;
+                     text-transform:uppercase; letter-spacing:0.06em;">Started</th>
+          <th style="padding:10px 14px; font-size:11px; font-weight:500;
+                     text-transform:uppercase; letter-spacing:0.06em;
+                     text-align:right;">Took</th>
+          <th></th>
+        </tr>
+      </thead>
+      {# tbody is the HTMX swap target — header never re-renders. #}
+      <tbody id="jobs-tbody"
+             hx-get="{{ url_for('admin.jobs_table', status=filter) }}"
+             hx-trigger="every 2s"
+             hx-swap="outerHTML">
+        {% include "admin/_jobs_rows.html" %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</main>
+{% endblock %}

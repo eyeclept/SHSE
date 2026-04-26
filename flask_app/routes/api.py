@@ -11,8 +11,10 @@ Description:
 # Imports
 import math
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, render_template, request
+from flask_login import current_user
 from flask_app.services.opensearch import get_client
+from flask_app.services.search import bm25_body, semantic_results
 
 # Globals
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -26,20 +28,22 @@ _PAGE_SIZE = 10
 def search():
     """
     Input: q (query string), page (1-indexed, default 1), tab (default 'all')
-    Output: JSON object with results, total, timing, and source facets
+    Output: JSON object with results, total, timing, source facets,
+            vector_hits, and optional ai_summary
     Details:
-        Runs a BM25 match query against the shse_pages index with highlighting.
-        Returns 200 with an empty results list when q is blank.
-        Returns 200 with an empty results list when OpenSearch is unreachable.
+        Runs a multi_match BM25 query with typo tolerance across text and title.
+        When the LLM API is available, also runs vector search and generates
+        an AI summary. Returns 200 with empty results on any failure.
 
     Response shape:
         {
-          "q":          str,
-          "tab":        str,
-          "page":       int,
-          "page_count": int,
-          "total":      int,
-          "took_ms":    int,
+          "q":                  str,
+          "tab":                str,
+          "page":               int,
+          "page_count":         int,
+          "total":              int,
+          "took_ms":            int,
+          "show_bm25_warning":  bool,
           "results": [
             {
               "id":           str,
@@ -53,7 +57,9 @@ def search():
               "vectorized":   bool
             }
           ],
-          "sources": [{"name": str, "n": int}]
+          "sources":       [{"name": str, "n": int}],
+          "vector_hits":   [{"score": float, "service": str, "url": str, "title": str, "snippet": str}],
+          "ai_summary":    {"html": str, "sources": [str]} | null
         }
     """
     q = request.args.get("q", "").strip()
@@ -68,25 +74,14 @@ def search():
     took_ms = 0
     sources = []
     page_count = 1
+    vector_hits = []
+    ai_summary = None
+    show_bm25_warning = False
 
     if q:
         try:
             client = get_client()
-            body = {
-                "from": (page - 1) * _PAGE_SIZE,
-                "size": _PAGE_SIZE,
-                "query": {"match": {"text": {"query": q, "fuzziness": "AUTO"}}},
-                "highlight": {
-                    "fields": {"text": {}},
-                    "pre_tags": [""],
-                    "post_tags": [""],
-                    "number_of_fragments": 2,
-                    "fragment_size": 200,
-                },
-                "aggs": {
-                    "by_service": {"terms": {"field": "service_nickname", "size": 20}},
-                },
-            }
+            body = bm25_body(q, page=page, page_size=_PAGE_SIZE)
             resp = client.search(index=_INDEX_NAME, body=body)
             took_ms = resp.get("took", 0)
             total = resp["hits"]["total"]["value"]
@@ -95,7 +90,8 @@ def search():
             for h in resp["hits"]["hits"]:
                 src = h.get("_source", {})
                 hl = h.get("highlight", {})
-                snippet = " … ".join(hl.get("text", [src.get("text", "")[:300]]))
+                frags = hl.get("title", []) + hl.get("text", [src.get("text", "")[:300]])
+                snippet = " … ".join(frags[:3])
                 result_rows.append({
                     "id": h["_id"],
                     "title": src.get("title") or src.get("url", ""),
@@ -114,6 +110,9 @@ def search():
         except Exception:
             pass
 
+        # Semantic search + AI summary
+        vector_hits, ai_summary, show_bm25_warning = semantic_results(q)
+
     return jsonify({
         "q": q,
         "tab": tab,
@@ -121,8 +120,11 @@ def search():
         "page_count": page_count,
         "total": total,
         "took_ms": took_ms,
+        "show_bm25_warning": show_bm25_warning,
         "results": result_rows,
         "sources": sources,
+        "vector_hits": vector_hits,
+        "ai_summary": ai_summary,
     })
 
 
@@ -150,6 +152,45 @@ def stats():
         return jsonify({"docs": count, "services": svc_count, "last_crawl": last_crawl})
     except Exception:
         return jsonify({"docs": 0, "services": 0, "last_crawl": None})
+
+
+@api_bp.route("/semantic")
+def semantic():
+    """
+    Input: q (query string)
+    Output: HTML fragment replacing the semantic rail aside element
+    Details:
+        Called by HTMX on the results page after BM25 results have rendered.
+        Runs vector search and generates an AI summary. Returns a complete
+        <aside> element that HTMX swaps in place of the loading placeholder.
+        Returns an empty aside when the LLM API is unavailable.
+    """
+    q = request.args.get("q", "").strip()
+    if not q:
+        return "<aside></aside>"
+
+    vector_hits, ai_summary, show_bm25_warning = semantic_results(q)
+    return render_template(
+        "_semantic_rail.html",
+        q=q,
+        vector_hits=vector_hits,
+        ai_summary=ai_summary,
+        show_bm25_warning=show_bm25_warning,
+    )
+
+
+@api_bp.route("/admin-check")
+def admin_check():
+    """
+    Input: None (reads Flask-Login session)
+    Output: 200 for authenticated admin, 403 otherwise
+    Details:
+        Used by Nginx auth_request to gate /admin/* routes at the proxy layer.
+        Returns no body — only the status code is meaningful to Nginx.
+    """
+    if current_user.is_authenticated and current_user.role == "admin":
+        return "", 200
+    return "", 403
 
 
 if __name__ == "__main__":

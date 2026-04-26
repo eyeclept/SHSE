@@ -12,7 +12,11 @@ but any OpenAI-compatible server works.
 |---|---|---|
 | `LLM_API_BASE` | `http://localhost:11434/v1` | Base URL of the OpenAI-compatible endpoint |
 | `LLM_EMBED_MODEL` | `nomic-embed-text` | Model name used for embedding calls |
-| `LLM_GEN_MODEL` | `llama3` | Model name used for generative summary calls |
+| `LLM_GEN_MODEL` | `granite3.3:latest` | Model name used for generative summary calls |
+
+These defaults can be overridden at runtime via the `settings.llm` block in the crawler
+YAML config (see [docs/config.md](config.md) — Epic 9d). DB values take precedence over
+env vars when set.
 
 All three variables are read at import time from the environment.
 Set them in `.env` before starting the stack.

@@ -1,0 +1,148 @@
+{#
+  Crawler targets list. Porting reference: src/screens/admin.jsx <AdminTargets>
+
+  Route contract:
+    GET  /admin/targets                    → render this
+    POST /admin/targets/<id>/crawl         → enqueue crawl Celery task
+    POST /admin/targets/<id>/reindex       → enqueue reindex Celery task
+    POST /admin/targets/<id>/vectorize     → enqueue vectorize Celery task
+    POST /admin/targets/<id>/toggle        → enable/disable target
+    DELETE /admin/targets/<id>             → remove target
+
+  Buttons must auto-disable when the relevant service is unreachable
+  (see opensearch_up / nutch_up / llm_api_up flags).
+
+  Context:
+    targets        = list of crawler_targets rows; shape:
+                       { id, name, url, service_label, enabled,
+                         last_crawl, next_crawl, doc_count,
+                         status: 'idle'|'crawling'|'failed' }
+    opensearch_up  = bool
+    nutch_up       = bool
+    llm_api_up     = bool
+#}
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+{% import "_macros.html" as macros %}
+
+{% block title %}Admin · Targets{% endblock %}
+
+{% block chrome %}
+  {% include "_topbar.html" %}
+  {% include "admin/_subnav.html" %}
+{% endblock %}
+
+{% block content %}
+<main id="shse-main" role="main" style="max-width:1180px; margin:0 auto; padding:28px 28px 80px;">
+  <header style="display:flex; align-items:flex-end; gap:16px; margin-bottom:18px;">
+    <div>
+      <h1 class="shse-serif" style="margin:0; font-size:28px; font-weight:400;
+                                    letter-spacing:-0.01em;">Crawler targets</h1>
+      <p style="margin:4px 0 0; font-size:14px; color:var(--shse-text-muted);">
+        Sources that get indexed. Edit the YAML in
+        <a href="{{ url_for('admin_config') }}">Config</a> to add or remove.
+      </p>
+    </div>
+    <div style="flex:1;"></div>
+    <a href="{{ url_for('admin_config') }}" class="shse-btn">{{ icon.edit(14) }} Edit YAML</a>
+  </header>
+
+  {# ── Service-down banners ───────────────────────────────────────── #}
+  {% if not opensearch_up or not nutch_up %}
+  <div class="shse-card" style="padding:12px 16px; margin-bottom:18px;
+                                border-color:var(--shse-warning);
+                                background:var(--shse-warning-soft);">
+    <div style="display:flex; align-items:flex-start; gap:10px;">
+      <span style="color:var(--shse-warning); margin-top:2px;">{{ icon.alert(14) }}</span>
+      <div style="font-size:13px;">
+        <strong>Some actions are disabled.</strong>
+        {% if not opensearch_up %}OpenSearch is unreachable.{% endif %}
+        {% if not nutch_up %}Nutch is unreachable.{% endif %}
+        Check <a href="{{ url_for('admin_overview') }}">Overview</a> for details.
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not targets %}
+    {{ macros.empty_state(
+      title="No crawler targets configured",
+      body="Add targets via the YAML config to start indexing your homelab.",
+      action_label="Open Config", action_href=url_for('admin_config'),
+      icon_name="server") }}
+  {% else %}
+    <div class="shse-card" style="overflow:hidden;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="background:var(--shse-surface-2);
+                     color:var(--shse-text-muted); text-align:left;">
+            <th style="padding:10px 14px; font-weight:500; font-size:11px;
+                       text-transform:uppercase; letter-spacing:0.06em;">Target</th>
+            <th style="padding:10px 14px; font-weight:500; font-size:11px;
+                       text-transform:uppercase; letter-spacing:0.06em;">Status</th>
+            <th style="padding:10px 14px; font-weight:500; font-size:11px;
+                       text-transform:uppercase; letter-spacing:0.06em;">Docs</th>
+            <th style="padding:10px 14px; font-weight:500; font-size:11px;
+                       text-transform:uppercase; letter-spacing:0.06em;">Last crawl</th>
+            <th style="padding:10px 14px; font-weight:500; font-size:11px;
+                       text-transform:uppercase; letter-spacing:0.06em;
+                       text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in targets %}
+          <tr style="border-top:1px solid var(--shse-border);"
+              {% if not t.enabled %}style="opacity:0.55;"{% endif %}>
+            <td style="padding:12px 14px;">
+              <div style="font-weight:500;">{{ t.name }}</div>
+              <div class="shse-mono" style="font-size:11px;
+                          color:var(--shse-text-faint); margin-top:2px;">{{ t.url }}</div>
+            </td>
+            <td style="padding:12px 14px;">
+              <span class="shse-pill {{
+                'shse-pill-success' if t.status == 'idle' else
+                'shse-pill-warning' if t.status == 'crawling' else
+                'shse-pill-danger' }}">
+                {% if t.status == 'crawling' %}{{ macros.spinner(10) }}{% endif %}
+                {{ t.status }}
+              </span>
+            </td>
+            <td class="shse-mono" style="padding:12px 14px;">{{ "{:,}".format(t.doc_count) }}</td>
+            <td style="padding:12px 14px; color:var(--shse-text-muted);">{{ t.last_crawl }}</td>
+            <td style="padding:12px 14px; text-align:right; white-space:nowrap;">
+              {# Crawl: needs Nutch + OpenSearch #}
+              <form method="post" action="{{ url_for('admin_target_crawl', target_id=t.id) }}"
+                    style="display:inline;">
+                <button type="submit" class="shse-btn shse-btn-ghost"
+                        style="font-size:12px;"
+                        title="{{ 'Nutch unreachable' if not nutch_up else 'Trigger crawl' }}"
+                        {{ 'disabled' if not (nutch_up and opensearch_up) }}>
+                  {{ icon.refresh(12) }} Crawl
+                </button>
+              </form>
+              {# Reindex: needs OpenSearch #}
+              <form method="post" action="{{ url_for('admin_target_reindex', target_id=t.id) }}"
+                    style="display:inline;">
+                <button type="submit" class="shse-btn shse-btn-ghost"
+                        style="font-size:12px;"
+                        {{ 'disabled' if not opensearch_up }}>Reindex</button>
+              </form>
+              {# Vectorize: needs LLM API + OpenSearch #}
+              <form method="post" action="{{ url_for('admin_target_vectorize', target_id=t.id) }}"
+                    style="display:inline;">
+                <button type="submit" class="shse-btn shse-btn-ghost"
+                        style="font-size:12px;"
+                        title="{{ 'LLM API unreachable' if not llm_api_up else 'Embed all docs' }}"
+                        {{ 'disabled' if not (llm_api_up and opensearch_up) }}>
+                  {{ icon.spark(12) }} Vectorize
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</main>
+{% endblock %}

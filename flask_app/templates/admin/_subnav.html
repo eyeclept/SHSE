@@ -1,0 +1,35 @@
+{#
+  Admin sub-navigation.
+
+  Route map:
+    /admin           → Overview      admin.index
+    /admin/targets   → Targets       admin.targets
+    /admin/jobs      → Jobs          admin.jobs
+    /admin/config    → Config        admin.crawler_config
+    /admin/index     → Index ops     admin.index_ops
+#}
+<nav aria-label="Admin sections"
+     style="display:flex; gap:2px; padding:0 24px;
+            border-bottom:1px solid var(--shse-border);
+            background:var(--shse-surface); position:sticky; top:48px; z-index:9;">
+  <a href="{{ url_for('admin.index') }}" class="shse-tab"
+     aria-current="{{ 'page' if request.endpoint == 'admin.index' else '' }}">
+    {{ icon.grid(14) }} Overview
+  </a>
+  <a href="{{ url_for('admin.targets') }}" class="shse-tab"
+     aria-current="{{ 'page' if request.endpoint == 'admin.targets' else '' }}">
+    {{ icon.server(14) }} Targets
+  </a>
+  <a href="{{ url_for('admin.jobs') }}" class="shse-tab"
+     aria-current="{{ 'page' if request.endpoint == 'admin.jobs' else '' }}">
+    {{ icon.play(14) }} Jobs
+  </a>
+  <a href="{{ url_for('admin.crawler_config') }}" class="shse-tab"
+     aria-current="{{ 'page' if request.endpoint == 'admin.crawler_config' else '' }}">
+    {{ icon.edit(14) }} Config
+  </a>
+  <a href="{{ url_for('admin.index_ops') }}" class="shse-tab"
+     aria-current="{{ 'page' if request.endpoint == 'admin.index_ops' else '' }}">
+    {{ icon.list(14) }} Index
+  </a>
+</nav>

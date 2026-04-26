@@ -35,8 +35,15 @@ def login():
         if user and user.check_password(password):
             login_user(user)
             return redirect(url_for("search.home"))
-        return render_template("login.html", error="Invalid credentials"), 401
-    return render_template("login.html")
+        return render_template(
+            "login.html",
+            error="Invalid credentials",
+            sso_enabled=current_app.config.get("SSO_ENABLED", False),
+        ), 401
+    return render_template(
+        "login.html",
+        sso_enabled=current_app.config.get("SSO_ENABLED", False),
+    )
 
 
 @auth_bp.route("/logout", methods=["GET", "POST"])
@@ -75,7 +82,8 @@ def register():
         db.session.add(user)
         db.session.commit()
         return redirect(url_for("auth.login"))
-    return render_template("register.html")
+    is_first = db.session.execute(db.select(User)).scalar_one_or_none() is None
+    return render_template("register.html", is_first=is_first)
 
 
 @auth_bp.route("/setup", methods=["GET", "POST"])

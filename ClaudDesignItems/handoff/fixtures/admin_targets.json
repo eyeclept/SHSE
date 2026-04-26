@@ -1,0 +1,52 @@
+{
+  "_doc": "Mock crawler_targets rows. Used by /admin/targets.",
+  "opensearch_up": true,
+  "nutch_up": true,
+  "llm_api_up": true,
+  "targets": [
+    {
+      "id": 1,
+      "name": "Prometheus",
+      "url": "http://prometheus.lab.local:9090",
+      "service_label": "prometheus",
+      "enabled": true,
+      "last_crawl": "5m ago",
+      "next_crawl": "in 55m",
+      "doc_count": 21408,
+      "status": "idle"
+    },
+    {
+      "id": 2,
+      "name": "Gitea",
+      "url": "http://gitea.lab.local:3000",
+      "service_label": "gitea",
+      "enabled": true,
+      "last_crawl": "now",
+      "next_crawl": "in 4h",
+      "doc_count": 184902,
+      "status": "crawling"
+    },
+    {
+      "id": 3,
+      "name": "Grafana",
+      "url": "http://grafana.lab.local:3000",
+      "service_label": "grafana",
+      "enabled": true,
+      "last_crawl": "4h ago",
+      "next_crawl": "in 2h",
+      "doc_count": 8421,
+      "status": "failed"
+    },
+    {
+      "id": 4,
+      "name": "Wiki",
+      "url": "http://wiki.lab.local",
+      "service_label": "bookstack",
+      "enabled": false,
+      "last_crawl": "3d ago",
+      "next_crawl": "—",
+      "doc_count": 1204,
+      "status": "idle"
+    }
+  ]
+}

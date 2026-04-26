@@ -10,7 +10,7 @@ Homelab operators lack a purpose-built search engine for their internal infrastr
 ## 2. Goals & Non-Goals
 
 **Goals**
-- BM25 full-text search over lab-network-hosted content
+- BM25 full-text search over lab-network-hosted content with typo tolerance
 - Optional AI-generated result summaries via local LLM (RAG)
 - Configurable network/service crawling via Apache Nutch
 - User accounts with persistent search history
@@ -47,7 +47,7 @@ All services are assumed to be independently hosted and reachable over the netwo
 
 ```mermaid
 graph TD
-    User["👤 User"]
+    User["User"]
 
     Nginx["Nginx\n(configurable host)"]
     Flask["Flask\n(configurable host)"]
@@ -97,6 +97,16 @@ graph TD
 - System health indicators (OpenSearch, Nutch, LLM API, Redis connectivity)
 
 ### 4.2 OpenSearch
+
+#### Search quality
+
+SHSE targets **typo-tolerant, multi-field BM25** as the baseline retrieval strategy:
+
+- **Typo tolerance** — `fuzziness: AUTO` on match queries (1 edit distance for 3–5 char terms, 2 for 6+). The first character is never fuzzed (`prefix_length: 1`) to avoid excessively broad matches.
+- **Multi-field retrieval** — queries match against both `text` (chunk content) and `title` (page title) simultaneously using OpenSearch `multi_match best_fields`; `title` is boosted (`title^2`) so title matches rank above body matches.
+- **Semantic re-ranking** — when the LLM API is available, the query is also embedded and run as a k-NN search to surface semantically related results alongside BM25 hits.
+
+No additional OpenSearch plugins are required for baseline typo tolerance. Phonetic matching (Soundex/Metaphone via the `analysis-phonetic` plugin) is a possible future enhancement if homophone confusion becomes a problem in practice.
 
 Single index with the following core fields:
 

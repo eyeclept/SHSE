@@ -1,0 +1,15 @@
+{
+  "_doc": "Mock current YAML + a representative validation result. Used by /admin/config.",
+  "last_saved": "12 minutes ago",
+  "yaml_text": "# crawler.yml — sources to index\n# Reload via Admin → Config or `flask config reload`\n\ndefaults:\n  user_agent: shse/0.1\n  timeout_s: 30\n  recrawl_interval_h: 6\n  max_depth: 4\n\ntargets:\n  - name: Prometheus\n    url: http://prometheus.lab.local:9090\n    service_label: prometheus\n    include_paths:\n      - /docs\n      - /graph\n    exclude_paths:\n      - /api/v1/query\n\n  - name: Gitea\n    url: http://gitea.lab.local:3000\n    service_label: gitea\n    auth:\n      type: token\n      env: GITEA_TOKEN\n    include_paths:\n      - /\n    exclude_paths:\n      - /attachments\n      - /raw\n\n  - name: Grafana\n    url: http://grafana.lab.local:3000\n    service_label: grafana\n    auth:\n      type: bearer\n      env: GRAFANA_TOKEN\n    recrawl_interval_h: 12\n",
+  "validation": {
+    "ok": false,
+    "errors": [
+      { "line": 22, "message": "auth.type='token' requires `env` to point to an existing env var (GITEA_TOKEN is unset)" },
+      { "line": 33, "message": "Unknown key 'recrawl_interval_h' at this level — did you mean to put it under defaults?" }
+    ],
+    "warnings": [
+      "Grafana has no exclude_paths — every dashboard JSON will be indexed (~12 MB)."
+    ]
+  }
+}

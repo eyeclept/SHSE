@@ -1,0 +1,99 @@
+{
+  "_doc": "Sample BM25 search hits — fed into search.html via render_template('search.html', results=...). Each item maps to a Result row in _result_item.html. Dates/URLs are example homelab services; replace at port-time.",
+  "q": "prometheus alerting rules",
+  "tab": "all",
+  "page": 1,
+  "page_count": 4,
+  "total": 47,
+  "took_ms": 38,
+  "tab_counts": { "all": 47, "docs": 21, "web": 14, "code": 12 },
+  "show_bm25_warning": false,
+  "results": [
+    {
+      "id": "doc-9c1a",
+      "title": "Defining alerting rules — Prometheus",
+      "url": "http://prometheus.lab.local:9090/docs/alerting/latest/configuration",
+      "service": "prometheus.lab.local",
+      "service_label": "Prometheus",
+      "port": 9090,
+      "crawled_at": "2h ago",
+      "content_type": "docs",
+      "snippet_html": "Alerting rules allow you to define <mark>alert</mark> conditions based on Prometheus expression language expressions and to send notifications about firing alerts to an external service. Whenever the <mark>alert</mark> expression results in one or more vector elements at a given point in time, the <mark>alert</mark> counts as active for these elements' label sets.",
+      "chunks": 3,
+      "vectorized": true
+    },
+    {
+      "id": "doc-3f72",
+      "title": "alertmanager.yml — receivers config",
+      "url": "http://gitea.lab.local/ops/infra/src/branch/main/prometheus/alertmanager.yml",
+      "service": "gitea.lab.local",
+      "service_label": "Gitea",
+      "port": 3000,
+      "crawled_at": "5h ago",
+      "content_type": "code",
+      "snippet_html": "route:\n  group_by: ['<mark>alert</mark>name', 'cluster']\n  group_wait: 30s\n  repeat_interval: 4h\n  receiver: 'pagerduty'",
+      "chunks": 1,
+      "vectorized": true
+    },
+    {
+      "id": "doc-8e44",
+      "title": "Grafana — Prometheus alerts dashboard",
+      "url": "http://grafana.lab.local:3000/d/prom-alerts/prometheus-alerts",
+      "service": "grafana.lab.local",
+      "service_label": "Grafana",
+      "port": 3000,
+      "crawled_at": "1d ago",
+      "content_type": "web",
+      "snippet_html": "Live view of all firing and pending Prometheus <mark>alerts</mark> across the homelab. Includes group-by-severity panels and a 24h history.",
+      "chunks": 2,
+      "vectorized": true
+    },
+    {
+      "id": "doc-5a91",
+      "title": "Recording rules vs. alerting rules",
+      "url": "http://prometheus.lab.local:9090/docs/recording/",
+      "service": "prometheus.lab.local",
+      "service_label": "Prometheus",
+      "port": 9090,
+      "crawled_at": "2h ago",
+      "content_type": "docs",
+      "snippet_html": "Recording rules let you precompute frequently needed or computationally expensive expressions and save their result as a new set of time series. <mark>Alerting</mark> rules act on those series to fire notifications.",
+      "chunks": 4,
+      "vectorized": false
+    }
+  ],
+  "vector_hits": [
+    {
+      "score": 0.91,
+      "title": "Why your alert flapped at 3am",
+      "url": "http://gitea.lab.local/ops/runbooks/wiki/alerts-postmortem",
+      "service": "gitea.lab.local",
+      "snippet": "Postmortem covering for: clause sensitivity and how Alertmanager group_wait interacts with PagerDuty escalation."
+    },
+    {
+      "score": 0.84,
+      "title": "Alertmanager silences API",
+      "url": "http://prometheus.lab.local:9093/api/v2/silences",
+      "service": "prometheus.lab.local",
+      "snippet": "REST endpoint for creating and querying silences programmatically. Useful for maintenance windows."
+    },
+    {
+      "score": 0.78,
+      "title": "Notification routing tree",
+      "url": "http://gitea.lab.local/ops/infra/src/branch/main/docs/routing.md",
+      "service": "gitea.lab.local",
+      "snippet": "Decision diagram for which receiver fires for a given alert label set."
+    }
+  ],
+  "keyword_chips": ["alertmanager", "silences", "receivers", "pagerduty", "group_wait"],
+  "sources": [
+    { "name": "prometheus.lab.local", "n": 21 },
+    { "name": "gitea.lab.local",      "n": 14 },
+    { "name": "grafana.lab.local",    "n": 8 },
+    { "name": "wiki.lab.local",       "n": 4 }
+  ],
+  "ai_summary": {
+    "html": "Prometheus alerting rules live in <code>*.rules.yml</code> files referenced by <code>rule_files:</code> in <code>prometheus.yml</code>. They evaluate PromQL expressions on every scrape interval; matching elements transition through <em>pending</em> → <em>firing</em> based on the <code>for:</code> clause, then Alertmanager groups, dedupes and routes them to receivers.",
+    "sources": ["prometheus.lab.local", "gitea.lab.local"]
+  }
+}

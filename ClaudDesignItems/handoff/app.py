@@ -63,9 +63,36 @@ def login():
     abort(501)
 
 
-@app.route("/setup", methods=["GET", "POST"])
-def setup():
-    """First-run admin creation. TODO Sprint 1 — auth.jsx (mode='setup')."""
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    """Open registration. First user becomes role='admin' (is_first=True
+    is computed in the handler from User.query.count() == 0).
+    TODO Sprint 1 — see src/screens/auth.jsx."""
+    abort(501)
+
+
+@app.route("/sso/start")
+def sso_start():
+    """Authentik OIDC kickoff (Authlib). TODO Sprint 1 if SSO_ENABLED."""
+    abort(501)
+
+
+@app.route("/history/_filter")
+def history_filter():
+    """HTMX partial — returns just <ul#history-list> filtered by ?q=
+    TODO Sprint 4."""
+    abort(501)
+
+
+@app.route("/history/clear", methods=["POST"])
+def clear_history():
+    """TODO Sprint 4 — DELETE FROM search_history WHERE user_id=current_user.id."""
+    abort(501)
+
+
+@app.route("/settings/password", methods=["GET", "POST"])
+def password_modal():
+    """HTMX partial; returns the change-password modal markup. TODO Sprint 4."""
     abort(501)
 
 
@@ -85,13 +112,38 @@ def settings():
 
 @app.route("/admin")
 def admin_overview():
-    """TODO Sprint 5 — admin.jsx <AdminOverview>."""
+    """TODO Sprint 5 — admin.jsx <AdminOverview>. Renders templates/admin/index.html."""
+    abort(501)
+
+
+@app.route("/admin/_health")
+def admin_health_partial():
+    """HTMX poll target. Returns templates/admin/_health_grid.html only.
+    hx-trigger='every 5s' on the parent div. TODO Sprint 5."""
     abort(501)
 
 
 @app.route("/admin/targets")
 def admin_targets():
-    """TODO Sprint 5 — admin.jsx <AdminTargets>."""
+    """TODO Sprint 5 — admin.jsx <AdminTargets>. templates/admin/targets.html."""
+    abort(501)
+
+
+@app.route("/admin/targets/<int:target_id>/crawl", methods=["POST"])
+def admin_target_crawl(target_id):
+    """Enqueue Celery crawl task. TODO Sprint 5."""
+    abort(501)
+
+
+@app.route("/admin/targets/<int:target_id>/reindex", methods=["POST"])
+def admin_target_reindex(target_id):
+    """Enqueue Celery reindex task. TODO Sprint 5."""
+    abort(501)
+
+
+@app.route("/admin/targets/<int:target_id>/vectorize", methods=["POST"])
+def admin_target_vectorize(target_id):
+    """Enqueue Celery vectorize task. TODO Sprint 5."""
     abort(501)
 
 
@@ -101,15 +153,60 @@ def admin_jobs():
     abort(501)
 
 
+@app.route("/admin/jobs/_table")
+def admin_jobs_table():
+    """HTMX partial — returns templates/admin/_jobs_rows.html (just <tbody>).
+    TODO Sprint 6."""
+    abort(501)
+
+
+@app.route("/admin/jobs/<int:job_id>")
+def admin_job_detail(job_id):
+    """Per-job logs / stack trace. TODO Sprint 6."""
+    abort(501)
+
+
+@app.route("/admin/jobs/<int:job_id>/cancel", methods=["POST"])
+def admin_job_cancel(job_id):
+    """Revoke Celery task. TODO Sprint 6."""
+    abort(501)
+
+
 @app.route("/admin/config", methods=["GET", "POST"])
 def admin_config():
     """TODO Sprint 6 — admin.jsx <AdminConfig>. YAML editor."""
     abort(501)
 
 
+@app.route("/admin/config/_validate", methods=["POST"])
+def admin_config_validate():
+    """HTMX partial — returns templates/admin/_yaml_validation.html.
+    Debounced input handler from the editor textarea. TODO Sprint 6."""
+    abort(501)
+
+
 @app.route("/admin/index")
 def admin_index_ops():
-    """TODO Sprint 6 — admin.jsx <AdminIndex>. Vectorize + reindex."""
+    """TODO Sprint 6 — admin.jsx <AdminIndex>. templates/admin/index_ops.html."""
+    abort(501)
+
+
+@app.route("/admin/index/reindex_all", methods=["POST"])
+def admin_reindex_all():
+    """Full-corpus reindex. TODO Sprint 6."""
+    abort(501)
+
+
+@app.route("/admin/index/vectorize_all", methods=["POST"])
+def admin_vectorize_all():
+    """Full-corpus vectorize. TODO Sprint 6."""
+    abort(501)
+
+
+@app.route("/admin/index/drop", methods=["POST"])
+def admin_drop_index():
+    """Destructive: drop+recreate index. Requires confirm_text == 'DROP'.
+    TODO Sprint 6."""
     abort(501)
 
 

@@ -271,6 +271,41 @@ Toggle between light and dark mode using the user menu (hamburger icon, top-righ
 
 ---
 
+## AI Summaries
+
+AI summaries load **asynchronously** after the BM25 results page renders. A spinner
+shows in the right rail while the LLM API is being queried. The summary card appears
+when the response arrives (HTMX `hx-trigger="load"` on `/api/semantic?q=...`).
+
+If the LLM API is unreachable the rail loads silently with no content — BM25 results
+are unaffected. To check LLM API connectivity visit `/admin/` and look at the health grid.
+
+Toggle per-user at `/settings` → AI summary switch.
+
+### Default summary model
+
+The default generative model is `granite3.3:latest`. Override it in your YAML config
+or by setting `LLM_GEN_MODEL` in `.env`. The embedding model defaults to `nomic-embed-text`.
+
+---
+
+## Admin Dashboard
+
+The admin dashboard at `/admin/` shows live service health (polls every 5 seconds):
+
+| Indicator | Source |
+|---|---|
+| OpenSearch | `cluster.health()` — green/yellow/red |
+| Nutch | `GET /admin/` on the Nutch REST server |
+| LLM API | `GET {LLM_API_BASE}/models` |
+| Redis | `PING` |
+| MariaDB | `SELECT 1` |
+
+If the Nutch or OpenSearch indicators show **Down**, crawl and reindex buttons on the
+Targets page will be disabled in the UI.
+
+---
+
 ## Kiwix Test Server (dev/test only)
 
 A Kiwix server with a 100-article Wikipedia ZIM is included for end-to-end testing. It is not started during normal stack boot.

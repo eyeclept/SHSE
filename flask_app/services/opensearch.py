@@ -214,8 +214,9 @@ def bm25_search(query, k=10, client=None):
            client — optional OpenSearch client
     Output: list of hit dicts (each contains _source fields and _score)
     Details:
-        Runs a BM25 match query against the text field and returns the top-k
-        hits sorted by relevance score descending.
+        Runs a multi_match best_fields query across `text` and `title` (title
+        boosted 2x) with fuzziness=AUTO for typo tolerance. prefix_length=1
+        prevents fuzzing the leading character to avoid overly broad matches.
     """
     if client is None:
         client = get_client()
@@ -223,10 +224,12 @@ def bm25_search(query, k=10, client=None):
     body = {
         "size": k,
         "query": {
-            "match": {
-                "text": {
-                    "query": query,
-                }
+            "multi_match": {
+                "query": query,
+                "fields": ["title^2", "text"],
+                "type": "best_fields",
+                "fuzziness": "AUTO",
+                "prefix_length": 1,
             }
         },
     }

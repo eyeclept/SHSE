@@ -33,18 +33,31 @@ hits = bm25_search("nginx reverse proxy", k=10)
 # hits: list of dicts with _score and _source
 ```
 
-Underlying query:
+Underlying query — **`multi_match best_fields`** across `title` (boosted 2×) and `text`,
+with `fuzziness: AUTO` for typo tolerance (1 edit distance for 3–5 char terms, 2 for 6+)
+and `prefix_length: 1` to prevent fuzzing the first character:
 
 ```json
 {
   "size": 10,
   "query": {
-    "match": {
-      "text": { "query": "nginx reverse proxy" }
+    "multi_match": {
+      "query": "nginx reverse proxy",
+      "fields": ["title^2", "text"],
+      "type": "best_fields",
+      "fuzziness": "AUTO",
+      "prefix_length": 1
     }
   }
 }
 ```
+
+Title matches rank above body matches. A query for `"ngnx"` (typo) will still match
+documents containing `"nginx"`.
+
+The search routes (`/search` and `/api/search`) use the same `multi_match` shape
+via `flask_app.services.search.bm25_body()`, which also adds `highlight` and
+aggregation clauses for the results page.
 
 ### Vector search (`vector_search`)
 

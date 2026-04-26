@@ -1,3 +1,112 @@
+{#
+  Admin overview / dashboard — system health + at-a-glance stats.
+  Porting reference: src/screens/admin.jsx <AdminOverview>
+
+  Route contract:
+    GET  /admin                 → render this (admin role only)
+    GET  /admin/_health         → HTMX endpoint, returns ONLY the health grid;
+                                  poll every 5s with hx-trigger="every 5s"
+
+  Authorization: handler must abort(403) if current_user.role != 'admin'.
+
+  Context:
+    health   = dict of { service: { status: 'up'|'down'|'degraded',
+                                     latency_ms: int, message: str|None } }
+               keys: 'opensearch', 'nutch', 'llm_api', 'redis', 'mariadb'
+    stats    = dict { docs, services, last_crawl, queue_depth,
+                       indexed_24h, vector_coverage_pct }
+    activity = list of { kind, label, when, status } recent admin events
+#}
 {% extends "base.html" %}
-{% block title %}Admin — SHSE{% endblock %}
-{% block content %}{% endblock %}
+{% import "_icons.html" as icon %}
+{% import "_macros.html" as macros %}
+
+{% block title %}Admin · Overview{% endblock %}
+
+{% block chrome %}
+  {% include "_topbar.html" %}
+  {% include "admin/_subnav.html" %}
+{% endblock %}
+
+{% block content %}
+<main id="shse-main" role="main" style="max-width:1180px; margin:0 auto; padding:28px 28px 80px;">
+  <header style="margin-bottom:22px;">
+    <h1 class="shse-serif" style="margin:0; font-size:28px; font-weight:400;
+                                  letter-spacing:-0.01em;">Overview</h1>
+    <p style="margin:4px 0 0; font-size:14px; color:var(--shse-text-muted);">
+      System health and recent activity.
+    </p>
+  </header>
+
+  {# ── Stat tiles ─────────────────────────────────────────────────── #}
+  <section style="display:grid; grid-template-columns:repeat(4, 1fr);
+                  gap:14px; margin-bottom:24px;">
+    {% for tile in [
+      ('Indexed docs', "{:,}".format(stats.docs), icon.doc, None),
+      ('Services', stats.services, icon.server, None),
+      ('Last crawl', stats.last_crawl, icon.refresh, None),
+      ('Vector coverage', stats.vector_coverage_pct ~ '%', icon.spark, None),
+    ] %}
+    <div class="shse-card" style="padding:16px;">
+      <div style="display:flex; align-items:center; gap:10px;
+                  font-size:11px; text-transform:uppercase; letter-spacing:0.06em;
+                  color:var(--shse-text-faint); margin-bottom:8px;">
+        {{ tile[2](14) }} {{ tile[0] }}
+      </div>
+      <div class="shse-serif" style="font-size:26px; line-height:1;">{{ tile[1] }}</div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {# ── Health grid (HTMX poll target) ─────────────────────────────── #}
+  <section style="margin-bottom:24px;">
+    <div style="display:flex; align-items:flex-end; margin-bottom:10px;">
+      <h2 style="margin:0; font-size:13px; font-weight:600;
+                 color:var(--shse-text-muted); text-transform:uppercase;
+                 letter-spacing:0.06em;">Service health</h2>
+      <div style="flex:1;"></div>
+      <span style="font-size:11px; color:var(--shse-text-faint);">
+        Polls every 5s
+      </span>
+    </div>
+
+    <div id="health-grid"
+         hx-get="{{ url_for('admin.health_partial') }}"
+         hx-trigger="every 5s"
+         hx-swap="innerHTML"
+         style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">
+      {% include "admin/_health_grid.html" %}
+    </div>
+  </section>
+
+  {# ── Recent activity ────────────────────────────────────────────── #}
+  <section>
+    <h2 style="margin:0 0 10px; font-size:13px; font-weight:600;
+               color:var(--shse-text-muted); text-transform:uppercase;
+               letter-spacing:0.06em;">Recent activity</h2>
+    {% if activity %}
+    <ul class="shse-card" style="list-style:none; padding:0; margin:0;">
+      {% for a in activity %}
+      <li style="display:flex; align-items:center; gap:12px;
+                 padding:12px 16px;
+                 border-top:1px solid var(--shse-border);
+                 {% if loop.first %}border-top:none;{% endif %}">
+        <span class="shse-pill {{
+          'shse-pill-success' if a.status == 'ok' else
+          'shse-pill-danger'  if a.status == 'fail' else
+          'shse-pill-warning' }}"
+              style="font-size:10px;">{{ a.kind }}</span>
+        <span style="flex:1; font-size:13px;">{{ a.label }}</span>
+        <span style="font-size:12px; color:var(--shse-text-faint);">{{ a.when }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      {{ macros.empty_state(
+        title="No recent activity",
+        body="Crawl, reindex, and admin events will show up here.",
+        icon_name="history") }}
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

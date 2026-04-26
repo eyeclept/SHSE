@@ -1,0 +1,29 @@
+{#
+  Admin sub-navigation. Porting reference: src/screens/admin.jsx (tab strip).
+
+  Route map:
+    /admin           → Overview      admin_overview
+    /admin/targets   → Targets       admin_targets
+    /admin/jobs      → Jobs          admin_jobs
+    /admin/config    → Config        admin_config
+    /admin/index     → Index ops     admin_index_ops
+
+  Active tab is detected by request.endpoint.
+#}
+<nav aria-label="Admin sections"
+     style="display:flex; gap:2px; padding:0 24px;
+            border-bottom:1px solid var(--shse-border);
+            background:var(--shse-surface); position:sticky; top:48px; z-index:9;">
+  {% for ep, label, ic in [
+    ('admin_overview',  'Overview',  'home'),
+    ('admin_targets',   'Targets',   'server'),
+    ('admin_jobs',      'Jobs',      'play'),
+    ('admin_config',    'Config',    'code'),
+    ('admin_index_ops', 'Index ops', 'database'),
+  ] %}
+    <a href="{{ url_for(ep) }}" class="shse-tab"
+       aria-current="{{ 'page' if request.endpoint == ep else '' }}">
+      {{ icon[ic](14) }} {{ label }}
+    </a>
+  {% endfor %}
+</nav>

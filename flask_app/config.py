@@ -51,7 +51,7 @@ class Config:
     # LLM API (OpenAI-compatible endpoint; in the lab stack this is LiteLLM)
     LLM_API_BASE = os.environ.get("LLM_API_BASE", "http://localhost:11434/v1")
     LLM_EMBED_MODEL = os.environ.get("LLM_EMBED_MODEL", "nomic-embed-text")
-    LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "llama3")
+    LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "granite3.3:latest")
 
     # TLS
     INTERNAL_TLS_VERIFY = os.environ.get("INTERNAL_TLS_VERIFY", "true").lower() == "true"

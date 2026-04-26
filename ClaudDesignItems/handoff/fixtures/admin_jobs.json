@@ -1,0 +1,14 @@
+{
+  "_doc": "Mock crawl_jobs rows. Used by /admin/jobs.",
+  "filter": "all",
+  "counts": { "all": 7, "queued": 1, "running": 2, "done": 3, "failed": 1 },
+  "jobs": [
+    { "id": 1042, "kind": "crawl",     "target": "Gitea",      "status": "running",   "progress": 64,  "started_at": "2m ago",   "finished_at": null,        "took": null,      "message": null },
+    { "id": 1041, "kind": "vectorize", "target": "Prometheus", "status": "running",   "progress": 18,  "started_at": "4m ago",   "finished_at": null,        "took": null,      "message": null },
+    { "id": 1040, "kind": "crawl",     "target": "Wiki",       "status": "queued",    "progress": 0,   "started_at": "—",        "finished_at": null,        "took": null,      "message": null },
+    { "id": 1039, "kind": "reindex",   "target": "(all)",      "status": "done",      "progress": 100, "started_at": "32m ago",  "finished_at": "26m ago",   "took": "6m 12s",  "message": null },
+    { "id": 1038, "kind": "crawl",     "target": "Grafana",    "status": "failed",    "progress": 38,  "started_at": "4h ago",   "finished_at": "4h ago",    "took": "1m 02s",  "message": "HTTPError 502 on /api/dashboards/uid/abc" },
+    { "id": 1037, "kind": "crawl",     "target": "Prometheus", "status": "done",      "progress": 100, "started_at": "5h ago",   "finished_at": "5h ago",    "took": "48s",     "message": null },
+    { "id": 1036, "kind": "vectorize", "target": "Gitea",      "status": "done",      "progress": 100, "started_at": "1d ago",   "finished_at": "1d ago",    "took": "12m 04s", "message": null }
+  ]
+}

@@ -42,10 +42,14 @@ def get_session():
     Input: None
     Output: requests.Session
     Details:
-        Returns a new Session. Injectable in tests via the session parameter
-        on trigger_crawl / fetch_results.
+        Returns a new Session with SSL verification controlled by the
+        INTERNAL_TLS_VERIFY environment variable (default: True).
+        Injectable in tests via the session parameter on trigger_crawl / fetch_results.
     """
-    return requests.Session()
+    session = requests.Session()
+    verify = os.environ.get("INTERNAL_TLS_VERIFY", "true").lower() != "false"
+    session.verify = verify
+    return session
 
 
 def _base_url():
@@ -204,6 +208,62 @@ def fetch_results(crawl_id, page_size=500, session=None):
     stats = stats_resp.json() or {}
 
     return {"nodes": normalized, "stats": stats}
+
+
+def _fetch_page_text(url, tls_verify=True, timeout=10):
+    """
+    Input:
+        url        - str, fully-qualified URL to fetch
+        tls_verify - bool, whether to verify TLS certificates
+        timeout    - int, request timeout in seconds
+    Output:
+        str — visible plain text extracted from the HTML response body,
+              or the URL itself when fetching or parsing fails
+    Details:
+        Uses requests.get() to fetch the page and stdlib html.parser to strip
+        tags. Script, style, and nav blocks are excluded. Falls back to the URL
+        string on any error (network, timeout, encoding) so callers always
+        receive a non-empty string to index.
+    """
+    from html.parser import HTMLParser
+
+    class _TextExtractor(HTMLParser):
+        """Minimal tag-stripping HTMLParser that skips scripts and styles."""
+        def __init__(self):
+            super().__init__()
+            self._parts = []
+            self._skip = False
+            self._skip_tags = {"script", "style", "nav", "header", "footer", "noscript"}
+
+        def handle_starttag(self, tag, attrs):
+            if tag in self._skip_tags:
+                self._skip = True
+
+        def handle_endtag(self, tag):
+            if tag in self._skip_tags:
+                self._skip = False
+
+        def handle_data(self, data):
+            if not self._skip:
+                stripped = data.strip()
+                if stripped:
+                    self._parts.append(stripped)
+
+        def get_text(self):
+            return " ".join(self._parts)
+
+    try:
+        resp = requests.get(url, timeout=timeout, verify=tls_verify)
+        resp.raise_for_status()
+        content_type = resp.headers.get("Content-Type", "")
+        if "html" not in content_type and "xml" not in content_type:
+            return url
+        extractor = _TextExtractor()
+        extractor.feed(resp.text)
+        text = extractor.get_text()
+        return text if text.strip() else url
+    except Exception:
+        return url
 
 
 def main():

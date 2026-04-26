@@ -1,0 +1,60 @@
+{#
+  Validation rail partial. Returned standalone from
+  /admin/config/_validate (HTMX) and inlined on first render.
+
+  Context: validation = { ok, errors:[{line, message}], warnings:[...] }
+#}
+{% import "_icons.html" as icon %}
+
+{% if not validation %}
+<div class="shse-card" style="padding:14px;">
+  <div style="display:flex; align-items:center; gap:10px;
+              color:var(--shse-text-muted); font-size:13px;">
+    <span style="width:8px; height:8px; border-radius:50%;
+                 background:var(--shse-text-faint);"></span>
+    Edit the YAML to see live validation.
+  </div>
+</div>
+{% elif validation.ok %}
+<div class="shse-card" style="padding:14px;
+                              border-color:var(--shse-success);
+                              background:var(--shse-success-soft);">
+  <div style="display:flex; align-items:center; gap:10px;
+              color:var(--shse-success); font-size:13px; font-weight:500;">
+    {{ icon.check(14) }} YAML is valid
+  </div>
+  {% if validation.warnings %}
+  <ul style="margin:8px 0 0; padding:0; list-style:none;
+             font-size:12px; color:var(--shse-text-muted);
+             display:flex; flex-direction:column; gap:4px;">
+    {% for w in validation.warnings %}
+    <li style="display:flex; gap:6px; align-items:flex-start;">
+      <span style="color:var(--shse-warning); flex-shrink:0;">{{ icon.alert(12) }}</span>
+      <span>{{ w }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% else %}
+<div class="shse-card" style="padding:14px;
+                              border-color:var(--shse-danger);
+                              background:var(--shse-danger-soft);">
+  <div style="display:flex; align-items:center; gap:10px;
+              color:var(--shse-danger); font-size:13px; font-weight:500;
+              margin-bottom:10px;">
+    {{ icon.alert(14) }}
+    {{ validation.errors|length }} error{{ '' if validation.errors|length == 1 else 's' }}
+  </div>
+  <ul style="margin:0; padding:0; list-style:none; font-size:12px;
+             display:flex; flex-direction:column; gap:8px;">
+    {% for e in validation.errors %}
+    <li style="display:flex; gap:8px;">
+      <span class="shse-mono" style="color:var(--shse-text-faint);
+            flex-shrink:0;">L{{ e.line }}</span>
+      <span style="color:var(--shse-text-muted);">{{ e.message }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

@@ -59,6 +59,24 @@ The schedule reflects the DB state at worker boot. To apply a new YAML config to
 the running Beat scheduler, restart the `celery_beat` container after uploading
 the config.
 
+### Beat persistence (redbeat)
+
+Beat uses **celery-redbeat** (`celery-redbeat==2.3.3`) to persist schedule state
+in Redis. This means:
+
+- Schedule entries survive `celery_beat` container restarts
+- Overdue tasks fire on next startup rather than being skipped
+- Schedule state is stored under the `redbeat:` key prefix in Redis
+
+Configuration in `celery_worker/app.py`:
+```python
+celery.conf.update(
+    beat_scheduler="redbeat.RedBeatScheduler",
+    redbeat_redis_url=_REDIS_URL,
+    redbeat_lock_timeout=60,
+)
+```
+
 ---
 
 ## `CrawlJob` Lifecycle
