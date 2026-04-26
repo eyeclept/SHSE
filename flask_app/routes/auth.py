@@ -34,6 +34,14 @@ def login():
         ).scalar_one_or_none()
         if user and user.check_password(password):
             login_user(user)
+            # Force password change if still using the default admin/admin credential
+            if user.username == "admin" and user.check_password("admin"):
+                from flask import flash
+                flash(
+                    "You are using the default password. Please change it now.",
+                    "error",
+                )
+                return redirect(url_for("search.settings"))
             return redirect(url_for("search.home"))
         return render_template(
             "login.html",

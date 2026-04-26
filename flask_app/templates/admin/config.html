@@ -1,24 +1,5 @@
-{#
-  Crawler YAML config editor. Porting reference: src/screens/admin.jsx <AdminConfig>
-
-  Route contract:
-    GET  /admin/config              → render this with current YAML
-    POST /admin/config              → ConfigForm: textarea OR file upload;
-                                       parse YAML, validate, persist to
-                                       crawler_targets table; flash result
-    POST /admin/config/_validate    → HTMX endpoint; returns ONLY the
-                                       validation panel for live feedback
-                                       (debounce 600ms)
-
-  Context:
-    form        = ConfigForm (yaml: TextAreaField, upload: FileField, csrf)
-    yaml_text   = current YAML (str) — pre-fills the textarea
-    validation  = dict|None — { ok: bool, errors: list[{line, message}], warnings: [...] }
-    last_saved  = str — humanized timestamp
-#}
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
-{% import "_macros.html" as macros %}
 
 {% block title %}Admin · Config{% endblock %}
 
@@ -28,76 +9,125 @@
 {% endblock %}
 
 {% block content %}
-<main id="shse-main" role="main" style="max-width:1180px; margin:0 auto; padding:28px 28px 80px;">
-  <header style="display:flex; align-items:flex-end; gap:16px; margin-bottom:18px;">
-    <div>
-      <h1 class="shse-serif" style="margin:0; font-size:28px; font-weight:400;
-                                    letter-spacing:-0.01em;">Crawler config</h1>
-      <p style="margin:4px 0 0; font-size:14px; color:var(--shse-text-muted);">
-        Edit YAML directly or upload a file. Validates as you type.
-        Last saved {{ last_saved }}.
-      </p>
-    </div>
-    <div style="flex:1;"></div>
-    <a href="{{ url_for('admin.targets') }}" class="shse-btn">
-      {{ icon.server(14) }} View targets
-    </a>
+<main id="shse-main" role="main" style="max-width:900px; margin:0 auto; padding:28px 28px 80px;">
+  <header style="margin-bottom:24px;">
+    <h1 class="shse-serif" style="margin:0; font-size:28px; font-weight:400; letter-spacing:-0.01em;">
+      Configuration
+    </h1>
+    <p style="margin:4px 0 0; font-size:14px; color:var(--shse-text-muted);">
+      System-wide settings. Manage individual crawl targets on the
+      <a href="{{ url_for('admin.targets') }}">Targets</a> page.
+    </p>
   </header>
 
-  <div style="display:grid; grid-template-columns:1fr 320px; gap:20px;">
+  {# ── LLM API ─────────────────────────────────────────────────────── #}
+  <section class="shse-card" style="padding:22px; margin-bottom:20px;">
+    <h2 style="margin:0 0 16px; font-size:15px; font-weight:600;">LLM API</h2>
+    <form method="post" action="{{ url_for('admin.crawler_config') }}">
+      <input type="hidden" name="action" value="settings">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px 20px; margin-bottom:16px;">
+        <label style="display:block;">
+          <span style="font-size:12px; font-weight:500; color:var(--shse-text-muted);
+                       display:block; margin-bottom:5px;">API base URL</span>
+          <input type="text" name="llm_api_base" class="shse-input" style="width:100%;"
+                 placeholder="http://host:11434/v1"
+                 value="{{ llm_api_base }}">
+          <span style="font-size:11px; color:var(--shse-text-faint); margin-top:3px; display:block;">
+            Set via LLM_API_BASE env var. Restart container to apply.
+          </span>
+        </label>
+        <label style="display:block;">
+          <span style="font-size:12px; font-weight:500; color:var(--shse-text-muted);
+                       display:block; margin-bottom:5px;">Embedding model</span>
+          <input type="text" name="llm_embed_model" class="shse-input" style="width:100%;"
+                 placeholder="nomic-embed-text"
+                 value="{{ llm_embed_model }}">
+        </label>
+        <label style="display:block;">
+          <span style="font-size:12px; font-weight:500; color:var(--shse-text-muted);
+                       display:block; margin-bottom:5px;">Generative model</span>
+          <input type="text" name="llm_gen_model" class="shse-input" style="width:100%;"
+                 placeholder="granite3.3:latest"
+                 value="{{ llm_gen_model }}">
+        </label>
+      </div>
+      <p style="margin:0 0 12px; font-size:12px; color:var(--shse-text-faint);">
+        To make model changes permanent, update <code style="font-size:11px;">LLM_EMBED_MODEL</code>
+        and <code style="font-size:11px;">LLM_GEN_MODEL</code> in <code style="font-size:11px;">.env</code>
+        then restart the stack. Per-target model overrides are coming in a future update.
+      </p>
+      <button type="submit" class="shse-btn shse-btn-primary">
+        {{ icon.check(14) }} Save settings
+      </button>
+    </form>
+  </section>
 
-    {# ── Editor column ──────────────────────────────────────────── #}
-    <form method="post" action="{{ url_for('admin.crawler_config') }}"
-          enctype="multipart/form-data">
-      <div class="shse-card" style="padding:0; overflow:hidden;">
-        <div style="display:flex; align-items:center; gap:10px;
-                    padding:8px 12px; background:var(--shse-surface-2);
-                    border-bottom:1px solid var(--shse-border);">
-          <span class="shse-mono" style="font-size:11px;
-                color:var(--shse-text-muted);">crawler.yml</span>
-          <div style="flex:1;"></div>
-          <label class="shse-btn shse-btn-ghost" style="font-size:12px;
-                 cursor:pointer; padding:4px 10px;">
+  {# ── Bulk YAML import (advanced) ─────────────────────────────────── #}
+  <details style="margin-bottom:20px;">
+    <summary style="cursor:pointer; padding:16px 20px;
+                    background:var(--shse-surface); border:1px solid var(--shse-border);
+                    border-radius:10px; font-size:14px; font-weight:500;
+                    list-style:none; display:flex; align-items:center; gap:8px;">
+      {{ icon.edit(14) }} Advanced: bulk import / export YAML
+      <span style="margin-left:auto; font-size:12px; color:var(--shse-text-muted);">
+        Import multiple targets at once or export current config
+      </span>
+    </summary>
+    <div style="border:1px solid var(--shse-border); border-top:none;
+                border-radius:0 0 10px 10px; padding:20px;
+                background:var(--shse-surface);">
+
+      {% if validation %}
+        {% if validation.ok %}
+          <div style="padding:10px 14px; margin-bottom:14px; border-radius:8px;
+                      background:var(--shse-success-soft); color:var(--shse-success);
+                      font-size:13px;">
+            {{ icon.check(14) }}
+            {% for w in validation.warnings %}{{ w }}{% endfor %}
+          </div>
+        {% else %}
+          <div style="padding:10px 14px; margin-bottom:14px; border-radius:8px;
+                      background:var(--shse-danger-soft); color:var(--shse-danger);
+                      font-size:13px;">
+            {{ icon.alert(14) }}
+            {% for e in validation.errors %}{{ e.message }}{% endfor %}
+          </div>
+        {% endif %}
+      {% endif %}
+
+      <form method="post" action="{{ url_for('admin.crawler_config') }}"
+            enctype="multipart/form-data">
+        <input type="hidden" name="action" value="yaml_import">
+
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+          <span style="font-size:13px; font-weight:500;">YAML</span>
+          <label class="shse-btn shse-btn-ghost" style="font-size:12px; cursor:pointer; padding:4px 10px;">
             {{ icon.plus(12) }} Upload file
-            <input type="file" name="upload" style="display:none;"
-                   onchange="this.form.submit()">
+            <input type="file" name="upload" style="display:none;" onchange="this.form.submit()">
           </label>
+          <span style="font-size:11px; color:var(--shse-text-faint);">
+            Last saved: {{ last_saved }}
+          </span>
         </div>
 
         <textarea name="yaml"
                   class="shse-mono shse-input"
-                  style="border:none; border-radius:0; padding:14px 16px;
-                         font-size:13px; line-height:1.55; min-height:520px;
-                         width:100%; resize:vertical; box-sizing:border-box;"
-                  spellcheck="false"
-                  autocomplete="off"
-                  hx-post="{{ url_for('admin.config_validate') }}"
-                  hx-trigger="input changed delay:600ms"
-                  hx-target="#yaml-validation"
-                  hx-swap="innerHTML">{{ yaml_text }}</textarea>
-      </div>
+                  style="border-radius:6px; padding:12px 14px; font-size:12px;
+                         line-height:1.6; min-height:360px; width:100%;
+                         resize:vertical; box-sizing:border-box;"
+                  spellcheck="false" autocomplete="off">{{ yaml_text }}</textarea>
 
-      <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
-        <button type="submit" class="shse-btn shse-btn-primary"
-                {{ 'disabled' if validation and not validation.ok }}>
-          Save and apply
-        </button>
-        <button type="reset" class="shse-btn shse-btn-ghost">Discard changes</button>
-        <div style="flex:1;"></div>
-        <a href="https://github.com/your-org/shse/blob/main/docs/crawler-yaml.md"
-           class="shse-btn shse-btn-ghost" style="font-size:12px;"
-           target="_blank" rel="noopener">
-          {{ icon.doc(12) }} YAML reference {{ icon.ext(10) }}
-        </a>
-      </div>
-    </form>
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <button type="submit" class="shse-btn shse-btn-primary">
+            {{ icon.check(14) }} Import
+          </button>
+          <a href="{{ url_for('admin.targets') }}" class="shse-btn shse-btn-ghost">
+            View targets →
+          </a>
+        </div>
+      </form>
+    </div>
+  </details>
 
-    {# ── Validation rail ─────────────────────────────────────────── #}
-    <aside id="yaml-validation"
-           style="display:flex; flex-direction:column; gap:14px;
-                  position:sticky; top:120px; align-self:flex-start;">
-      {% include "admin/_yaml_validation.html" %}
-    </aside>
-  </div>
 </main>
 {% endblock %}

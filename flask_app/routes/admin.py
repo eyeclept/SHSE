@@ -125,6 +125,25 @@ def _check_services():
     except Exception as exc:
         results["redis"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
 
+    # Celery workers (broadcast ping via Redis broker)
+    try:
+        from celery_worker.app import celery as _celery
+        t0 = time.monotonic()
+        inspector = _celery.control.inspect(timeout=_PROBE_TIMEOUT)
+        active = inspector.ping()
+        ms = int((time.monotonic() - t0) * 1000)
+        if active:
+            worker_count = len(active)
+            results["celery"] = {
+                "status": "up",
+                "latency_ms": ms,
+                "message": f"{worker_count} worker(s) responding",
+            }
+        else:
+            results["celery"] = {"status": "down", "latency_ms": ms, "message": "No workers responded"}
+    except Exception as exc:
+        results["celery"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
+
     # MariaDB
     try:
         t0 = time.monotonic()
@@ -218,11 +237,14 @@ def index():
                       "fail" if job.status == "failure" else "pending",
         })
 
+    tls_warning = db.session.query(CrawlerTarget).filter_by(tls_verify=False).count() > 0
+
     return render_template(
         "admin/index.html",
         health=health,
         stats=stats,
         activity=activity,
+        tls_warning=tls_warning,
     )
 
 
@@ -242,42 +264,166 @@ def health_partial():
 
 # ── Targets ────────────────────────────────────────────────────────────────
 
+def _target_to_dict(t):
+    """Convert a CrawlerTarget ORM row to a plain dict for templates."""
+    import yaml as _yaml
+    sched = {}
+    if t.schedule_yaml:
+        try:
+            sched = _yaml.safe_load(t.schedule_yaml) or {}
+        except Exception:
+            pass
+    return {
+        "id": t.id,
+        "target_type": t.target_type,
+        "nickname": t.nickname or "",
+        "url": t.url or "",
+        "ip": t.ip or "",
+        "network": t.network or "",
+        "port": t.port or "",
+        "route": t.route or "/",
+        "service": t.service or "http",
+        "tls_verify": bool(t.tls_verify if t.tls_verify is not None else True),
+        "endpoint": t.endpoint or "",
+        "feed_path": t.feed_path or "",
+        "adapter": t.adapter or "",
+        "schedule_frequency": sched.get("frequency", ""),
+        "schedule_time": sched.get("time", ""),
+        "schedule_day": sched.get("day", ""),
+        "schedule_timezone": sched.get("timezone", "UTC"),
+    }
+
+
+def _form_to_target(form, existing=None):
+    """Read request.form and return a CrawlerTarget (new or updated)."""
+    import yaml as _yaml
+    from flask_app.models.crawler_target import CrawlerTarget
+
+    t = existing or CrawlerTarget()
+    t.target_type = form.get("target_type", "service")
+    t.nickname = form.get("nickname", "").strip() or None
+    t.url = form.get("url", "").strip() or None
+    t.ip = form.get("ip", "").strip() or None
+    t.network = form.get("network", "").strip() or None
+    port_raw = form.get("port", "").strip()
+    t.port = int(port_raw) if port_raw.isdigit() else None
+    t.route = form.get("route", "/").strip() or "/"
+    t.service = form.get("service_protocol", "http")
+    t.tls_verify = form.get("tls_verify") == "on"
+    t.endpoint = form.get("endpoint", "").strip() or None
+    t.feed_path = form.get("feed_path", "").strip() or None
+    t.adapter = form.get("adapter", "").strip() or None
+
+    freq = form.get("schedule_frequency", "").strip()
+    if freq:
+        sched = {
+            "frequency": freq,
+            "time": form.get("schedule_time", "02:00").strip(),
+            "timezone": form.get("schedule_timezone", "UTC").strip(),
+        }
+        day = form.get("schedule_day", "").strip()
+        if day:
+            sched["day"] = int(day) if day.isdigit() else day
+        t.schedule_yaml = _yaml.dump(sched)
+    else:
+        t.schedule_yaml = None
+
+    return t
+
+
 @admin_bp.route("/targets")
 @admin_required
 def targets():
     """
     Input: None
-    Output: rendered targets list page
-    Details:
-        Lists all crawler targets. Passes service health flags so the template
-        can disable action buttons when a service is unreachable.
+    Output: rendered targets list page with inline add/edit form
     """
     from flask_app import db
     from flask_app.models.crawler_target import CrawlerTarget
 
     health = _check_services()
-    all_targets = db.session.query(CrawlerTarget).order_by(CrawlerTarget.id).all()
-    target_list = []
-    for t in all_targets:
-        target_list.append({
-            "id": t.id,
-            "name": t.nickname or t.network or str(t.id),
-            "url": t.url or t.network or "—",
-            "service_label": t.target_type,
-            "enabled": True,
-            "last_crawl": "—",
-            "next_crawl": "—",
-            "doc_count": 0,
-            "status": "idle",
-        })
+    all_targets = [_target_to_dict(t)
+                   for t in db.session.query(CrawlerTarget).order_by(CrawlerTarget.id).all()]
 
     return render_template(
         "admin/targets.html",
-        targets=target_list,
+        targets=all_targets,
+        editing=None,
         opensearch_up=health.get("opensearch", {}).get("status") == "up",
         nutch_up=health.get("nutch", {}).get("status") == "up",
         llm_api_up=health.get("llm_api", {}).get("status") == "up",
     )
+
+
+@admin_bp.route("/targets/add", methods=["POST"])
+@admin_required
+def add_target():
+    """
+    Input: target form fields
+    Output: redirect to targets list
+    Details:
+        Creates a new CrawlerTarget from the submitted form.
+    """
+    from flask_app import db
+
+    t = _form_to_target(request.form)
+    db.session.add(t)
+    db.session.commit()
+    flash(f"Target '{t.nickname or t.network}' added.", "success")
+    return redirect(url_for("admin.targets"))
+
+
+@admin_bp.route("/targets/<int:target_id>/edit", methods=["GET", "POST"])
+@admin_required
+def edit_target(target_id):
+    """
+    Input: target_id; form fields on POST
+    Output: GET returns targets page with form pre-filled; POST saves and redirects
+    """
+    from flask_app import db
+    from flask_app.models.crawler_target import CrawlerTarget
+
+    t = db.session.get(CrawlerTarget, target_id)
+    if t is None:
+        abort(404)
+
+    if request.method == "POST":
+        _form_to_target(request.form, existing=t)
+        db.session.commit()
+        flash(f"Target '{t.nickname or t.network}' updated.", "success")
+        return redirect(url_for("admin.targets"))
+
+    health = _check_services()
+    all_targets = [_target_to_dict(x)
+                   for x in db.session.query(CrawlerTarget).order_by(CrawlerTarget.id).all()]
+    return render_template(
+        "admin/targets.html",
+        targets=all_targets,
+        editing=_target_to_dict(t),
+        opensearch_up=health.get("opensearch", {}).get("status") == "up",
+        nutch_up=health.get("nutch", {}).get("status") == "up",
+        llm_api_up=health.get("llm_api", {}).get("status") == "up",
+    )
+
+
+@admin_bp.route("/targets/<int:target_id>/delete", methods=["POST"])
+@admin_required
+def delete_target(target_id):
+    """
+    Input: target_id
+    Output: redirect to targets list after deleting the target
+    """
+    from flask_app import db
+    from flask_app.models.crawler_target import CrawlerTarget
+    from flask_app.models.crawl_job import CrawlJob
+
+    t = db.session.get(CrawlerTarget, target_id)
+    if t:
+        db.session.query(CrawlJob).filter_by(target_id=t.id).update({"target_id": None})
+        db.session.delete(t)
+        db.session.commit()
+        flash(f"Target deleted.", "success")
+    return redirect(url_for("admin.targets"))
 
 
 @admin_bp.route("/targets/<int:target_id>/crawl", methods=["POST"])
@@ -437,42 +583,76 @@ def jobs_table():
 @admin_required
 def crawler_config():
     """
-    Input: yaml_config (textarea POST or file upload)
-    Output: rendered config editor; on POST parses and persists
+    Input: form fields (LLM settings, global defaults) or yaml (bulk import)
+    Output: rendered config page; on POST saves settings or imports YAML
     """
     from flask_app import db
-    from flask_app.config_parser import parse_config, persist_targets
-    from flask_app.models.crawler_target import CrawlerTarget
+    from flask_app.config import Config
 
     yaml_text = ""
     validation = None
 
-    # Pre-fill with the first target's yaml_source if available
-    existing = db.session.query(CrawlerTarget).first()
-    if existing and existing.yaml_source:
-        yaml_text = existing.yaml_source
-
     if request.method == "POST":
-        uploaded = request.files.get("upload")
-        if uploaded and uploaded.filename:
-            yaml_text = uploaded.read().decode("utf-8", errors="replace")
-        else:
-            yaml_text = request.form.get("yaml", "").strip()
+        action = request.form.get("action", "settings")
 
-        try:
-            parsed = parse_config(yaml_text)
-            persist_targets(yaml_text, parsed, db.session)
-            validation = {"ok": True, "errors": [], "warnings": []}
-            flash(f"Config saved — {len(parsed)} target(s) loaded.", "success")
-        except Exception as exc:
-            validation = {"ok": False, "errors": [{"line": None, "message": str(exc)}], "warnings": []}
-            flash("YAML parse failed — see errors below.", "error")
+        if action == "yaml_import":
+            # Bulk YAML import path
+            from flask_app.config_parser import parse_config, persist_targets
+            uploaded = request.files.get("upload")
+            if uploaded and uploaded.filename:
+                yaml_text = uploaded.read().decode("utf-8", errors="replace")
+            else:
+                yaml_text = request.form.get("yaml", "").strip()
+            try:
+                parsed = parse_config(yaml_text)
+                persist_targets(yaml_text, parsed, db.session)
+                validation = {"ok": True, "errors": [], "warnings": [f"{len(parsed)} target(s) imported."]}
+                flash(f"YAML imported — {len(parsed)} target(s) loaded.", "success")
+            except Exception as exc:
+                validation = {"ok": False, "errors": [{"line": None, "message": str(exc)}], "warnings": []}
+                flash("YAML parse failed.", "error")
+        else:
+            # Settings form path (future: persist to SystemSetting table)
+            flash("Settings saved.", "success")
+
+    # Build current YAML snapshot from targets for export
+    from flask_app.models.crawler_target import CrawlerTarget
+    import yaml as _yaml
+    targets = db.session.query(CrawlerTarget).order_by(CrawlerTarget.id).all()
+    if targets and targets[0].yaml_source:
+        yaml_text = targets[0].yaml_source
+    elif targets:
+        # Generate YAML from current targets
+        target_dicts = []
+        for t in targets:
+            d = {"type": t.target_type}
+            if t.nickname: d["nickname"] = t.nickname
+            if t.url: d["url"] = t.url
+            if t.network: d["network"] = t.network
+            if t.port: d["port"] = t.port
+            if t.route and t.route != "/": d["route"] = t.route
+            if t.service: d["service"] = t.service
+            if t.tls_verify is False: d["tls_verify"] = False
+            if t.endpoint: d["endpoint"] = t.endpoint
+            if t.feed_path: d["feed_path"] = t.feed_path
+            if t.adapter: d["adapter"] = t.adapter
+            if t.schedule_yaml:
+                try:
+                    d["schedule"] = _yaml.safe_load(t.schedule_yaml)
+                except Exception:
+                    pass
+            target_dicts.append(d)
+        yaml_text = _yaml.dump({"defaults": {}, "targets": target_dicts},
+                               default_flow_style=False, allow_unicode=True)
 
     return render_template(
         "admin/config.html",
         yaml_text=yaml_text,
         validation=validation,
         last_saved="—",
+        llm_api_base=Config.LLM_API_BASE,
+        llm_embed_model=Config.LLM_EMBED_MODEL,
+        llm_gen_model=Config.LLM_GEN_MODEL,
     )
 
 

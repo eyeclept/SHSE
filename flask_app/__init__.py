@@ -11,7 +11,6 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from authlib.integrations.flask_client import OAuth
-from jinja2.sandbox import SandboxedEnvironment
 
 # Globals
 db = SQLAlchemy()
@@ -42,13 +41,6 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object("flask_app.config.Config")
 
-    # Sandbox the Jinja2 environment to block attribute/item access to
-    # dangerous Python internals even if user-controlled content were ever
-    # passed to render_template_string(). Flask's auto-escaping for .html
-    # files already prevents XSS via template variables; sandboxing is an
-    # additional defence-in-depth layer.
-    app.jinja_environment = SandboxedEnvironment
-
     db.init_app(app)
     login_manager.init_app(app)
     oauth.init_app(app)
@@ -62,6 +54,14 @@ def create_app():
             client_kwargs={"scope": "openid email profile"},
         )
 
+    # Import all models before blueprints so SQLAlchemy can resolve
+    # relationship strings (e.g. User.search_history → SearchHistory)
+    # without hitting an InvalidRequestError on first mapper access.
+    from flask_app.models.user import User                     # noqa: F401
+    from flask_app.models.search_history import SearchHistory  # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob            # noqa: F401
+
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
     from flask_app.routes.admin import admin_bp
@@ -71,6 +71,20 @@ def create_app():
     app.register_blueprint(search_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(api_bp)
+
+    # Ensure a default admin account exists on first boot.
+    # Username: admin  Password: admin  (change after first login)
+    with app.app_context():
+        try:
+            if not db.session.execute(
+                db.select(User).filter_by(role="admin")
+            ).scalar_one_or_none():
+                default_admin = User(username="admin", role="admin")
+                default_admin.set_password("admin")
+                db.session.add(default_admin)
+                db.session.commit()
+        except Exception:
+            pass
 
     return app
 

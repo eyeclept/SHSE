@@ -71,6 +71,7 @@ def cmd_stats(_args):
     Details:
         Queries OpenSearch for document count, service count, and last crawl time.
     """
+    _load_env()
     from flask_app.services.opensearch import get_client
     try:
         client = get_client()

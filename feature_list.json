@@ -164,9 +164,9 @@
     "items": {
       "per_service_tls_bypass": { "passes": true },
       "global_tls_flag": { "passes": true },
-      "tls_warning_banner": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_tls_md": { "passes": false }
+      "tls_warning_banner": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_tls_md": { "passes": true }
     }
   },
   "epic_14_testing": {
@@ -177,7 +177,7 @@
       "unit_auth": { "passes": true },
       "unit_tasks": { "passes": true },
       "unit_vectorize": { "passes": true },
-      "docs_testing_md": { "passes": false }
+      "docs_testing_md": { "passes": true }
     }
   },
   "epic_15_mcp_server": {

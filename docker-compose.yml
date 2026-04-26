@@ -76,6 +76,12 @@ services:
       - MARIADB_HOST=mariadb
       - REDIS_HOST=redis
       - OPENSEARCH_HOST=opensearch
+      - NUTCH_HOST=nutch
+      - NUTCH_PORT=8081
+      - LLM_API_BASE=http://host.docker.internal:11434/v1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5000:5000"
     healthcheck:
@@ -105,6 +111,11 @@ services:
       - REDIS_HOST=redis
       - OPENSEARCH_HOST=opensearch
       - CELERY_BROKER_URL=redis://redis:6379/0
+      - NUTCH_HOST=nutch
+      - NUTCH_PORT=8081
+      - LLM_API_BASE=http://host.docker.internal:11434/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -125,6 +136,11 @@ services:
       - REDIS_HOST=redis
       - OPENSEARCH_HOST=opensearch
       - CELERY_BROKER_URL=redis://redis:6379/0
+      - NUTCH_HOST=nutch
+      - NUTCH_PORT=8081
+      - LLM_API_BASE=http://host.docker.internal:11434/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -176,17 +192,18 @@ services:
     image: apache/nutch:latest
     container_name: nutch
     restart: unless-stopped
-    # Keeps container alive for manual crawl execution via docker exec
-    command: tail -f /dev/null
+    # Starts the Nutch REST server on all interfaces so other containers can reach it
+    command: ["/bin/sh", "-c", "/root/nutch_source/runtime/local/bin/nutch startserver -host 0.0.0.0 -port 8081"]
     volumes:
       - ./nutch_data:/nutch_data
-    # No HTTP server in this image; healthcheck tests that the tail process is alive
+    ports:
+      - "8081:8081"
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "tail"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/admin/ > /dev/null || exit 1"]
       interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     depends_on:
       opensearch:
         condition: service_healthy

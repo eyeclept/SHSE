@@ -58,6 +58,26 @@
     {% endfor %}
   </section>
 
+  {# ── TLS warning banner ──────────────────────────────────────────── #}
+  {% if tls_warning %}
+  <div class="shse-card" style="padding:12px 16px; margin-bottom:16px;
+                                border-color:var(--shse-warning);
+                                background:var(--shse-warning-soft);
+                                display:flex; align-items:flex-start; gap:10px;">
+    <span style="color:var(--shse-warning); flex-shrink:0; margin-top:1px;">
+      {{ icon.alert(15) }}
+    </span>
+    <div style="font-size:13px; color:var(--shse-text-muted);">
+      <strong style="color:var(--shse-warning);">TLS verification disabled</strong>
+      on one or more crawler targets. Only do this for services with known
+      self-signed certificates on your private network.
+      <a href="{{ url_for('admin.targets') }}" style="margin-left:6px;">
+        Review targets →
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
   {# ── Health grid (HTMX poll target) ─────────────────────────────── #}
   <section style="margin-bottom:24px;">
     <div style="display:flex; align-items:flex-end; margin-bottom:10px;">
@@ -65,10 +85,33 @@
                  color:var(--shse-text-muted); text-transform:uppercase;
                  letter-spacing:0.06em;">Service health</h2>
       <div style="flex:1;"></div>
-      <span style="font-size:11px; color:var(--shse-text-faint);">
+      <span style="font-size:11px; color:var(--shse-text-faint);
+                   display:flex; align-items:center; gap:6px;">
         Polls every 5s
+        <span style="display:inline-block; width:48px; height:3px;
+                     background:var(--shse-surface-2); border-radius:2px;
+                     overflow:hidden; vertical-align:middle;">
+          <span id="poll-bar"
+                style="display:block; height:100%; width:0;
+                       background:var(--shse-accent);
+                       animation:poll-progress 5s linear forwards;"></span>
+        </span>
       </span>
     </div>
+    <style>
+      @keyframes poll-progress { from { width:0; } to { width:100%; } }
+    </style>
+    <script>
+      document.body.addEventListener('htmx:afterSettle', function(e) {
+        if (e.detail.target && e.detail.target.id === 'health-grid') {
+          var bar = document.getElementById('poll-bar');
+          if (!bar) return;
+          bar.style.animation = 'none';
+          void bar.offsetWidth;
+          bar.style.animation = 'poll-progress 5s linear forwards';
+        }
+      });
+    </script>
 
     <div id="health-grid"
          hx-get="{{ url_for('admin.health_partial') }}"

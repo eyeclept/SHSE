@@ -257,25 +257,26 @@ def history_filter():
 @search_bp.route("/settings", methods=["GET", "POST"])
 def settings():
     """
-    Input: ai_summary_enabled (form POST)
+    Input: ai_summary_enabled (checkbox), theme (radio) form POST
     Output: rendered settings page
     Details:
-        Allows users to toggle AI summary. Preference stored in session.
+        Allows users to toggle AI summary and set theme preference.
+        Both preferences stored in the Flask session.
     """
     from flask import flash
 
     if request.method == "POST":
-        enabled = request.form.get("ai_summary_enabled") == "on"
-        session["ai_summary_enabled"] = enabled
+        session["ai_summary_enabled"] = request.form.get("ai_summary_enabled") == "on"
+        theme = request.form.get("theme", "light")
+        if theme in ("light", "dark"):
+            session["theme"] = theme
         flash("Settings saved.", "success")
 
-    class _FakeForm:
-        class ai_summary_enabled:
-            name = "ai_summary_enabled"
-            id = "ai_summary_enabled"
-            data = session.get("ai_summary_enabled", True)
-
-    return render_template("settings.html", user=current_user, form=_FakeForm(), settings={})
+    return render_template(
+        "settings.html",
+        ai_summary_enabled=session.get("ai_summary_enabled", True),
+        current_theme=session.get("theme", "light"),
+    )
 
 
 @search_bp.route("/settings/clear-history", methods=["POST"])
@@ -284,10 +285,37 @@ def settings_clear_history():
     return history_clear()
 
 
-@search_bp.route("/settings/password", methods=["GET"])
+@search_bp.route("/settings/password", methods=["POST"])
 def settings_password():
-    """Stub for password change modal — returns empty fragment."""
-    return ""
+    """
+    Input: current_password, new_password, confirm_password (form POST)
+    Output: redirect to settings with success/error flash
+    Details:
+        Changes the current user's password. Requires current password to be correct.
+    """
+    from flask import flash, redirect
+    from flask_app import db
+
+    if not current_user.is_authenticated:
+        from flask import url_for as _url_for
+        return redirect(_url_for("auth.login"))
+
+    current_pw = request.form.get("current_password", "")
+    new_pw = request.form.get("new_password", "")
+    confirm_pw = request.form.get("confirm_password", "")
+
+    if not current_user.check_password(current_pw):
+        flash("Current password is incorrect.", "error")
+    elif len(new_pw) < 8:
+        flash("New password must be at least 8 characters.", "error")
+    elif new_pw != confirm_pw:
+        flash("New passwords do not match.", "error")
+    else:
+        current_user.set_password(new_pw)
+        db.session.commit()
+        flash("Password changed successfully.", "success")
+
+    return redirect(url_for("search.settings"))
 
 
 if __name__ == "__main__":

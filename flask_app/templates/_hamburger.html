@@ -29,7 +29,7 @@
        style="position:absolute; right:0; top:calc(100% + 6px); min-width:240px;
               background:var(--shse-surface); border:1px solid var(--shse-border);
               border-radius:12px; box-shadow:var(--shse-shadow-md);
-              padding:6px; z-index:60; display:none;">
+              padding:6px; z-index:60;">
     <div style="padding:10px 12px 6px;">
       <div style="font-size:13px; font-weight:600;">{{ u.username if u else 'guest' }}</div>
       <div style="font-size:11px; color:var(--shse-text-faint); margin-top:2px;">
@@ -89,6 +89,7 @@
 </div>
 
 <style>
+  .shse-hamburger-menu                        { display:none; }
   .shse-hamburger[data-open="true"] .shse-hamburger-menu { display:block; }
   .shse-hamburger[data-open="true"] .shse-hamburger-btn  { background:var(--shse-surface-2); }
   .shse-menu-item:hover[data-active="false"] { background:var(--shse-surface-2); }
