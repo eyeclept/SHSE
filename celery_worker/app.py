@@ -18,6 +18,7 @@ _REDIS_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
 celery = Celery(
     "shse",
     broker=_REDIS_URL,
+    backend=_REDIS_URL,   # store task results so job logs are readable
     include=[
         "celery_worker.tasks.crawl",
         "celery_worker.tasks.index",

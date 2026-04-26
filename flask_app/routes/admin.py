@@ -528,7 +528,7 @@ def _job_rows(status_filter="all"):
             "started_at": str(job.started_at)[:16] if job.started_at else "—",
             "finished_at": str(job.finished_at)[:16] if job.finished_at else "—",
             "took": duration,
-            "message": None,
+            "message": job.message,
         })
     return rows
 
@@ -553,6 +553,44 @@ def jobs():
         filter=status_filter,
         counts=counts,
     )
+
+
+@admin_bp.route("/jobs/<int:job_id>/logs")
+@admin_required
+def job_logs(job_id):
+    """
+    Input: job_id URL param
+    Output: JSON with job status and error message
+    Details:
+        Returns the stored error message and (if available) the Celery
+        task traceback from the result backend.
+    """
+    from flask_app import db
+    from flask_app.models.crawl_job import CrawlJob
+    from flask import jsonify
+
+    job = db.session.get(CrawlJob, job_id)
+    if job is None:
+        return jsonify({"error": "Job not found"}), 404
+
+    result = {
+        "id": job.id,
+        "status": job.status,
+        "message": job.message,
+        "traceback": None,
+    }
+
+    # Try to get the full traceback from Celery result backend
+    if job.task_id:
+        try:
+            from celery_worker.app import celery
+            ar = celery.AsyncResult(job.task_id)
+            if ar.failed():
+                result["traceback"] = str(ar.traceback)
+        except Exception:
+            pass
+
+    return jsonify(result)
 
 
 @admin_bp.route("/jobs/_table")

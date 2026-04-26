@@ -29,6 +29,7 @@ class CrawlJob(db.Model):
     status = db.Column(db.String(64), default="queued")
     started_at = db.Column(db.DateTime, default=datetime.utcnow)
     finished_at = db.Column(db.DateTime)
+    message = db.Column(db.Text)
 
 
 if __name__ == "__main__":

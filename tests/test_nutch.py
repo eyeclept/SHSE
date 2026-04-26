@@ -132,7 +132,7 @@ def test_trigger_crawl_inject_includes_seed_dir():
     inject_call = session.post.call_args_list[1]
     body = inject_call.kwargs.get("json") or inject_call.args[1]
     assert body["type"] == "INJECT"
-    assert body["args"]["seedDir"] == "/some/seed/path"
+    assert body["args"]["url_dir"] == "/some/seed/path"
 
 
 def test_trigger_crawl_raises_on_failed_job():

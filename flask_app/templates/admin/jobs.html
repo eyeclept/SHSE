@@ -105,4 +105,47 @@
   </div>
   {% endif %}
 </main>
+
+{# ── Job logs modal ──────────────────────────────────────────────── #}
+<div id="logs-modal"
+     style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+            z-index:200; align-items:center; justify-content:center; padding:20px;">
+  <div class="shse-card" style="width:min(700px,96vw); max-height:80vh;
+               display:flex; flex-direction:column; padding:0; overflow:hidden;">
+    <div style="display:flex; align-items:center; padding:14px 18px;
+                border-bottom:1px solid var(--shse-border);">
+      <span style="font-weight:600; font-size:14px;">Job logs</span>
+      <div style="flex:1;"></div>
+      <button onclick="document.getElementById('logs-modal').style.display='none'"
+              class="shse-btn shse-btn-ghost" style="padding:4px 8px;">✕</button>
+    </div>
+    <div id="logs-body" style="padding:16px; overflow:auto; flex:1;
+                               font-family:monospace; font-size:12px;
+                               line-height:1.6; white-space:pre-wrap;
+                               color:var(--shse-text-muted);">
+      Loading…
+    </div>
+  </div>
+</div>
+
+<script>
+function showJobLogs(jobId) {
+  var modal = document.getElementById('logs-modal');
+  var body  = document.getElementById('logs-body');
+  modal.style.display = 'flex';
+  body.textContent = 'Loading…';
+  fetch('/api/jobs/' + jobId + '/logs')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var text = '';
+      if (d.message)   text += 'Error: ' + d.message + '\n\n';
+      if (d.traceback) text += d.traceback;
+      body.textContent = text || '(no details recorded)';
+    })
+    .catch(function() { body.textContent = 'Failed to load logs.'; });
+}
+document.getElementById('logs-modal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+</script>
 {% endblock %}

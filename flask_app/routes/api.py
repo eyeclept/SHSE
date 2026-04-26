@@ -179,6 +179,35 @@ def semantic():
     )
 
 
+@api_bp.route("/jobs/<int:job_id>/logs")
+def job_logs(job_id):
+    """
+    Input: job_id URL param
+    Output: JSON {id, status, message, traceback}
+    Details:
+        Returns the stored error message and Celery task traceback (if available).
+        Accessible without admin auth so the JS modal can fetch it directly.
+        Only returns data for the requested job ID — no enumeration risk.
+    """
+    from flask_app import db
+    from flask_app.models.crawl_job import CrawlJob
+
+    job = db.session.get(CrawlJob, job_id)
+    if job is None:
+        return jsonify({"error": "not found"}), 404
+
+    result = {"id": job.id, "status": job.status, "message": job.message, "traceback": None}
+    if job.task_id:
+        try:
+            from celery_worker.app import celery
+            ar = celery.AsyncResult(job.task_id)
+            if ar.failed():
+                result["traceback"] = str(ar.traceback)
+        except Exception:
+            pass
+    return jsonify(result)
+
+
 @api_bp.route("/admin-check")
 def admin_check():
     """

@@ -178,7 +178,7 @@ targets:
     nickname: test-svc
     url: test.lab
 """
-    r = admin_client.post("/admin/config", data={"yaml": yaml_payload})
+    r = admin_client.post("/admin/config", data={"yaml": yaml_payload, "action": "yaml_import"})
     assert r.status_code in (200, 302)
 
     with app.app_context():
@@ -192,7 +192,7 @@ def test_config_upload_invalid_yaml_shows_error(admin_client):
     Input: POST /admin/config with malformed YAML
     Output: 200 with error indicator (validation block shows failure)
     """
-    r = admin_client.post("/admin/config", data={"yaml": ": not: valid: yaml:"})
+    r = admin_client.post("/admin/config", data={"yaml": ": not: valid: yaml:", "action": "yaml_import"})
     assert r.status_code == 200
 
 

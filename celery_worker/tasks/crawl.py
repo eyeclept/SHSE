@@ -73,9 +73,11 @@ def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None
             _push_api_content_impl(target, os_client)
         job.status = "success"
         job.finished_at = datetime.utcnow()
+        job.message = None
     except Exception as exc:
         job.status = "failure"
         job.finished_at = datetime.utcnow()
+        job.message = str(exc)[:500]
         db_session.commit()
         raise exc
 

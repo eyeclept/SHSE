@@ -135,7 +135,8 @@ def trigger_crawl(seed_urls, crawl_id=None, tls_verify=True, session=None):
     for job_type in _PIPELINE:
         args = dict(_JOB_ARGS[job_type])
         if job_type == "INJECT":
-            args["seedDir"] = seed_path
+            # Nutch REST API reads args["url_dir"] in InjectJob.java
+            args["url_dir"] = seed_path
 
         job_resp = session.post(
             f"{base}/job/create",

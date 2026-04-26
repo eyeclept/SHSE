@@ -55,14 +55,12 @@
     <td class="shse-mono" style="padding:12px 14px; text-align:right;
                                   color:var(--shse-text-muted);">{{ j.took or '—' }}</td>
     <td style="padding:12px 14px; text-align:right; white-space:nowrap;">
-      <a href="{{ url_for('admin.jobs', job_id=j.id) }}"
-         class="shse-btn shse-btn-ghost" style="font-size:12px;">Logs</a>
-      {% if j.status in ('queued', 'running') %}
-        <form method="post" action="{{ url_for('admin.jobs', job_id=j.id) }}"
-              style="display:inline;">
-          <button type="submit" class="shse-btn shse-btn-ghost"
-                  style="font-size:12px; color:var(--shse-danger);">Cancel</button>
-        </form>
+      {% if j.message or j.status == 'failure' %}
+        <button type="button" class="shse-btn shse-btn-ghost"
+                style="font-size:12px; color:var(--shse-danger);"
+                onclick="showJobLogs({{ j.id }})">
+          {{ icon.alert(12) }} Logs
+        </button>
       {% endif %}
     </td>
   </tr>
