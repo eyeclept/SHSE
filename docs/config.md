@@ -69,7 +69,7 @@ The `schedule` block is supported on all target types.
 |---|---|---|
 | `frequency` | string | `hourly`, `daily`, `weekly`, `monthly` |
 | `day` | string or int | Day name (e.g. `sunday`) for weekly; day number (1–31) for monthly |
-| `time` | string | `"HH:MM"` (24-hour) — used for daily/weekly/monthly |
+| `time` | string | `"HH:MM"` (24-hour) - used for daily/weekly/monthly |
 | `timezone` | string | IANA timezone name (e.g. `UTC`, `America/New_York`) |
 
 Schedules are converted to Celery Beat `crontab` entries at runtime by

@@ -1,4 +1,4 @@
-# SHSE — Database
+# SHSE - Database
 
 ## Schema
 

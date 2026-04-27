@@ -1,4 +1,4 @@
-# SHSE — Project Setup
+# SHSE - Project Setup
 
 ## Install Steps
 
@@ -66,12 +66,12 @@ All services up.
 ```
 
 Exit code 0 means all services are healthy. Exit code 1 means at least one service is
-down or unhealthy — check `docker compose ps` for details.
+down or unhealthy - check `docker compose ps` for details.
 
 ## Docker Prerequisites
 
-- **Docker Engine** 24+ — verify with `docker --version`
-- **Docker Compose plugin** (v2) — verify with `docker compose version`
+- **Docker Engine** 24+ - verify with `docker --version`
+- **Docker Compose plugin** (v2) - verify with `docker compose version`
 
 The stack uses the `docker compose` (v2) command, not the legacy `docker-compose` binary.
 Install Docker Desktop or the standalone Docker Engine + Compose plugin for your OS.

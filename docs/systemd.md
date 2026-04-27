@@ -1,4 +1,4 @@
-# SHSE — systemd Service
+# SHSE - systemd Service
 
 SHSE ships a systemd unit file at `systemd/shse.service` so the full Docker
 Compose stack starts automatically on boot and is manageable with standard
@@ -28,7 +28,7 @@ systemctl status shse
 
 Expected output:
 ```
-● shse.service - SHSE — Self-Hosted Search Engine
+● shse.service - SHSE - Self-Hosted Search Engine
      Loaded: loaded (/etc/systemd/system/shse.service; enabled; preset: disabled)
      Active: active (exited) since ...
 ```

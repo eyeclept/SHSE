@@ -1,4 +1,4 @@
-# SHSE — Installation Guide
+# SHSE - Installation Guide
 
 This guide walks through installing SHSE from scratch on a Linux host with Docker.
 
@@ -16,7 +16,7 @@ This guide walks through installing SHSE from scratch on a Linux host with Docke
 
 ---
 
-## Step 1 — Clone the repository
+## Step 1 - Clone the repository
 
 ```bash
 git clone https://github.com/youruser/shse.git
@@ -25,7 +25,7 @@ cd shse
 
 ---
 
-## Step 2 — Create the environment file
+## Step 2 - Create the environment file
 
 ```bash
 cp .env.example .env
@@ -55,7 +55,7 @@ Rules for `OPENSEARCH_INITIAL_ADMIN_PASSWORD`: minimum 8 characters, at least on
 
 ---
 
-## Step 3 — (Optional) Configure the LLM API
+## Step 3 - (Optional) Configure the LLM API
 
 Skip this step if you do not have a local LLM API. SHSE works without one; AI summaries and semantic search will be disabled but all other features are available.
 
@@ -74,7 +74,7 @@ LLM_API_BASE=http://host.docker.internal:11434/v1
 
 ---
 
-## Step 4 — (Optional) Configure SSO
+## Step 4 - (Optional) Configure SSO
 
 Skip this step to use local username/password auth.
 
@@ -88,7 +88,7 @@ SSO_ADMIN_GROUP=shse-admins   # OIDC groups claim value that grants admin role
 
 ---
 
-## Step 5 — Start the stack
+## Step 5 - Start the stack
 
 ```bash
 docker compose up -d
@@ -106,7 +106,7 @@ All services should show `healthy` or `running`. OpenSearch takes the longest to
 
 ---
 
-## Step 6 — Verify the stack
+## Step 6 - Verify the stack
 
 ```bash
 bash init.sh
@@ -120,7 +120,7 @@ docker compose logs <service-name> --tail=50
 
 ---
 
-## Step 7 — Apply database migrations
+## Step 7 - Apply database migrations
 
 Migrations run automatically inside the Flask container on startup. Confirm they applied:
 
@@ -140,25 +140,32 @@ Expected output includes: `users`, `search_history`, `crawler_targets`, `crawl_j
 
 ---
 
-## Step 8 — Create the admin account
+## Step 8 - Log in as the default admin
 
-Navigate to `https://localhost:8443/setup` (or `http://localhost:8888/setup` for plain HTTP).
+A default admin account is created automatically when the Flask container first starts:
 
-This page only appears when no admin account exists. Enter a username and password and click Create.
+| Field | Value |
+|---|---|
+| Username | `admin` |
+| Password | `admin` |
+
+Navigate to `https://localhost:8443` and log in. The app immediately redirects you to the settings page with a warning to change the password. **Change the password before proceeding.**
+
+> The `/setup` route exists as a fallback for manually creating an admin if the default account is deleted, but it is not needed on a fresh install.
 
 ---
 
-## Step 9 — Create the OpenSearch index
+## Step 9 - Create the OpenSearch index
 
 ```bash
 python cli.py create-index
 ```
 
-This is idempotent — safe to run multiple times.
+This is idempotent - safe to run multiple times.
 
 ---
 
-## Step 10 — (Optional) Enable auto-start on boot
+## Step 10 - (Optional) Enable auto-start on boot
 
 A systemd service file is included. To install it:
 

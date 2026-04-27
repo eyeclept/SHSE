@@ -20,33 +20,6 @@
 
   <form method="post" action="{{ url_for('search.settings') }}">
 
-    {# ── Search ──────────────────────────────────────────────────────── #}
-    <section style="margin-bottom:28px;">
-      <h2 style="margin:0 0 12px; font-size:13px; font-weight:600;
-                 color:var(--shse-text-muted); text-transform:uppercase; letter-spacing:0.06em;">
-        Search
-      </h2>
-      <div class="shse-card" style="padding:0;">
-
-        <div style="display:flex; align-items:center; gap:20px; padding:16px 18px;">
-          <div style="flex:1;">
-            <div style="font-size:14px; font-weight:500;">AI summary</div>
-            <div style="font-size:12px; color:var(--shse-text-muted); margin-top:3px; max-width:440px;">
-              Generate an AI summary above results using the configured LLM.
-              Loads asynchronously — BM25 results appear immediately.
-            </div>
-          </div>
-          <label style="display:inline-flex; align-items:center; gap:10px; cursor:pointer;">
-            <input type="checkbox" name="ai_summary_enabled"
-                   {% if ai_summary_enabled %}checked{% endif %}
-                   style="width:18px; height:18px; cursor:pointer;">
-            <span style="font-size:13px; color:var(--shse-text-muted);">Enabled</span>
-          </label>
-        </div>
-
-      </div>
-    </section>
-
     {# ── Appearance ──────────────────────────────────────────────────── #}
     <section style="margin-bottom:28px;">
       <h2 style="margin:0 0 12px; font-size:13px; font-weight:600;
@@ -59,20 +32,31 @@
           <div style="flex:1;">
             <div style="font-size:14px; font-weight:500;">Theme</div>
           </div>
-          <div role="radiogroup" style="display:flex; gap:6px;">
+          <div role="radiogroup" style="display:flex; gap:6px;" id="theme-group">
             {% for t in ["light", "dark"] %}
-              <label class="shse-btn"
+              <label class="shse-btn theme-btn"
+                     data-theme="{{ t }}"
                      style="text-transform:capitalize; cursor:pointer;
                             background:{{ 'var(--shse-accent-soft)' if current_theme == t else 'var(--shse-surface)' }};
                             color:{{ 'var(--shse-accent)' if current_theme == t else 'var(--shse-text)' }};
                             border-color:{{ 'transparent' if current_theme == t else 'var(--shse-border)' }};">
                 <input type="radio" name="theme" value="{{ t }}"
                        {% if current_theme == t %}checked{% endif %}
-                       style="position:absolute; opacity:0; pointer-events:none;">
+                       style="position:absolute; opacity:0; width:0; height:0;">
                 {{ t }}
               </label>
             {% endfor %}
           </div>
+          <script>
+            document.getElementById('theme-group').addEventListener('change', function(e) {
+              document.querySelectorAll('.theme-btn').forEach(function(btn) {
+                var selected = btn.querySelector('input').checked;
+                btn.style.background    = selected ? 'var(--shse-accent-soft)' : 'var(--shse-surface)';
+                btn.style.color         = selected ? 'var(--shse-accent)'      : 'var(--shse-text)';
+                btn.style.borderColor   = selected ? 'transparent'             : 'var(--shse-border)';
+              });
+            });
+          </script>
         </div>
 
       </div>

@@ -1,4 +1,4 @@
-# SHSE — TLS / Self-Signed Certificate Handling
+# SHSE - TLS / Self-Signed Certificate Handling
 
 SHSE operates on a private network where self-signed certificates are common.
 Two layers of TLS control exist: per-target bypass for crawled services, and a
@@ -23,11 +23,11 @@ targets:
 
 **What it affects:**
 
-1. **Nutch crawl** — before triggering the Nutch pipeline, the crawl task calls
+1. **Nutch crawl** - before triggering the Nutch pipeline, the crawl task calls
    `PUT /config/default/http.tls.certificates.check` with value `false` on the
    Nutch REST server when `tls_verify=False`.
 
-2. **Page text fetch** — after Nutch returns crawled URLs, `_fetch_page_text(url,
+2. **Page text fetch** - after Nutch returns crawled URLs, `_fetch_page_text(url,
    tls_verify=False)` is called for each URL to retrieve the full HTML. The
    `requests.get()` call passes `verify=False`.
 
@@ -45,7 +45,7 @@ internal service calls made by the Flask and Celery processes:
 |---|---|
 | Nutch REST API | `get_session()` returns a `requests.Session` with `session.verify=False` |
 | OpenSearch | `verify_certs=False` is already the default in `get_client()` |
-| LLM API | `requests.post()` inside `get_embedding()` / `generate_summary()` always passes `verify=True` — override via `LLM_API_BASE` with a non-TLS URL if needed |
+| LLM API | `requests.post()` inside `get_embedding()` / `generate_summary()` always passes `verify=True` - override via `LLM_API_BASE` with a non-TLS URL if needed |
 
 **When to use:** fully trusted LAN environments where all services share an internal
 CA that is not in the system trust store. The recommended production approach is to
@@ -60,7 +60,7 @@ The admin dashboard at `/admin/` shows a warning banner whenever any
 `CrawlerTarget` row has `tls_verify=False`. The banner links to `/admin/targets`
 so the admin can review which targets have verification disabled.
 
-The banner only appears in the admin UI — regular users do not see it.
+The banner only appears in the admin UI - regular users do not see it.
 
 ---
 
@@ -68,9 +68,9 @@ The banner only appears in the admin UI — regular users do not see it.
 
 | Action | Risk |
 |---|---|
-| `tls_verify: false` on a single internal target | Low — limited to one service on your LAN |
-| `INTERNAL_TLS_VERIFY=false` globally | Medium — all internal API calls skip cert validation |
-| `tls_verify: false` for a public internet target | **Do not do this** — SHSE only indexes internal services |
+| `tls_verify: false` on a single internal target | Low - limited to one service on your LAN |
+| `INTERNAL_TLS_VERIFY=false` globally | Medium - all internal API calls skip cert validation |
+| `tls_verify: false` for a public internet target | **Do not do this** - SHSE only indexes internal services |
 
 The recommended long-term fix for homelab self-signed certificates is to mount
 your internal root CA certificate into the relevant containers:

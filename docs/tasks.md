@@ -89,7 +89,7 @@ celery.conf.update(
 
 `started_at` is set when the job row is created. `finished_at` is set on both success and failure.
 
-Rows are NOT deleted on completion — they persist for the jobs page in the admin UI.
+Rows are NOT deleted on completion - they persist for the jobs page in the admin UI.
 
 ---
 

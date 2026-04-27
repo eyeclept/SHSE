@@ -15,7 +15,7 @@ but any OpenAI-compatible server works.
 | `LLM_GEN_MODEL` | `granite3.3:latest` | Model name used for generative summary calls |
 
 These defaults can be overridden at runtime via the `settings.llm` block in the crawler
-YAML config (see [docs/config.md](config.md) — Epic 9d). DB values take precedence over
+YAML config (see [docs/config.md](config.md) - Epic 9d). DB values take precedence over
 env vars when set.
 
 All three variables are read at import time from the environment.
@@ -46,7 +46,7 @@ Set them in `.env` before starting the stack.
 }
 ```
 
-**Returns:** `list[float]` — the embedding vector, or `None` if the API is unreachable
+**Returns:** `list[float]` - the embedding vector, or `None` if the API is unreachable
 or returns an error field.
 
 Callers (the Celery vectorize task) must check for `None` and store

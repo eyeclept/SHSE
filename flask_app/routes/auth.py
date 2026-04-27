@@ -90,7 +90,7 @@ def register():
         db.session.add(user)
         db.session.commit()
         return redirect(url_for("auth.login"))
-    is_first = db.session.execute(db.select(User)).scalar_one_or_none() is None
+    is_first = db.session.execute(db.select(User)).scalars().first() is None
     return render_template("register.html", is_first=is_first)
 
 
@@ -105,7 +105,7 @@ def setup():
     """
     admin_exists = db.session.execute(
         db.select(User).filter_by(role="admin")
-    ).scalar_one_or_none() is not None
+    ).scalars().first() is not None
     if admin_exists:
         return redirect(url_for("auth.login"))
     if request.method == "POST":

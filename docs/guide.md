@@ -1,4 +1,4 @@
-# SHSE — User and Operator Guide
+# SHSE - User and Operator Guide
 
 This guide covers day-to-day use of SHSE: first-run setup, adding services to crawl, running and monitoring crawl jobs, searching, and managing the index.
 
@@ -13,9 +13,16 @@ docker compose up -d
 bash init.sh          # confirm all services healthy
 ```
 
-### 2. Create the admin account
+### 2. Log in as admin
 
-Navigate to `http://localhost:8888/setup` in your browser. This page only appears when no admin account exists. Enter a username and password; you will be redirected to the login page.
+A default admin account is created automatically on first boot:
+
+| Field | Value |
+|---|---|
+| Username | `admin` |
+| Password | `admin` |
+
+Navigate to `https://localhost:8443` and log in. You will be redirected to the settings page with a prompt to change the password. **Change it before doing anything else.**
 
 ### 3. Create the OpenSearch index
 
@@ -80,9 +87,9 @@ targets:
 Every target inherits from `defaults`. Override any field at the target level.
 
 **`crawl_depth`** controls how many link-hops the BFS crawler follows from the seed URL:
-- `0` — index the seed page only
-- `1` — seed page + all pages directly linked from it
-- `2` (default) — two hops; reaches most single-level site structures
+- `0` - index the seed page only
+- `1` - seed page + all pages directly linked from it
+- `2` (default) - two hops; reaches most single-level site structures
 - Higher values follow more links but take proportionally longer
 
 Set `crawl_depth` in YAML or edit it per-target in Admin → Targets.
@@ -158,7 +165,7 @@ id      nickname                  status      started              task_id
      2  192.168.1.0/24            success     2026-04-24 03:00:00  e5f6a7b8-...
 ```
 
-`success` means the crawl pipeline completed without error. `failure` means an exception was raised — check the Celery worker logs for details:
+`success` means the crawl pipeline completed without error. `failure` means an exception was raised - check the Celery worker logs for details:
 
 ```bash
 docker compose logs celery_worker --tail=50
@@ -183,7 +190,7 @@ Output:
 ```
 3 results for "nginx reverse proxy"  (8ms)  page 1/1
 
-  [1] Nginx — Homelab Docs
+  [1] Nginx - Homelab Docs
       service: homelab-docs
       http://docs.homelab.lan/nginx
       Nginx is a web server that can also be used as a reverse proxy …
@@ -270,7 +277,7 @@ This disables certificate verification only for that target. Nutch will still cr
 
 Visit `/register` in the browser, or ask the admin to create an account.
 
-All self-registered accounts receive the `user` role. Admins are created only via `/setup` (first run) or by manually updating the `role` column in the database.
+All self-registered accounts receive the `user` role. The only admin account is the default `admin` created on first boot, or any account promoted manually by updating the `role` column in the database.
 
 ### SSO
 
@@ -286,9 +293,9 @@ Toggle between light and dark mode using the user menu (hamburger icon, top-righ
 
 When `LLM_API_BASE` is configured, the search results page shows a right-rail panel that loads asynchronously after the main BM25 results:
 
-1. **Suggested keywords** — Short phrases extracted from semantic results to help refine your query. Appear as grey chips at the top of the rail.
-2. **AI summary** — A 2–4 sentence RAG answer synthesised from the top vector matches. Collapsible, with source citations.
-3. **Semantic matches** — The top-k vector hits with relevance scores, independent from the BM25 result set.
+1. **Suggested keywords** - Short phrases extracted from semantic results to help refine your query. Appear as grey chips at the top of the rail.
+2. **AI summary** - A 2–4 sentence RAG answer synthesised from the top vector matches. Collapsible, with source citations.
+3. **Semantic matches** - The top-k vector hits with relevance scores, independent from the BM25 result set.
 
 The entire rail loads via a single HTMX request to `/api/semantic?q=...`. BM25 results are never blocked by it. If the LLM API is unreachable the rail loads silently with no content.
 
@@ -319,7 +326,7 @@ The admin dashboard at `/admin/` shows live service health (polls every 5 second
 
 | Indicator | Source |
 |---|---|
-| OpenSearch | `cluster.health()` — green/yellow/red |
+| OpenSearch | `cluster.health()` - green/yellow/red |
 | Nutch | `GET /admin/` on the Nutch REST server |
 | LLM API | `GET {LLM_API_BASE}/models` |
 | Redis | `PING` |
@@ -341,7 +348,7 @@ docker compose --profile test up kiwix -d
 # Add as a crawl target.
 # Inside Docker, container-to-container port is 8080 (not the host-mapped 8082).
 # Route to the ZIM content root so articles are one hop from the seed.
-# crawl_depth: 1 is enough — the index page links to all 97 articles directly.
+# crawl_depth: 1 is enough - the index page links to all 97 articles directly.
 cat > /tmp/kiwix-target.yaml << 'EOF'
 defaults: {}
 targets:
@@ -378,7 +385,7 @@ docker compose --profile test down kiwix
 
 ### Search returns no results
 
-1. Run `python cli.py stats` — if `documents: 0`, the index is empty. Run a crawl first.
+1. Run `python cli.py stats` - if `documents: 0`, the index is empty. Run a crawl first.
 2. Confirm the OpenSearch index exists: `python cli.py create-index`
 3. Check that at least one crawl job completed with `success` status: `python cli.py jobs`
 
@@ -392,4 +399,4 @@ docker compose --profile test down kiwix
 
 1. Confirm `celery_beat` is running: `docker compose ps celery_beat`
 2. Restart Beat after uploading a new config: `docker compose restart celery_beat`
-3. Check Beat logs: `docker compose logs celery_beat --tail=50` — look for lines like `beat: Starting...` followed by the schedule entries.
+3. Check Beat logs: `docker compose logs celery_beat --tail=50` - look for lines like `beat: Starting...` followed by the schedule entries.

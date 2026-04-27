@@ -1,51 +1,52 @@
 # Self-Hosted Search Engine (SHSE)
 
-**SHSE** is a private, homelab-native search engine. It indexes and searches the services, pages, and content running on your internal network — not the public internet. Full-text BM25 retrieval via OpenSearch, link-following BFS crawling, and optional AI-powered summaries and semantic search via any OpenAI-compatible LLM endpoint.
+**SHSE** is a private, homelab-native search engine. It indexes and searches the services, pages, and content running on your internal network - not the public internet. Full-text BM25 retrieval via OpenSearch, link-following BFS crawling, and optional AI-powered summaries and semantic search via any OpenAI-compatible LLM endpoint.
 
-Admins define what gets crawled via a YAML config file, schedule indexing jobs that run automatically via Celery Beat, and control the index from the admin UI or the CLI. Users get a clean search interface with optional AI-assisted result summaries, semantic matches, and suggested keyword chips — all backed entirely by infrastructure you control.
+Admins define what gets crawled via a YAML config file, schedule indexing jobs that run automatically via Celery Beat, and control the index from the admin UI or the CLI. Users get a clean search interface with optional AI-assisted result summaries, semantic matches, and suggested keyword chips - all backed entirely by infrastructure you control.
 
 ---
 
 ## Features
 
-- **Full-text search** — BM25 multi-field retrieval via OpenSearch with typo tolerance (`fuzziness: AUTO`)
-- **Semantic search** — Vector search using local embeddings, loaded async so BM25 results appear immediately
-- **AI summaries** — RAG-based summaries via any OpenAI-compatible LLM endpoint; hidden gracefully when unavailable
-- **Suggested keywords** — Post-search keyword chips extracted from semantic results to help refine queries
-- **BFS web crawling** — Link-following crawl from a seed URL to configurable depth; depth set per-target in YAML or the admin UI
-- **Flexible ingestion** — Service crawl, subnet scan, OAI-PMH harvest, RSS/Atom feed, or custom API adapter
-- **Auto-vectorization** — Embeddings backfilled automatically after each successful crawl when LLM API is configured
-- **Scheduled indexing** — Cron-style per-target schedules managed by Celery Beat with Redis-backed persistence (redbeat)
-- **Job tracking** — Crawl and vectorize jobs visible in the admin Jobs page with live HTMX polling
-- **Admin CLI** — `python cli.py` for index stats, search, crawl dispatch, config upload, and job history
-- **User accounts** — Per-user search history; role-based access (admin vs. user); light/dark theme toggle
-- **SSO support** — Optional OIDC integration (Authentik, Keycloak, Authelia); local password auth on by default
+- **Full-text search** - BM25 multi-field retrieval via OpenSearch with typo tolerance (`fuzziness: AUTO`)
+- **Semantic search** - Vector search using local embeddings, loaded async so BM25 results appear immediately
+- **AI summaries** - RAG-based summaries via any OpenAI-compatible LLM endpoint; hidden gracefully when unavailable
+- **Suggested keywords** - Post-search keyword chips extracted from semantic results to help refine queries
+- **BFS web crawling** - Link-following crawl from a seed URL to configurable depth; depth set per-target in YAML or the admin UI
+- **Flexible ingestion** - Service crawl, subnet scan, OAI-PMH harvest, RSS/Atom feed, or custom API adapter
+- **Auto-vectorization** - Embeddings backfilled automatically after each successful crawl when LLM API is configured
+- **Scheduled indexing** - Cron-style per-target schedules managed by Celery Beat with Redis-backed persistence (redbeat)
+- **Job tracking** - Crawl and vectorize jobs visible in the admin Jobs page with live HTMX polling
+- **Admin CLI** - `python cli.py` for index stats, search, crawl dispatch, config upload, and job history
+- **User accounts** - Per-user search history; role-based access (admin vs. user); light/dark theme toggle
+- **SSO support** - Optional OIDC integration (Authentik, Keycloak, Authelia); local password auth on by default
 
 ---
 
 ## Architecture
 
-```
-User ──HTTPS──▶ Nginx ──▶ Flask (Web UI + REST API)
-                              │
-                    ┌─────────┼─────────┐
-                    ▼         ▼         ▼
-                MariaDB   OpenSearch   Redis
-             (users/jobs) (index)    (broker)
-                                        │
-                              ┌─────────┴─────────┐
-                              ▼                   ▼
-                        Celery Worker        Celery Beat
-                              │              (schedules)
-                              ▼
-                        Apache Nutch
-                        (web crawler)
-                              │
-                              ▼
-                    OpenSearch (index)
-                              │
-                      LLM API (optional)
-                     (embeddings + RAG)
+```mermaid
+graph TD
+    User([User / Browser]) -->|HTTPS| Nginx
+    Nginx -->|proxy| Flask["Flask\n(Web UI + REST API)"]
+
+    Flask --> MariaDB[(MariaDB\nusers · jobs · config)]
+    Flask --> OpenSearch[(OpenSearch\nsearch index + vectors)]
+    Flask --> Redis[(Redis\nbroker + Beat state)]
+
+    Redis --> Worker[Celery Worker]
+    Redis --> Beat[Celery Beat\nscheduled crawls]
+
+    Worker -->|BFS crawl| Target["Target Services\n(HTTP/HTTPS)"]
+    Worker -->|index docs| OpenSearch
+    Worker -->|vectorize| LLM["LLM API\noptional\nOllama · LiteLLM · vLLM"]
+
+    Flask -->|embed + search| LLM
+    Flask -->|semantic query| OpenSearch
+
+    Beat -->|dispatch| Worker
+
+    Nutch["Apache Nutch\nREST server"] -.->|crawldb state| Worker
 ```
 
 ### Dependencies
@@ -107,9 +108,13 @@ User ──HTTPS──▶ Nginx ──▶ Flask (Web UI + REST API)
    bash init.sh
    ```
 
-7. Navigate to `http://localhost:8888/setup` to create the initial admin account.
+7. Log in at `https://localhost:8443` with the default admin credentials:
+   - **Username:** `admin`
+   - **Password:** `admin`
 
-See [docs/setup.md](docs/setup.md) for full setup instructions and [docs/docker.md](docs/docker.md) for service details.
+   You will be redirected to the settings page and prompted to change the password immediately.
+
+See [docs/installGuide.md](docs/installGuide.md) for the full step-by-step installation guide and [docs/docker.md](docs/docker.md) for service details.
 
 ---
 
@@ -218,7 +223,7 @@ SHSE exposes a JSON REST API for programmatic search access.
   "results": [
     {
       "id": "abc123",
-      "title": "Nginx — My Homelab Docs",
+      "title": "Nginx - My Homelab Docs",
       "url": "http://docs.homelab.lan/nginx",
       "service": "homelab-docs",
       "port": 80,
@@ -249,7 +254,7 @@ Returns document count, service count, and last crawl timestamp.
 
 ### Local auth (default)
 
-Username and bcrypt-hashed password stored in MariaDB. No configuration required. The first admin account is created at `/setup` on first run.
+Username and bcrypt-hashed password stored in MariaDB. No configuration required. A default admin account (`admin` / `admin`) is created automatically on first boot. You are prompted to change the password on first login.
 
 ### SSO via OIDC (optional)
 
@@ -273,7 +278,7 @@ See [docs/auth.md](docs/auth.md) for the full route reference and SSO configurat
 When a compatible LLM API is configured (`LLM_API_BASE`), SHSE performs hybrid retrieval at query time:
 
 1. BM25 results render immediately
-2. An HTMX request fires for `/api/semantic?q=...` — vector search + AI summary load in the right rail without blocking the main results
+2. An HTMX request fires for `/api/semantic?q=...` - vector search + AI summary load in the right rail without blocking the main results
 3. Suggested keywords extracted from semantic results appear as chips to help refine the query
 
 AI summaries can be toggled per-user in settings. If the LLM API is unreachable, SHSE falls back to BM25-only results without error, and the semantic rail is hidden.

@@ -1,4 +1,4 @@
-# SHSE — Authentication
+# SHSE - Authentication
 
 ## Route Reference
 
@@ -10,7 +10,7 @@
 | GET / POST | `/setup` | auth | No | First-run admin creation (redirects if admin exists) |
 | POST | `/theme` | auth | No | Toggle session theme between light and dark |
 | GET | `/sso/login` | auth | No | Initiate OIDC SSO flow (requires `SSO_ENABLED=true`) |
-| GET | `/sso/callback` | auth | No | OIDC callback — exchange code, create/sync user |
+| GET | `/sso/callback` | auth | No | OIDC callback - exchange code, create/sync user |
 | GET / POST | `/admin/*` | admin | admin role | All admin routes enforced by `@admin_required` |
 
 ### Login (`POST /login`)
@@ -21,9 +21,13 @@ Accepts `username` and `password` form fields. Validates credentials against the
 
 Creates a user with `role = 'user'`. Returns 400 if the username is already taken or if either field is empty.
 
-### First-run setup (`GET/POST /setup`)
+### Default admin account
 
-If no admin account exists, renders a form to create the initial admin user. If an admin already exists, redirects immediately to `/login` without rendering the form. This prevents re-running setup after deployment.
+A default admin account (`admin` / `admin`) is created automatically when the Flask app starts for the first time and no admin exists. On first login with these credentials, the app redirects to `/settings` with a warning to change the password.
+
+### Manual admin creation (`GET/POST /setup`)
+
+Fallback route for manually creating an admin if the default account has been deleted. If an admin account already exists, redirects immediately to `/login` without rendering the form.
 
 ---
 
@@ -31,10 +35,10 @@ If no admin account exists, renders a form to create the initial admin user. If 
 
 SHSE uses Flask-Login for session management backed by a signed browser cookie.
 
-1. **Login** — `login_user(user)` writes the user's primary key into the session cookie as `_user_id`.
-2. **Request** — `@login_manager.user_loader` re-loads the `User` row from MariaDB on every request.
-3. **Logout** — `logout_user()` removes `_user_id` from the session.
-4. **Unauthenticated access** — Flask-Login redirects to `/login` when a protected route is hit without a session. The admin blueprint additionally returns 403 for authenticated non-admin users.
+1. **Login** - `login_user(user)` writes the user's primary key into the session cookie as `_user_id`.
+2. **Request** - `@login_manager.user_loader` re-loads the `User` row from MariaDB on every request.
+3. **Logout** - `logout_user()` removes `_user_id` from the session.
+4. **Unauthenticated access** - Flask-Login redirects to `/login` when a protected route is hit without a session. The admin blueprint additionally returns 403 for authenticated non-admin users.
 
 The `LOGIN_DISABLED` config flag is not set; every request to `/admin/*` is subject to the `@admin_required` decorator check.
 
@@ -56,7 +60,7 @@ SHSE has two roles stored in `users.role` (ENUM `'admin'`, `'user'`):
 | `POST /register` | Always `user` |
 | `POST /setup` | Always `admin` |
 | `GET /sso/callback` (first login) | Derived from OIDC `groups` claim (see SSO section) |
-| `GET /sso/callback` (repeat login) | Re-derived from `groups` claim — syncs any provider-side changes |
+| `GET /sso/callback` (repeat login) | Re-derived from `groups` claim - syncs any provider-side changes |
 
 ### `@admin_required` decorator
 

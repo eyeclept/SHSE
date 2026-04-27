@@ -1,4 +1,4 @@
-# SHSE — Search UI
+# SHSE - Search UI
 
 ---
 
@@ -6,12 +6,12 @@
 
 | Method | Path | Blueprint | Description |
 |---|---|---|---|
-| GET | `/` | search | Home page — search box and index stat strip |
+| GET | `/` | search | Home page - search box and index stat strip |
 | GET | `/search?q=...&page=N&tab=X` | search | BM25 results page |
-| GET | `/api/semantic?q=...` | api | HTMX fragment — AI summary + vector hits (async) |
+| GET | `/api/semantic?q=...` | api | HTMX fragment - AI summary + vector hits (async) |
 | GET | `/history` | search | Search history for the logged-in user |
 | POST | `/history/clear` | search | Delete all history rows for the current user |
-| GET | `/history/_filter?q=...` | search | HTMX partial — filtered history list |
+| GET | `/history/_filter?q=...` | search | HTMX partial - filtered history list |
 | GET/POST | `/settings` | search | User settings (AI summary toggle) |
 | GET | `/login` | auth | Login page |
 | GET/POST | `/register` | auth | Registration page |
@@ -24,20 +24,20 @@
 
 ```
 flask_app/templates/
-├── base.html              Master layout — theme, fonts, flash messages, blocks
+├── base.html              Master layout - theme, fonts, flash messages, blocks
 ├── _icons.html            Jinja macros for all SVG icons and the SHSE logo
 ├── _macros.html           Reusable form widgets (toggle switch, empty state)
 ├── _search.html           Search box partial (sm/md/lg sizes)
 ├── _topbar.html           Sticky header with logo and hamburger menu
 ├── _hamburger.html        Avatar popover with nav links and theme toggle
 ├── _result_item.html      Single BM25 result card (used inside results loop)
-├── _semantic_rail.html    HTMX fragment — AI summary + semantic hits
+├── _semantic_rail.html    HTMX fragment - AI summary + semantic hits
 ├── home.html              Landing page with large search box and stat strip
 ├── results.html           Two-column results page (BM25 + async semantic rail)
 ├── history.html           Search history list with live filter
 ├── login.html             Login form (plain HTML, no WTForms)
 ├── register.html          Registration form; shows admin copy for first user
-└── settings.html          User settings — AI summary toggle
+└── settings.html          User settings - AI summary toggle
 ```
 
 ---
@@ -52,7 +52,7 @@ AI summary and vector search are enabled by default. The session key
   semantic rail is not requested
 
 The semantic rail is always loaded asynchronously via HTMX regardless of the
-toggle — the route just skips the LLM call and returns an empty aside.
+toggle - the route just skips the LLM call and returns an empty aside.
 
 ---
 
@@ -71,7 +71,7 @@ and supports a live filter via `GET /history/_filter?q=...` (HTMX).
 
 ## Registration and Login
 
-Neither form uses WTForms — plain HTML `<input>` elements POST to the auth routes.
+Neither form uses WTForms - plain HTML `<input>` elements POST to the auth routes.
 
 `GET /register` passes `is_first=True` when the `users` table is empty; the
 template shows "First-run setup" copy and notes that the account will have

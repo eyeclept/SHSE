@@ -1,4 +1,4 @@
-# SHSE — Testing
+# SHSE - Testing
 
 ---
 
@@ -59,7 +59,7 @@ Most test files share a common fixture pattern:
 ```python
 @pytest.fixture
 def app():
-    """SQLite in-memory Flask app — no live MariaDB."""
+    """SQLite in-memory Flask app - no live MariaDB."""
     flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
     db.init_app(flask_app)
     login_manager.init_app(flask_app)
@@ -81,7 +81,7 @@ fail with a connection error when the relevant service is not running.
 
 ## Coverage Commands
 
-Install `pytest-cov` (not in `requirements.txt` — dev only):
+Install `pytest-cov` (not in `requirements.txt` - dev only):
 
 ```bash
 .venv/bin/pip install pytest-cov

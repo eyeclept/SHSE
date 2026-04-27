@@ -30,14 +30,14 @@ Base URL: `http://nutch:8081` (from other Docker Compose services) or `http://lo
 
 All endpoints accept and return `application/json`.
 
-### Admin — `/admin`
+### Admin - `/admin`
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/admin/` | Server status and metadata |
 | GET | `/admin/stop` | Gracefully stop the Nutch server |
 
-### Config — `/config`
+### Config - `/config`
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -48,7 +48,7 @@ All endpoints accept and return `application/json`.
 | POST | `/config/create` | Create a new configuration |
 | PUT | `/config/{configId}/{propertyId}` | Update a single property |
 
-### Job — `/job`
+### Job - `/job`
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -91,21 +91,21 @@ All endpoints accept and return `application/json`.
 
 **`state` values:** `IDLE`, `RUNNING`, `FINISHED`, `FAILED`, `KILLED`, `STOPPING`, `KILLING`
 
-### Seed — `/seed`
+### Seed - `/seed`
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/seed/` | List all seed lists |
 | POST | `/seed/create` | Create a seed file (list of URLs) |
 
-### DB — `/db`
+### DB - `/db`
 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/db/crawldb` | Query the crawl DB |
 | GET | `/db/fetchdb?from=0&to=0` | Fetch DB entries (paginated) |
 
-### Services — `/services`
+### Services - `/services`
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -118,14 +118,14 @@ All endpoints accept and return `application/json`.
 
 A minimal crawl sequence using the REST API:
 
-1. **Create seed** — `POST /seed/create` with a list of seed URLs; Nutch returns a seed path.
-2. **Inject** — `POST /job/create` with `type: INJECT` and `args.seedDir` pointing to the seed path.
-3. **Generate** — `POST /job/create` with `type: GENERATE`.
-4. **Fetch** — `POST /job/create` with `type: FETCH`.
-5. **Parse** — `POST /job/create` with `type: PARSE`.
-6. **Update DB** — `POST /job/create` with `type: UPDATEDB`.
-7. **Poll** — `GET /job/{id}?crawlId=` until `state == FINISHED` or `state == FAILED`.
-8. **Read results** — `POST /db/crawldb` to query indexed content.
+1. **Create seed** - `POST /seed/create` with a list of seed URLs; Nutch returns a seed path.
+2. **Inject** - `POST /job/create` with `type: INJECT` and `args.seedDir` pointing to the seed path.
+3. **Generate** - `POST /job/create` with `type: GENERATE`.
+4. **Fetch** - `POST /job/create` with `type: FETCH`.
+5. **Parse** - `POST /job/create` with `type: PARSE`.
+6. **Update DB** - `POST /job/create` with `type: UPDATEDB`.
+7. **Poll** - `GET /job/{id}?crawlId=` until `state == FINISHED` or `state == FAILED`.
+8. **Read results** - `POST /db/crawldb` to query indexed content.
 
 Each job must finish before the next step is started. `flask_app/services/nutch.py` wraps this sequence in `trigger_crawl()` and `fetch_results()`.
 

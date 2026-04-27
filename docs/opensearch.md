@@ -8,7 +8,7 @@ Index name: `shse_pages`
 |---|---|---|
 | `url` | `keyword` | Source URL of the crawled page |
 | `port` | `integer` | Source port |
-| `text` | `text` | Chunk content — BM25 target field |
+| `text` | `text` | Chunk content - BM25 target field |
 | `embedding` | `knn_vector` (768-dim) | Cosine similarity vector; `null` when deferred |
 | `title` | `text` | Page title from Nutch |
 | `crawled_at` | `date` | Ingest timestamp (ISO 8601) |
@@ -33,7 +33,7 @@ hits = bm25_search("nginx reverse proxy", k=10)
 # hits: list of dicts with _score and _source
 ```
 
-Underlying query — **`multi_match best_fields`** across `title` (boosted 2×) and `text`,
+Underlying query - **`multi_match best_fields`** across `title` (boosted 2×) and `text`,
 with `fuzziness: AUTO` for typo tolerance (1 edit distance for 3–5 char terms, 2 for 6+)
 and `prefix_length: 1` to prevent fuzzing the first character:
 
@@ -89,7 +89,7 @@ Only documents with `vectorized=true` have a non-null embedding and participate 
 
 ## Chunking Strategy
 
-Documents are split into 800-word chunks before indexing (`_chunk_text`). Word count is used as a proxy for subword tokens — 800 whitespace-delimited words is a conservative upper bound on an 800 subword-token context window. No external tokenizer is required.
+Documents are split into 800-word chunks before indexing (`_chunk_text`). Word count is used as a proxy for subword tokens - 800 whitespace-delimited words is a conservative upper bound on an 800 subword-token context window. No external tokenizer is required.
 
 Each chunk is indexed as a separate document, carrying the full set of metadata fields (`url`, `port`, `title`, `crawled_at`, `service_nickname`, `content_type`, `source_type`, `content_hash`).
 
@@ -103,7 +103,7 @@ Every chunk is written with a deterministic document ID:
 doc_id = sha256(url + str(chunk_index))
 ```
 
-Before each write, `index_document` fetches the existing document by ID and compares its stored `content_hash` against the hash of the incoming chunk. If the hashes match, the write is skipped — no duplicate is created and no unnecessary I/O is performed. If the hashes differ (content changed) or no document exists (new chunk), the document is written using `client.index(id=doc_id, ...)`.
+Before each write, `index_document` fetches the existing document by ID and compares its stored `content_hash` against the hash of the incoming chunk. If the hashes match, the write is skipped - no duplicate is created and no unnecessary I/O is performed. If the hashes differ (content changed) or no document exists (new chunk), the document is written using `client.index(id=doc_id, ...)`.
 
 ```python
 from flask_app.services.opensearch import index_document
@@ -202,7 +202,7 @@ wipe_index()
 
 ### Create index (`create_index`)
 
-Idempotent — safe to call on every startup. Returns immediately if the index already exists.
+Idempotent - safe to call on every startup. Returns immediately if the index already exists.
 
 ```python
 from flask_app.services.opensearch import create_index

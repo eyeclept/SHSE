@@ -1,4 +1,4 @@
-# SHSE — Docker Compose
+# SHSE - Docker Compose
 
 ## Service Overview
 

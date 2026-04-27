@@ -1,4 +1,4 @@
-# SHSE — Nginx
+# SHSE - Nginx
 
 Nginx sits in front of Flask as a TLS termination and reverse proxy layer.
 It also enforces a second layer of admin access control via `auth_request`.
@@ -9,7 +9,7 @@ It also enforces a second layer of admin access control via `auth_request`.
 
 `nginx/nginx.conf` contains two server blocks:
 
-**Port 80** — redirects all HTTP traffic to HTTPS:
+**Port 80** - redirects all HTTP traffic to HTTPS:
 ```nginx
 server {
     listen 80;
@@ -17,7 +17,7 @@ server {
 }
 ```
 
-**Port 443** — TLS termination and reverse proxy to Flask:
+**Port 443** - TLS termination and reverse proxy to Flask:
 ```nginx
 server {
     listen 443 ssl;
@@ -50,7 +50,7 @@ The Nginx service will refuse to start if either file is missing.
 
 ## `/admin/*` Restriction
 
-Nginx enforces admin access via the `auth_request` directive — a sub-request
+Nginx enforces admin access via the `auth_request` directive - a sub-request
 to `GET /api/admin-check` is issued before proxying any `/admin/` request.
 
 ```nginx
@@ -71,8 +71,8 @@ location /admin {
 ```
 
 Flask's `GET /api/admin-check` endpoint returns:
-- **200** — authenticated admin
-- **403** — authenticated non-admin or unauthenticated
+- **200** - authenticated admin
+- **403** - authenticated non-admin or unauthenticated
 
 When Nginx receives 403 from the sub-request, it returns 403 to the client
 without proxying to Flask at all. This is defence-in-depth: Flask also enforces

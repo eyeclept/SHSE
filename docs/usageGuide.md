@@ -1,4 +1,4 @@
-# SHSE — Usage Guide
+# SHSE - Usage Guide
 
 Day-to-day reference for searching, managing crawl targets, monitoring jobs, and using the admin tools.
 
@@ -45,9 +45,9 @@ Go to **Admin → Targets** and fill in the form. Required fields depend on the 
 | `api-push` | Nickname, URL, Adapter |
 
 **Crawl depth** (service and network targets): controls how many link-hops the BFS crawler follows from the seed URL.
-- `0` — seed page only
-- `1` — seed + all pages directly linked from it
-- `2` (default) — two hops
+- `0` - seed page only
+- `1` - seed + all pages directly linked from it
+- `2` (default) - two hops
 - Set lower for large sites to avoid crawling too broadly.
 
 **TLS verify**: uncheck for services with self-signed certificates.
@@ -112,8 +112,8 @@ docker compose restart celery_beat
 | Column | Meaning |
 |---|---|
 | Job | Kind (crawl / vectorize) and status badge |
-| Target | Crawler target nickname, or `—` for vectorize jobs |
-| Progress | Bar for running jobs; `—` when finished |
+| Target | Crawler target nickname, or `-` for vectorize jobs |
+| Progress | Bar for running jobs; `-` when finished |
 | Started | UTC timestamp |
 | Took | Wall-clock duration |
 
@@ -143,7 +143,7 @@ The dashboard at **Admin /** polls live status every 5 seconds:
 
 | Service | Probe |
 |---|---|
-| OpenSearch | `cluster.health()` — green/yellow/red |
+| OpenSearch | `cluster.health()` - green/yellow/red |
 | Nutch | `GET /admin/` on the Nutch REST server |
 | LLM API | `GET {LLM_API_BASE}/models` |
 | Redis | `PING` |
@@ -202,8 +202,8 @@ Users can configure personal preferences at **/settings**:
 
 ### Search returns no results
 
-1. `python cli.py stats` — if `documents: 0`, the index is empty. Trigger a crawl.
-2. Confirm the crawl completed: `python cli.py jobs` — look for `success` status.
+1. `python cli.py stats` - if `documents: 0`, the index is empty. Trigger a crawl.
+2. Confirm the crawl completed: `python cli.py jobs` - look for `success` status.
 3. If the crawl succeeded but docs are 0, check the target's URL and `crawl_depth` setting. A `crawl_depth: 0` indexes only the seed page.
 
 ### Crawl shows success but wrong content
@@ -214,7 +214,7 @@ Users can configure personal preferences at **/settings**:
 ### AI summaries not appearing
 
 1. Confirm `LLM_API_BASE` is set in `.env` and the endpoint is reachable.
-2. Test: `curl ${LLM_API_BASE}/models` — should return a JSON list of models.
+2. Test: `curl ${LLM_API_BASE}/models` - should return a JSON list of models.
 3. Check Admin → health grid for the LLM API indicator.
 4. If the API was down during the crawl, run `python cli.py vectorize` to backfill embeddings.
 

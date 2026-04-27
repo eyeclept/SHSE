@@ -257,16 +257,14 @@ def history_filter():
 @search_bp.route("/settings", methods=["GET", "POST"])
 def settings():
     """
-    Input: ai_summary_enabled (checkbox), theme (radio) form POST
+    Input: theme (radio) form POST
     Output: rendered settings page
     Details:
-        Allows users to toggle AI summary and set theme preference.
-        Both preferences stored in the Flask session.
+        Allows users to set theme preference, stored in the Flask session.
     """
     from flask import flash
 
     if request.method == "POST":
-        session["ai_summary_enabled"] = request.form.get("ai_summary_enabled") == "on"
         theme = request.form.get("theme", "light")
         if theme in ("light", "dark"):
             session["theme"] = theme
@@ -274,7 +272,6 @@ def settings():
 
     return render_template(
         "settings.html",
-        ai_summary_enabled=session.get("ai_summary_enabled", True),
         current_theme=session.get("theme", "light"),
     )
 
