@@ -119,7 +119,10 @@ def test_home_passes_stats_to_template(client):
     mock_client = MagicMock()
     mock_client.count.return_value = {"count": 12345}
     mock_client.search.side_effect = [
-        {"aggregations": {"services": {"value": 4}}},
+        {"aggregations": {"services": {"buckets": [
+            {"key": "homelab-docs"}, {"key": "gitea"},
+            {"key": "kiwix"}, {"key": "wiki"},
+        ]}}},
         {"hits": {"hits": [{"_source": {"crawled_at": "2026-04-25T00:00:00"}}]}},
     ]
     with patch("flask_app.routes.search.get_client", return_value=mock_client):

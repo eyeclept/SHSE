@@ -60,11 +60,33 @@
     })();
   </script>
 
-  <div style="margin-top: 48px; display:flex; gap:16px; flex-wrap:wrap; justify-content:center;">
-    <a class="shse-btn shse-btn-ghost" style="color:var(--shse-text-muted); padding:6px 10px;"
-       href="{{ url_for('admin.targets') }}">
-      {{ icon.server(14) }} Indexed services
-    </a>
+  <div style="margin-top: 48px; display:flex; gap:16px; flex-wrap:wrap; justify-content:center;
+              align-items:flex-start;">
+
+    {% if stats.service_names %}
+    <details style="position:relative;">
+      <summary class="shse-btn shse-btn-ghost"
+                style="color:var(--shse-text-muted); padding:6px 10px;
+                       list-style:none; cursor:pointer; user-select:none;">
+        {{ icon.server(14) }} {{ stats.services }} indexed service{{ 's' if stats.services != 1 else '' }}
+      </summary>
+      <div style="position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%);
+                  background:var(--shse-surface); border:1px solid var(--shse-border);
+                  border-radius:10px; padding:10px 14px; box-shadow:var(--shse-shadow-sm);
+                  display:flex; flex-wrap:wrap; gap:6px; min-width:160px; max-width:320px;
+                  z-index:50;">
+        {% for name in stats.service_names %}
+          <span class="shse-pill" style="font-size:11px;">{{ name }}</span>
+        {% endfor %}
+      </div>
+    </details>
+    {% else %}
+    <span class="shse-btn shse-btn-ghost"
+          style="color:var(--shse-text-faint); padding:6px 10px; cursor:default;">
+      {{ icon.server(14) }} No services indexed yet
+    </span>
+    {% endif %}
+
     <a class="shse-btn shse-btn-ghost" style="color:var(--shse-text-muted); padding:6px 10px;"
        href="{{ url_for('search.history') }}">
       {{ icon.history(14) }} Recent searches

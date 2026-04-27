@@ -26,7 +26,7 @@ _INDEX_NAME = "shse_pages"
 def _get_stats():
     """
     Input: None
-    Output: dict with docs, services, last_crawl
+    Output: dict with docs, services (count), service_names (list), last_crawl
     Details:
         Queries OpenSearch for index stats. Falls back to zeros on error.
     """
@@ -37,9 +37,13 @@ def _get_stats():
 
         agg_resp = client.search(index=_INDEX_NAME, body={
             "size": 0,
-            "aggs": {"services": {"cardinality": {"field": "service_nickname"}}},
+            "aggs": {
+                "services": {"terms": {"field": "service_nickname", "size": 100}},
+            },
         })
-        svc_count = agg_resp["aggregations"]["services"]["value"]
+        buckets = agg_resp["aggregations"]["services"]["buckets"]
+        service_names = [b["key"] for b in buckets]
+        svc_count = len(service_names)
 
         last_resp = client.search(index=_INDEX_NAME, body={
             "size": 1, "sort": [{"crawled_at": "desc"}], "_source": ["crawled_at"],
@@ -49,9 +53,15 @@ def _get_stats():
     except Exception:
         doc_count = 0
         svc_count = 0
+        service_names = []
         last_crawl = "unknown"
 
-    return {"docs": doc_count, "services": svc_count, "last_crawl": last_crawl}
+    return {
+        "docs": doc_count,
+        "services": svc_count,
+        "service_names": service_names,
+        "last_crawl": last_crawl,
+    }
 
 
 @search_bp.route("/", methods=["GET"])
