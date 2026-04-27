@@ -92,6 +92,7 @@ Triggers a Nutch crawl against a specific host.
 | `route` | no (default: `/`) | Starting path for the crawl |
 | `service` | no (default: `http`) | Protocol hint |
 | `tls_verify` | no (default: `true`) | Set `false` for self-signed certs |
+| `crawl_depth` | no (default: `2`) | BFS link hops to follow from the seed URL; `0` = seed page only, `1` = seed + directly linked pages |
 | `schedule` | no | Crawl schedule block |
 
 ### `type: network`

@@ -1,22 +1,24 @@
 # Self-Hosted Search Engine (SHSE)
 
-> ⚠️ **This project is currently in active development. The backend is complete; the admin and search UI are in progress.**
+**SHSE** is a private, homelab-native search engine. It indexes and searches the services, pages, and content running on your internal network — not the public internet. Full-text BM25 retrieval via OpenSearch, link-following BFS crawling, and optional AI-powered summaries and semantic search via any OpenAI-compatible LLM endpoint.
 
-**SHSE** is a private, homelab-native search engine. It indexes and searches the services, pages, and content running on your internal network — not the public internet. Built around OpenSearch for full-text BM25 retrieval and Apache Nutch for network crawling, with optional support for a local LLM API (Ollama, LiteLLM, or any OpenAI-compatible endpoint) for AI-generated summaries.
-
-Admins define what gets crawled via a YAML config file, schedule indexing jobs that run automatically via Celery Beat, and control the index from the admin UI or the CLI. Users get a clean search interface with optional AI-assisted result summaries — all backed entirely by infrastructure you control.
+Admins define what gets crawled via a YAML config file, schedule indexing jobs that run automatically via Celery Beat, and control the index from the admin UI or the CLI. Users get a clean search interface with optional AI-assisted result summaries, semantic matches, and suggested keyword chips — all backed entirely by infrastructure you control.
 
 ---
 
 ## Features
 
-- **Full-text search** — BM25 retrieval via OpenSearch across all indexed homelab content
-- **JSON search API** — `GET /api/search` for programmatic access; no HTML parsing required
-- **AI summaries** — Optional RAG-based summaries via any OpenAI-compatible LLM endpoint
-- **Flexible crawling** — Crawl subnets, specific services, OAI-PMH repositories, RSS/Atom feeds, or push via custom adapters
-- **Scheduled indexing** — Cron-style crawl schedules per target, managed by Celery Beat; loaded automatically from the YAML config at worker startup
-- **Admin CLI** — `python cli.py` for managing the index, crawls, and config without the browser
-- **User accounts** — Per-user search history; role-based access (admin vs. user)
+- **Full-text search** — BM25 multi-field retrieval via OpenSearch with typo tolerance (`fuzziness: AUTO`)
+- **Semantic search** — Vector search using local embeddings, loaded async so BM25 results appear immediately
+- **AI summaries** — RAG-based summaries via any OpenAI-compatible LLM endpoint; hidden gracefully when unavailable
+- **Suggested keywords** — Post-search keyword chips extracted from semantic results to help refine queries
+- **BFS web crawling** — Link-following crawl from a seed URL to configurable depth; depth set per-target in YAML or the admin UI
+- **Flexible ingestion** — Service crawl, subnet scan, OAI-PMH harvest, RSS/Atom feed, or custom API adapter
+- **Auto-vectorization** — Embeddings backfilled automatically after each successful crawl when LLM API is configured
+- **Scheduled indexing** — Cron-style per-target schedules managed by Celery Beat with Redis-backed persistence (redbeat)
+- **Job tracking** — Crawl and vectorize jobs visible in the admin Jobs page with live HTMX polling
+- **Admin CLI** — `python cli.py` for index stats, search, crawl dispatch, config upload, and job history
+- **User accounts** — Per-user search history; role-based access (admin vs. user); light/dark theme toggle
 - **SSO support** — Optional OIDC integration (Authentik, Keycloak, Authelia); local password auth on by default
 
 ---
@@ -51,10 +53,10 @@ User ──HTTPS──▶ Nginx ──▶ Flask (Web UI + REST API)
 | Service | Role | Required |
 |---|---|---|
 | OpenSearch | Search index + vector store | Yes |
-| MariaDB | Users, history, crawler config | Yes |
-| Redis | Celery task broker | Yes |
-| Apache Nutch | Web crawler | Yes |
-| LLM API | Embeddings + AI summaries | No |
+| MariaDB | Users, history, crawler config, job tracking | Yes |
+| Redis | Celery task broker + Beat schedule persistence | Yes |
+| Apache Nutch | Web crawler (REST server, auto-starts) | Yes |
+| LLM API | Embeddings + AI summaries + semantic search | No |
 | Nginx | Reverse proxy / TLS termination | Recommended |
 | SSO Provider | OIDC authentication | No |
 
@@ -132,7 +134,9 @@ targets:
     nickname: myblog
     url: blog.homelab.lan
     port: 80
-    tls_verify: false        # set false for self-signed certs
+    route: /                  # seed URL path; BFS follows links from here
+    crawl_depth: 2            # link hops to follow (0 = seed page only)
+    tls_verify: false         # set false for self-signed certs
 
   - type: network
     network: 192.168.1.0/24
@@ -153,7 +157,7 @@ targets:
     adapter: discourse_adapter
 ```
 
-Any field omitted from a target inherits from the `defaults` block. See [docs/config.md](docs/config.md) for the full field reference.
+Any field omitted from a target inherits from the `defaults` block. `crawl_depth` controls how many link-hops the BFS crawler follows from the seed URL; default is `2`. See [docs/config.md](docs/config.md) for the full field reference.
 
 ---
 
@@ -266,19 +270,25 @@ See [docs/auth.md](docs/auth.md) for the full route reference and SSO configurat
 
 ## AI Summaries
 
-When a compatible LLM API is configured (`LLM_API_BASE`), SHSE performs hybrid retrieval at query time: BM25 results are returned immediately while a vector search gathers context chunks for the generative model. The summary appears as a collapsible card above the standard results.
+When a compatible LLM API is configured (`LLM_API_BASE`), SHSE performs hybrid retrieval at query time:
 
-AI summaries can be toggled per-user in settings. If the LLM API is unreachable, SHSE falls back to BM25-only results without error.
+1. BM25 results render immediately
+2. An HTMX request fires for `/api/semantic?q=...` — vector search + AI summary load in the right rail without blocking the main results
+3. Suggested keywords extracted from semantic results appear as chips to help refine the query
 
-### Deferred vectorization
+AI summaries can be toggled per-user in settings. If the LLM API is unreachable, SHSE falls back to BM25-only results without error, and the semantic rail is hidden.
 
-If the LLM API is unavailable during indexing, documents are stored with `vectorized=false`. Once the API is reachable again, run:
+### Automatic vectorization
+
+After every successful crawl, SHSE automatically dispatches a vectorize job if `LLM_API_BASE` is set. The job appears in the Admin → Jobs page with kind `vectorize`. To trigger it manually:
 
 ```bash
 python cli.py vectorize
 ```
 
-This backfills embeddings across the entire index. Also useful when switching embedding models.
+### Deferred vectorization
+
+If the LLM API is unavailable during indexing, documents are stored with `vectorized=false` and picked up automatically on the next crawl, or manually via `python cli.py vectorize`. Useful when switching embedding models.
 
 See [docs/llm.md](docs/llm.md) for the full API reference.
 
@@ -288,16 +298,24 @@ See [docs/llm.md](docs/llm.md) for the full API reference.
 
 | File | Contents |
 |---|---|
-| [docs/setup.md](docs/setup.md) | Installation, environment config, Docker prerequisites |
+| [docs/installGuide.md](docs/installGuide.md) | Step-by-step installation from scratch |
+| [docs/usageGuide.md](docs/usageGuide.md) | Day-to-day usage: searching, crawling, admin, CLI |
+| [docs/setup.md](docs/setup.md) | Environment config reference and Docker prerequisites |
 | [docs/docker.md](docs/docker.md) | Service overview, healthchecks, startup order |
-| [docs/guide.md](docs/guide.md) | End-user and operator guide: first run, crawling, searching |
-| [docs/config.md](docs/config.md) | YAML crawler config format and field reference |
+| [docs/guide.md](docs/guide.md) | Operator guide: first run, YAML config, Kiwix test server |
+| [docs/config.md](docs/config.md) | YAML crawler config format and field reference (incl. `crawl_depth`) |
 | [docs/auth.md](docs/auth.md) | Auth routes, session lifecycle, SSO configuration |
 | [docs/database.md](docs/database.md) | Schema, migrations, ERD |
 | [docs/opensearch.md](docs/opensearch.md) | Index schema, query shapes, chunking, idempotent upsert |
 | [docs/tasks.md](docs/tasks.md) | Celery task signatures, Beat schedule, CrawlJob lifecycle |
 | [docs/llm.md](docs/llm.md) | LLM API integration, embedding, RAG flow, fallback |
-| [docs/nutch.md](docs/nutch.md) | Nutch REST API reference, crawl pipeline, TLS |
+| [docs/nutch.md](docs/nutch.md) | Nutch REST API reference, TLS patch |
+| [docs/search_ui.md](docs/search_ui.md) | Search routes, semantic rail, AI summary, keyword chips |
+| [docs/admin_ui.md](docs/admin_ui.md) | Admin routes, health checks, job management, YAML upload |
+| [docs/tls.md](docs/tls.md) | Per-target TLS bypass, global flag, warning banner |
+| [docs/nginx.md](docs/nginx.md) | Proxy config, SSL cert setup, `/admin/*` restriction |
+| [docs/systemd.md](docs/systemd.md) | Auto-start on boot via systemd |
+| [docs/testing.md](docs/testing.md) | Running tests, fixture overview, coverage |
 
 ---
 

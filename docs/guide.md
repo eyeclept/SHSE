@@ -25,15 +25,15 @@ python cli.py create-index
 
 This is a no-op if the index already exists, so it is safe to run at any time.
 
-### 4. Start the Nutch REST server
+### 4. Verify Nutch is running
 
-The Nutch container keeps itself alive without starting the REST server automatically. Start it before triggering any crawls:
+The Nutch REST server starts automatically when the container starts (configured in `docker-compose.yml`). Confirm it is healthy:
 
 ```bash
-docker exec nutch /root/nutch_source/runtime/local/bin/nutch startserver -host 0.0.0.0 -port 8081
+curl http://localhost:8081/admin/
 ```
 
-You only need to run this once per container restart. If you want it to start automatically, add it to the `command` in `docker-compose.yml`.
+If it returns JSON, the server is up. The admin health grid at `/admin/` also shows Nutch status.
 
 ---
 
@@ -48,6 +48,7 @@ defaults:
   service: http
   port: 80
   tls_verify: true
+  crawl_depth: 2              # BFS hops from seed URL; 0 = seed page only
   schedule:
     frequency: weekly
     day: sunday
@@ -59,11 +60,13 @@ targets:
     nickname: homelab-docs
     url: docs.homelab.lan
     port: 80
+    route: /                  # seed URL path
 
   - type: service
     nickname: gitea
     url: git.homelab.lan
     port: 3000
+    crawl_depth: 1            # override: shallower crawl for Gitea
 
   - type: network
     network: 192.168.1.0/24
@@ -75,6 +78,14 @@ targets:
 ```
 
 Every target inherits from `defaults`. Override any field at the target level.
+
+**`crawl_depth`** controls how many link-hops the BFS crawler follows from the seed URL:
+- `0` — index the seed page only
+- `1` — seed page + all pages directly linked from it
+- `2` (default) — two hops; reaches most single-level site structures
+- Higher values follow more links but take proportionally longer
+
+Set `crawl_depth` in YAML or edit it per-target in Admin → Targets.
 
 ### Upload the config
 
@@ -271,21 +282,34 @@ Toggle between light and dark mode using the user menu (hamburger icon, top-righ
 
 ---
 
-## AI Summaries
+## AI Summaries and Semantic Search
 
-AI summaries load **asynchronously** after the BM25 results page renders. A spinner
-shows in the right rail while the LLM API is being queried. The summary card appears
-when the response arrives (HTMX `hx-trigger="load"` on `/api/semantic?q=...`).
+When `LLM_API_BASE` is configured, the search results page shows a right-rail panel that loads asynchronously after the main BM25 results:
 
-If the LLM API is unreachable the rail loads silently with no content — BM25 results
-are unaffected. To check LLM API connectivity visit `/admin/` and look at the health grid.
+1. **Suggested keywords** — Short phrases extracted from semantic results to help refine your query. Appear as grey chips at the top of the rail.
+2. **AI summary** — A 2–4 sentence RAG answer synthesised from the top vector matches. Collapsible, with source citations.
+3. **Semantic matches** — The top-k vector hits with relevance scores, independent from the BM25 result set.
 
-Toggle per-user at `/settings` → AI summary switch.
+The entire rail loads via a single HTMX request to `/api/semantic?q=...`. BM25 results are never blocked by it. If the LLM API is unreachable the rail loads silently with no content.
 
-### Default summary model
+Toggle the AI summary per-user at `/settings` → AI summary switch.
 
-The default generative model is `granite3.3:latest`. Override it in your YAML config
-or by setting `LLM_GEN_MODEL` in `.env`. The embedding model defaults to `nomic-embed-text`.
+To check LLM API connectivity, visit `/admin/` and look at the health grid.
+
+### Automatic vectorization
+
+After every successful crawl, a `vectorize` job is automatically dispatched to backfill any documents that were indexed without embeddings (e.g. if the LLM API was down during the crawl). The job appears in Admin → Jobs with kind `vectorize`. To trigger it manually:
+
+```bash
+python cli.py vectorize
+```
+
+### Models
+
+| Env var | Purpose | Default |
+|---|---|---|
+| `LLM_EMBED_MODEL` | Embedding model | `nomic-embed-text` |
+| `LLM_GEN_MODEL` | Summary / keyword model | `llama3` |
 
 ---
 
@@ -314,17 +338,21 @@ A Kiwix server with a 100-article Wikipedia ZIM is included for end-to-end testi
 # Start
 docker compose --profile test up kiwix -d
 
-# Add as a crawl target
+# Add as a crawl target.
+# Inside Docker, container-to-container port is 8080 (not the host-mapped 8082).
+# Route to the ZIM content root so articles are one hop from the seed.
+# crawl_depth: 1 is enough — the index page links to all 97 articles directly.
 cat > /tmp/kiwix-target.yaml << 'EOF'
 defaults: {}
 targets:
   - type: service
     nickname: kiwix-wikipedia
-    url: localhost
-    port: 8082
+    url: kiwix
+    port: 8080
     route: /content/wikipedia_en_100_nopic_2026-04/
     service: http
     tls_verify: false
+    crawl_depth: 1
 EOF
 python cli.py upload-config /tmp/kiwix-target.yaml
 
