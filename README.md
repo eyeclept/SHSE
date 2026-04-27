@@ -10,8 +10,8 @@ Admins define what gets crawled via a YAML config file, schedule indexing jobs t
 
 - **Full-text search** - BM25 multi-field retrieval via OpenSearch with typo tolerance (`fuzziness: AUTO`)
 - **Semantic search** - Vector search using local embeddings, loaded async so BM25 results appear immediately
-- **AI summaries** - RAG-based summaries via any OpenAI-compatible LLM endpoint; hidden gracefully when unavailable
 - **Suggested keywords** - Post-search keyword chips extracted from semantic results to help refine queries
+- **AI summaries** - Planned (Epic 18); infrastructure is in place but not yet wired to the UI
 - **BFS web crawling** - Link-following crawl from a seed URL to configurable depth; depth set per-target in YAML or the admin UI
 - **Flexible ingestion** - Service crawl, subnet scan, OAI-PMH harvest, RSS/Atom feed, or custom API adapter
 - **Auto-vectorization** - Embeddings backfilled automatically after each successful crawl when LLM API is configured
@@ -91,11 +91,11 @@ graph TD
    OPENSEARCH_INITIAL_ADMIN_PASSWORD=Min8Chars1Special!
    ```
 
-4. (Optional) Configure the LLM API for AI summaries:
+4. (Optional) Configure the LLM API for semantic search:
    ```ini
    LLM_API_BASE=http://192.168.1.50:11434/v1
    LLM_EMBED_MODEL=nomic-embed-text
-   LLM_GEN_MODEL=llama3
+   LLM_GEN_MODEL=granite3.3:latest   # must match a model pulled in your Ollama instance
    ```
 
 5. Start the stack:
@@ -273,15 +273,16 @@ See [docs/auth.md](docs/auth.md) for the full route reference and SSO configurat
 
 ---
 
-## AI Summaries
+## Semantic Search and Keyword Chips
 
 When a compatible LLM API is configured (`LLM_API_BASE`), SHSE performs hybrid retrieval at query time:
 
 1. BM25 results render immediately
-2. An HTMX request fires for `/api/semantic?q=...` - vector search + AI summary load in the right rail without blocking the main results
-3. Suggested keywords extracted from semantic results appear as chips to help refine the query
+2. An HTMX request fires for `/api/semantic?q=...` - vector search results and suggested keyword chips load in the right rail without blocking the main results
 
-AI summaries can be toggled per-user in settings. If the LLM API is unreachable, SHSE falls back to BM25-only results without error, and the semantic rail is hidden.
+If the LLM API is unreachable, SHSE falls back to BM25-only results without error and the semantic rail is empty.
+
+> **AI summaries** (RAG-generated answers) are planned but not yet implemented. See Epic 18 in TODO.md.
 
 ### Automatic vectorization
 
@@ -315,7 +316,7 @@ See [docs/llm.md](docs/llm.md) for the full API reference.
 | [docs/tasks.md](docs/tasks.md) | Celery task signatures, Beat schedule, CrawlJob lifecycle |
 | [docs/llm.md](docs/llm.md) | LLM API integration, embedding, RAG flow, fallback |
 | [docs/nutch.md](docs/nutch.md) | Nutch REST API reference, TLS patch |
-| [docs/search_ui.md](docs/search_ui.md) | Search routes, semantic rail, AI summary, keyword chips |
+| [docs/search_ui.md](docs/search_ui.md) | Search routes, semantic rail, keyword chips, settings |
 | [docs/admin_ui.md](docs/admin_ui.md) | Admin routes, health checks, job management, YAML upload |
 | [docs/tls.md](docs/tls.md) | Per-target TLS bypass, global flag, warning banner |
 | [docs/nginx.md](docs/nginx.md) | Proxy config, SSL cert setup, `/admin/*` restriction |

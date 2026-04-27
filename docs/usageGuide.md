@@ -16,11 +16,11 @@ Queries are automatically fuzzy-matched. `"anmal"` will find documents containin
 
 ### Right rail
 
-| Section | What it shows |
-|---|---|
-| **Suggested keywords** | Short phrases from semantic results to help refine your query |
-| **AI summary** | 2–4 sentence RAG answer with source citations |
-| **Semantic matches** | Top-k vector search hits with relevance scores |
+| Section | Status | What it shows |
+|---|---|---|
+| **Suggested keywords** | Working | Short phrases from semantic result titles to help refine your query |
+| **AI summary** | Not yet implemented | Planned for a future release (Epic 18) |
+| **Semantic matches** | Working | Top-k vector search hits with relevance scores |
 
 The entire rail is optional and loads asynchronously. BM25 results are never blocked by it.
 
@@ -192,9 +192,9 @@ Users can configure personal preferences at **/settings**:
 
 | Setting | Effect |
 |---|---|
-| AI summary toggle | Show or hide the semantic rail and AI summary on results pages |
 | Theme | Light or dark mode (also available from the hamburger menu on every page) |
-| Change password | Update local account password |
+| Change password | Update local account password (requires current password; 8 character minimum) |
+| Clear search history | Permanently deletes all saved searches for your account |
 
 ---
 
