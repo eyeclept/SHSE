@@ -24,7 +24,7 @@ import requests
 NUTCH_HOST = os.environ.get("NUTCH_HOST", "localhost")
 NUTCH_PORT = int(os.environ.get("NUTCH_PORT", 8081))
 
-_PIPELINE = ["INJECT", "GENERATE", "FETCH", "PARSE", "UPDATEDB"]
+_PIPELINE = ["INJECT", "GENERATE", "FETCH", "UPDATEDB"]
 _TERMINAL_STATES = {"FINISHED", "FAILED", "KILLED"}
 
 # job_type → extra args included in the job create body
@@ -32,7 +32,6 @@ _JOB_ARGS = {
     "INJECT":   {"depth": 1},
     "GENERATE": {},
     "FETCH":    {},
-    "PARSE":    {},
     "UPDATEDB": {},
 }
 
@@ -265,6 +264,82 @@ def _fetch_page_text(url, tls_verify=True, timeout=10):
         return text if text.strip() else url
     except Exception:
         return url
+
+
+def _discover_urls(seed_url, tls_verify=True, max_depth=2, max_urls=500, timeout=10):
+    """
+    Input:
+        seed_url  - str, starting URL
+        tls_verify - bool, SSL verification
+        max_depth  - int, how many link-hops to follow (0 = seed page only)
+        max_urls   - int, cap on total URLs returned
+        timeout    - int, per-request timeout in seconds
+    Output:
+        list[str] — discovered URLs in BFS order, seed first
+    Details:
+        BFS from seed_url staying on the same host. Follows redirects
+        transparently (the final URL after redirect is recorded). Links are
+        only extracted from HTML responses; CSS/JS/images are recorded but
+        not followed. Fragment identifiers and off-host hrefs are ignored.
+        Falls back to [seed_url] on any network error fetching the seed.
+    """
+    from html.parser import HTMLParser
+    import urllib.parse
+
+    class _LinkExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.links = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "a":
+                for name, value in attrs:
+                    if name == "href" and value and not value.startswith(
+                        ("#", "javascript:", "mailto:", "data:")
+                    ):
+                        self.links.append(value)
+
+    parsed_seed = urllib.parse.urlparse(seed_url)
+    base_host = parsed_seed.netloc
+
+    visited = set()
+    queue = [(seed_url, 0)]
+    result = []
+
+    while queue and len(result) < max_urls:
+        url, depth = queue.pop(0)
+        norm = url.split("#")[0]
+        if norm in visited:
+            continue
+        visited.add(norm)
+
+        try:
+            resp = requests.get(norm, timeout=timeout, verify=tls_verify, allow_redirects=True)
+            resp.raise_for_status()
+        except Exception:
+            continue
+
+        final_url = resp.url.split("#")[0]
+        if urllib.parse.urlparse(final_url).netloc != base_host:
+            continue
+        if final_url not in visited:
+            visited.add(final_url)
+        result.append(final_url)
+
+        if depth < max_depth and "html" in resp.headers.get("Content-Type", ""):
+            extractor = _LinkExtractor()
+            extractor.feed(resp.text)
+            for href in extractor.links:
+                abs_url = urllib.parse.urljoin(final_url, href).split("#")[0]
+                parsed = urllib.parse.urlparse(abs_url)
+                if (
+                    parsed.netloc == base_host
+                    and parsed.scheme in ("http", "https")
+                    and abs_url not in visited
+                ):
+                    queue.append((abs_url, depth + 1))
+
+    return result
 
 
 def main():

@@ -40,6 +40,7 @@ class CrawlerTarget(db.Model):
     endpoint = db.Column(db.String(256))   # oai-pmh OAI endpoint path
     feed_path = db.Column(db.String(256))  # feed RSS/Atom path
     adapter = db.Column(db.String(256))    # api-push adapter script name
+    crawl_depth = db.Column(db.Integer, default=2)  # BFS max_depth for service/network targets
     schedule_yaml = db.Column(db.Text)
     yaml_source = db.Column(db.Text)
 

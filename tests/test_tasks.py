@@ -148,8 +148,7 @@ def test_crawl_target_creates_crawl_job(db_session, service_target):
 
     os_client = MagicMock()
 
-    with patch("celery_worker.tasks.crawl.trigger_crawl", return_value="c-001"), \
-         patch("celery_worker.tasks.crawl.fetch_results", return_value={"nodes": []}), \
+    with patch("celery_worker.tasks.crawl._discover_urls", return_value=[]), \
          patch("celery_worker.tasks.crawl.delete_stale"):
         job_id = _crawl_target_impl(
             service_target.id, db_session, None, os_client
@@ -174,8 +173,8 @@ def test_crawl_target_status_failure_on_exception(db_session, service_target):
     from celery_worker.tasks.crawl import _crawl_target_impl
 
     with patch(
-        "celery_worker.tasks.crawl.trigger_crawl",
-        side_effect=RuntimeError("nutch down"),
+        "celery_worker.tasks.crawl._discover_urls",
+        side_effect=RuntimeError("network down"),
     ), pytest.raises(RuntimeError):
         _crawl_target_impl(service_target.id, db_session)
 
@@ -230,8 +229,7 @@ def test_reindex_target_deletes_then_crawls(db_session, service_target):
     os_client = MagicMock()
 
     with patch("celery_worker.tasks.index.delete_by_nickname") as del_mock, \
-         patch("celery_worker.tasks.crawl.trigger_crawl", return_value="c-001"), \
-         patch("celery_worker.tasks.crawl.fetch_results", return_value={"nodes": []}), \
+         patch("celery_worker.tasks.crawl._discover_urls", return_value=[]), \
          patch("celery_worker.tasks.crawl.delete_stale"):
         reindex_target(
             service_target.id,
@@ -444,8 +442,7 @@ def test_crawl_job_lifecycle(db_session, service_target):
 
     os_client = MagicMock()
 
-    with patch("celery_worker.tasks.crawl.trigger_crawl", return_value="c-001"), \
-         patch("celery_worker.tasks.crawl.fetch_results", return_value={"nodes": []}), \
+    with patch("celery_worker.tasks.crawl._discover_urls", return_value=[]), \
          patch("celery_worker.tasks.crawl.delete_stale"):
         job_id = _crawl_target_impl(service_target.id, db_session, None, os_client)
 

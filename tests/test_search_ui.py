@@ -141,7 +141,7 @@ def test_ai_summary_card_hidden_when_llm_unreachable(client):
         The rendered fragment should show the BM25 warning, not an AI summary.
     """
     with patch("flask_app.routes.api.semantic_results",
-               return_value=([], None, True)):
+               return_value=([], None, True, [])):
         r = client.get("/api/semantic?q=test")
     assert r.status_code == 200
     assert b"AI summary" not in r.data
@@ -157,7 +157,7 @@ def test_ai_summary_card_shown_when_llm_available(client):
                   "title": "A", "snippet": "text"}]
 
     with patch("flask_app.routes.api.semantic_results",
-               return_value=(fake_hits, fake_summary, False)):
+               return_value=(fake_hits, fake_summary, False, [])):
         r = client.get("/api/semantic?q=animal")
     assert r.status_code == 200
     assert b"AI summary" in r.data

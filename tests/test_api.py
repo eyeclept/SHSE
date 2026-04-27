@@ -311,7 +311,7 @@ def test_search_returns_vector_hits_and_ai_summary(client):
 
     with patch("flask_app.routes.api.get_client") as mock_gc, \
          patch("flask_app.routes.api.semantic_results",
-               return_value=(fake_vector_hits, fake_summary, False)):
+               return_value=(fake_vector_hits, fake_summary, False, [])):
         mock_gc.return_value = MagicMock(**{"search.return_value": os_resp})
         r = client.get("/api/search?q=animal")
 
@@ -329,7 +329,7 @@ def test_search_shows_bm25_warning_when_llm_unavailable(client):
     os_resp = _fake_os_response([])
 
     with patch("flask_app.routes.api.get_client") as mock_gc, \
-         patch("flask_app.routes.api.semantic_results", return_value=([], None, True)):
+         patch("flask_app.routes.api.semantic_results", return_value=([], None, True, [])):
         mock_gc.return_value = MagicMock(**{"search.return_value": os_resp})
         r = client.get("/api/search?q=test")
 

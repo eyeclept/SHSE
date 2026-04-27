@@ -94,13 +94,8 @@
           <th></th>
         </tr>
       </thead>
-      {# tbody is the HTMX swap target — header never re-renders. #}
-      <tbody id="jobs-tbody"
-             hx-get="{{ url_for('admin.jobs_table', status=filter) }}"
-             hx-trigger="every 2s"
-             hx-swap="outerHTML">
-        {% include "admin/_jobs_rows.html" %}
-      </tbody>
+      {# tbody is the HTMX swap target — _jobs_rows.html owns the <tbody> tag #}
+      {% include "admin/_jobs_rows.html" %}
     </table>
   </div>
   {% endif %}

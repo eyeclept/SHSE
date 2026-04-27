@@ -133,11 +133,10 @@ def test_nutch_crawl_propagates_tls_verify_to_page_fetch(app):
         tls_verify=False,
     )
 
-    fake_nodes = [{"url": "https://internal.lab/page"}]
+    fake_urls = ["https://internal.lab/page"]
 
-    with patch("celery_worker.tasks.crawl.trigger_crawl", return_value="cid-001"), \
-         patch("celery_worker.tasks.crawl.fetch_results",
-               return_value={"nodes": fake_nodes, "stats": {}}), \
+    with patch("celery_worker.tasks.crawl._discover_urls",
+               return_value=fake_urls), \
          patch("celery_worker.tasks.crawl._fetch_page_text",
                return_value="page text") as fetch_mock, \
          patch("celery_worker.tasks.crawl.index_document"), \

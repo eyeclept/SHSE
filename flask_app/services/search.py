@@ -59,6 +59,49 @@ def bm25_body(q, page=1, page_size=_PAGE_SIZE, highlight_tags=None):
     }
 
 
+
+_STOP_WORDS = {
+    "the", "a", "an", "in", "of", "for", "to", "and", "or", "is", "are",
+    "was", "were", "be", "been", "it", "its", "this", "that", "these",
+    "those", "at", "by", "from", "with", "as", "on", "into", "about",
+    "than", "also", "but", "not", "no", "so", "if", "has", "have", "had",
+    "do", "does", "did", "will", "would", "can", "could", "may", "might",
+    "their", "they", "them", "which", "who", "what", "when", "where",
+    "how", "all", "one", "two", "more", "most", "such", "been", "its",
+    "other", "many", "some", "used", "known", "well", "often", "also",
+    "first", "time", "human", "humans",
+}
+
+
+def _keyword_chips(vector_hits, query, max_chips=6):
+    """
+    Input:
+        vector_hits - list of vector search result dicts with 'snippet' keys
+        query       - str, original search query
+        max_chips   - int, maximum chips to return
+    Output:
+        list[str] — Google-style suggestions formed as "{query} {keyword}"
+    Details:
+        Extracts significant words (len >= 5) from the text snippets of vector
+        hits. Excludes stop words and words already in the query. For single-word
+        queries, prepends the query to form natural phrase suggestions.
+        No external calls — uses data already fetched by vector search.
+    """
+    query_words = {w.lower().strip(".,;:()[]\"'") for w in query.split()}
+    counts = {}
+    for h in vector_hits:
+        for raw in h.get("snippet", "").split():
+            w = raw.strip(".,;:()[]\"'()-").lower()
+            if len(w) >= 5 and w not in _STOP_WORDS and w not in query_words:
+                counts[w] = counts.get(w, 0) + 1
+
+    top_words = [w for w, _ in sorted(counts.items(), key=lambda x: -x[1])]
+
+    if len(query.split()) == 1:
+        return [f"{query} {w}" for w in top_words[:max_chips]]
+    return top_words[:max_chips]
+
+
 def semantic_results(q, os_client=None, llm_session=None):
     """
     Input:
@@ -66,10 +109,11 @@ def semantic_results(q, os_client=None, llm_session=None):
         os_client   - optional OpenSearch client (injectable for tests)
         llm_session - optional requests.Session for LLM API (injectable for tests)
     Output:
-        tuple (vector_hits, ai_summary, show_bm25_warning) where:
+        tuple (vector_hits, ai_summary, show_bm25_warning, keyword_chips) where:
             vector_hits      - list[dict] for the right-rail semantic results
             ai_summary       - dict {html, sources} or None
             show_bm25_warning - bool, True when LLM API is unreachable
+            keyword_chips    - list[str] of suggested related search terms
     Details:
         Embeds the query, runs k-NN vector search, and generates a RAG summary.
         Returns empty results and show_bm25_warning=True when the LLM API is down.
@@ -86,12 +130,12 @@ def semantic_results(q, os_client=None, llm_session=None):
         embedding = None
 
     if embedding is None:
-        return [], None, True
+        return [], None, True, []
 
     try:
         hits = vector_search(embedding, k=_VECTOR_K, client=client)
     except Exception:
-        return [], None, True
+        return [], None, True, []
 
     vector_hits = []
     context_chunks = []
@@ -128,7 +172,8 @@ def semantic_results(q, os_client=None, llm_session=None):
         except Exception:
             pass
 
-    return vector_hits, ai_summary, False
+    chips = _keyword_chips(vector_hits, q)
+    return vector_hits, ai_summary, False, chips
 
 
 if __name__ == "__main__":

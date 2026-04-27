@@ -141,6 +141,18 @@
             <span style="font-size:13px;">Verify TLS certificate</span>
           </label>
 
+          {# Crawl depth — service and network only #}
+          <label style="display:block; margin-top:14px;" class="f-tls">
+            <span style="font-size:12px; font-weight:500; color:var(--shse-text-muted);
+                         display:block; margin-bottom:5px;">Crawl depth</span>
+            <input type="number" name="crawl_depth" min="0" max="10"
+                   class="shse-input" style="width:80px;"
+                   value="{{ editing.crawl_depth if editing else 2 }}">
+            <span style="font-size:11px; color:var(--shse-text-faint); margin-left:8px;">
+              how many link-hops to follow from the seed URL (0 = seed page only)
+            </span>
+          </label>
+
         </div>
 
         {# Schedule #}

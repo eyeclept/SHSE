@@ -111,7 +111,7 @@ def search():
             pass
 
         # Semantic search + AI summary
-        vector_hits, ai_summary, show_bm25_warning = semantic_results(q)
+        vector_hits, ai_summary, show_bm25_warning, _chips = semantic_results(q)
 
     return jsonify({
         "q": q,
@@ -169,13 +169,14 @@ def semantic():
     if not q:
         return "<aside></aside>"
 
-    vector_hits, ai_summary, show_bm25_warning = semantic_results(q)
+    vector_hits, ai_summary, show_bm25_warning, keyword_chips = semantic_results(q)
     return render_template(
         "_semantic_rail.html",
         q=q,
         vector_hits=vector_hits,
         ai_summary=ai_summary,
         show_bm25_warning=show_bm25_warning,
+        keyword_chips=keyword_chips,
     )
 
 

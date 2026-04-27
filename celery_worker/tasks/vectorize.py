@@ -9,6 +9,8 @@ Description:
     index time.
 """
 # Imports
+from datetime import datetime
+
 from celery_worker.app import celery
 
 # Globals
@@ -72,23 +74,50 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
 
 
 @celery.task
-def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100):
+def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100, _db_session=None):
     """
     Input:
         _os_client   - injectable OpenSearch client (tests only)
         _llm_session - injectable requests.Session for LLM API (tests only)
         _page_size   - injectable page size (tests only)
+        _db_session  - injectable SQLAlchemy session (tests only; skips CrawlJob tracking)
     Output:
         int — number of documents successfully vectorized
     Details:
-        Celery task wrapper for _vectorize_pending_impl. No Flask app context
-        required — only OpenSearch and LLM API are accessed.
+        Creates a CrawlJob(kind='vectorize') row, runs _vectorize_pending_impl,
+        and updates the job status on completion. When _db_session is provided
+        (tests only), CrawlJob tracking is skipped.
     """
-    return _vectorize_pending_impl(
-        os_client=_os_client,
-        llm_session=_llm_session,
-        page_size=_page_size,
-    )
+    if _db_session is not None:
+        return _vectorize_pending_impl(
+            os_client=_os_client, llm_session=_llm_session, page_size=_page_size,
+        )
+
+    from flask_app import create_app, db as _db
+    from flask_app.models.crawl_job import CrawlJob
+
+    app = create_app()
+    with app.app_context():
+        job = CrawlJob(kind="vectorize", status="started", started_at=datetime.utcnow())
+        _db.session.add(job)
+        _db.session.commit()
+
+        try:
+            count = _vectorize_pending_impl(
+                os_client=_os_client, llm_session=_llm_session, page_size=_page_size,
+            )
+            job.status = "success"
+            job.finished_at = datetime.utcnow()
+            job.message = f"Vectorized {count} document(s)"
+        except Exception as exc:
+            job.status = "failure"
+            job.finished_at = datetime.utcnow()
+            job.message = str(exc)[:500]
+            _db.session.commit()
+            raise
+
+        _db.session.commit()
+        return count
 
 
 if __name__ == "__main__":

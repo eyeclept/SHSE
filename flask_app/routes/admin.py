@@ -287,6 +287,7 @@ def _target_to_dict(t):
         "endpoint": t.endpoint or "",
         "feed_path": t.feed_path or "",
         "adapter": t.adapter or "",
+        "crawl_depth": t.crawl_depth if t.crawl_depth is not None else 2,
         "schedule_frequency": sched.get("frequency", ""),
         "schedule_time": sched.get("time", ""),
         "schedule_day": sched.get("day", ""),
@@ -310,6 +311,8 @@ def _form_to_target(form, existing=None):
     t.route = form.get("route", "/").strip() or "/"
     t.service = form.get("service_protocol", "http")
     t.tls_verify = form.get("tls_verify") == "on"
+    depth_raw = form.get("crawl_depth", "2").strip()
+    t.crawl_depth = int(depth_raw) if depth_raw.isdigit() else 2
     t.endpoint = form.get("endpoint", "").strip() or None
     t.feed_path = form.get("feed_path", "").strip() or None
     t.adapter = form.get("adapter", "").strip() or None
@@ -514,14 +517,17 @@ def _job_rows(status_filter="all"):
     rows = []
     for job in q.all():
         if job.target_id not in target_cache:
-            t = db.session.get(CrawlerTarget, job.target_id)
-            target_cache[job.target_id] = t.nickname if t else "(deleted)"
+            if job.target_id is None:
+                target_cache[None] = "—"
+            else:
+                t = db.session.get(CrawlerTarget, job.target_id)
+                target_cache[job.target_id] = t.nickname if t else "(deleted)"
         duration = None
         if job.started_at and job.finished_at:
             duration = str(job.finished_at - job.started_at).split(".")[0]
         rows.append({
             "id": job.id,
-            "kind": "crawl",
+            "kind": job.kind or "crawl",
             "target": target_cache[job.target_id],
             "status": job.status or "unknown",
             "progress": 100 if job.status in ("success", "failure") else 0,

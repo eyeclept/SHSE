@@ -51,6 +51,23 @@
     </details>
   {% endif %}
 
+  {% if keyword_chips %}
+    <div class="shse-card" style="padding:12px 14px;">
+      <div style="font-size:11px; color:var(--shse-text-faint);
+                  text-transform:uppercase; letter-spacing:0.06em;
+                  margin-bottom:8px;">Suggested keywords</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        {% for chip in keyword_chips %}
+          <span class="shse-pill"
+                style="background:var(--shse-surface-2); color:var(--shse-text-muted);
+                       border-color:var(--shse-border); font-size:11px;">
+            {{ chip }}
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
   {% if vector_hits %}
     <div class="shse-card" style="padding:14px;">
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">

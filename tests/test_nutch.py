@@ -102,8 +102,9 @@ def test_trigger_crawl_runs_full_pipeline():
     Input: mock session, all steps FINISHED
     Output: POST /job/create called once per pipeline step in order
     Details:
-        Verifies that all five job types (INJECT, GENERATE, FETCH, PARSE, UPDATEDB)
-        are submitted in the correct order.
+        Verifies that all job types (INJECT, GENERATE, FETCH, UPDATEDB)
+        are submitted in the correct order. PARSE is excluded because
+        we do our own text extraction via _fetch_page_text.
     """
     session = _make_session()
     trigger_crawl(["http://host1"], crawl_id="cid-02", session=session)
@@ -143,7 +144,7 @@ def test_trigger_crawl_raises_on_failed_job():
         Verifies that a FAILED job state stops the pipeline and surfaces
         the failure rather than silently continuing.
     """
-    states = ["FINISHED", "FINISHED", "FAILED", "FINISHED", "FINISHED"]
+    states = ["FINISHED", "FINISHED", "FAILED", "FINISHED"]
     session = _make_session(job_states=states)
 
     with pytest.raises(RuntimeError, match="FETCH"):

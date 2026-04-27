@@ -88,6 +88,7 @@ def parse_service_target(target):
         "route": target.get("route", "/"),
         "service": target.get("service", "http"),
         "tls_verify": target.get("tls_verify", True),
+        "crawl_depth": target.get("crawl_depth", 2),
         "schedule": target.get("schedule"),
     }
 
@@ -104,6 +105,7 @@ def parse_network_target(target):
     return {
         "type": "network",
         "network": target.get("network"),
+        "crawl_depth": target.get("crawl_depth", 2),
         "schedule": target.get("schedule"),
     }
 
@@ -243,6 +245,7 @@ def persist_targets(yaml_str, parsed_targets, db_session):
             route=t.get("route"),
             service=t.get("service"),
             tls_verify=t.get("tls_verify", True),
+            crawl_depth=t.get("crawl_depth", 2),
             endpoint=t.get("endpoint"),
             feed_path=t.get("feed_path"),
             adapter=t.get("adapter"),

@@ -15,7 +15,7 @@ Description:
 from datetime import datetime
 
 from celery_worker.app import celery
-from flask_app.services.nutch import trigger_crawl, fetch_results, _fetch_page_text
+from flask_app.services.nutch import _discover_urls, _fetch_page_text
 from flask_app.services.opensearch import index_document, delete_stale
 
 # Globals
@@ -82,6 +82,17 @@ def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None
         raise exc
 
     db_session.commit()
+
+    # Auto-trigger vectorization after a successful crawl when LLM is configured.
+    # Runs as a separate Celery task so it doesn't block or fail the crawl status.
+    try:
+        from flask_app.config import Config
+        if Config.LLM_API_BASE:
+            from celery_worker.tasks.vectorize import vectorize_pending
+            vectorize_pending.delay()
+    except Exception:
+        pass
+
     return job.id
 
 
@@ -89,39 +100,37 @@ def _nutch_crawl(target, nutch_session=None, os_client=None):
     """
     Input:
         target        - CrawlerTarget ORM object (type service or network)
-        nutch_session - optional requests.Session for Nutch
+        nutch_session - unused; kept for signature compatibility with tests
         os_client     - optional OpenSearch client
     Output: None
     Details:
-        Builds seed URLs from target config, triggers Nutch crawl pipeline,
-        fetches result node metadata, and indexes each URL to OpenSearch.
-        Page text is not returned by the Nutch REST API; the URL is stored as
-        placeholder text pending a segment-parse integration.
+        BFS-crawls the target starting from the seed URL, discovers all
+        same-host pages up to max_depth=2, fetches each page's text, and
+        indexes it to OpenSearch. Nutch is not used for URL discovery;
+        _discover_urls handles link extraction directly so no Nutch PARSE
+        step is required.
     """
     nickname = target.nickname or target.network or str(target.id)
+    tls_ok = bool(target.tls_verify)
+    run_start = datetime.utcnow().isoformat()
 
     if target.target_type == "service":
         protocol = target.service or "http"
         port = target.port or 80
         route = target.route or "/"
-        seed_urls = [f"{protocol}://{target.url}:{port}{route}"]
+        seed_url = f"{protocol}://{target.url}:{port}{route}"
     else:
-        seed_urls = [target.network]
+        seed_url = target.network or ""
 
-    run_start = datetime.utcnow().isoformat()
-    crawl_id = trigger_crawl(
-        seed_urls,
-        tls_verify=bool(target.tls_verify),
-        session=nutch_session,
-    )
-    results = fetch_results(crawl_id, session=nutch_session)
+    if not seed_url:
+        return
 
-    tls_ok = bool(target.tls_verify)
-    for node in results.get("nodes", []):
-        url = node.get("url", "")
-        if not url:
-            continue
+    depth = target.crawl_depth if target.crawl_depth is not None else 2
+    urls = _discover_urls(seed_url, tls_verify=tls_ok, max_depth=depth)
+    for url in urls:
         page_text = _fetch_page_text(url, tls_verify=tls_ok)
+        if not page_text or page_text == url:
+            continue
         index_document(
             url=url,
             port=target.port or 80,

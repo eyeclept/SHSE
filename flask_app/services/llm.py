@@ -94,5 +94,63 @@ def generate_summary(context_chunks, query, session=None):
         return None
 
 
+def generate_keywords(query, context_chunks, session=None):
+    """
+    Input:
+        query          - str, the user's original search query
+        context_chunks - list[str], document text from vector search results
+        session        - optional requests.Session for injection in tests
+    Output:
+        list[str] of 4-6 related search terms, or [] if the LLM API is unreachable
+    Details:
+        Asks the generative model to suggest related search queries the user
+        could try to explore the topic further. Returns plain terms only —
+        no bullets, numbers, or explanation. Empty lines and duplicates are
+        removed. Falls back to [] without raising.
+    """
+    requester = session or requests
+    url = f"{_LLM_API_BASE}/chat/completions"
+    context = "\n\n".join(context_chunks[:3]) if context_chunks else ""
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a search assistant. Your only job is to suggest related "
+                "search terms. Return ONLY the terms themselves — no numbers, "
+                "no bullets, no explanation. One term per line. 2-4 words each. "
+                "Maximum 6 terms."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f'The user searched for: "{query}"\n\n'
+                f"Context from results:\n{context}\n\n"
+                "Suggest 5 related search terms:"
+            ),
+        },
+    ]
+    payload = {"model": _LLM_GEN_MODEL, "messages": messages}
+    try:
+        resp = requester.post(url, json=payload, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        if "error" in data:
+            return []
+        raw = data["choices"][0]["message"]["content"]
+        seen = set()
+        chips = []
+        for line in raw.splitlines():
+            term = line.strip().lstrip("-•*0123456789.) ")
+            if term and term.lower() != query.lower() and term not in seen:
+                seen.add(term)
+                chips.append(term)
+            if len(chips) >= 6:
+                break
+        return chips
+    except Exception:
+        return []
+
+
 if __name__ == "__main__":
     pass
