@@ -187,6 +187,20 @@
       "semantic_warning_fix": { "passes": true }
     }
   },
+  "epic_10c_password_bug": {
+    "description": "Fix NameError 500 on settings/password route; regression test",
+    "items": {
+      "url_for_import_fix": { "passes": true },
+      "error_returns_400": { "passes": true },
+      "regression_test": { "passes": true }
+    }
+  },
+  "epic_10e_flash_autodismiss": {
+    "description": "Flash messages auto-dismiss after 3 seconds via JS in base.html",
+    "items": {
+      "autodismiss_script": { "passes": true }
+    }
+  },
   "epic_15_mcp_server": {
     "description": "Post-MVP FastAPI MCP server with search_homelab tool",
     "items": {

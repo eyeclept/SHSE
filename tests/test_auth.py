@@ -461,5 +461,59 @@ def test_logout(sqlite_app):
         assert "_user_id" not in session
 
 
+def test_password_change(sqlite_app):
+    """
+    Input: sqlite_app fixture
+    Output: None
+    Details:
+        Valid password change must redirect (302) with no server error.
+        Blank new password must return 400 with user-visible error message.
+        Mismatched confirmation must return 400 with user-visible error message.
+    """
+    with sqlite_app.app_context():
+        user = User(username="pwuser", role="user")
+        user.set_password("oldpassword1")
+        db.session.add(user)
+        db.session.commit()
+
+    client = sqlite_app.test_client()
+    client.post("/login", data={"username": "pwuser", "password": "oldpassword1"})
+
+    # blank new password — must return 400
+    response = client.post(
+        "/settings/password",
+        data={"current_password": "oldpassword1", "new_password": "", "confirm_password": ""},
+    )
+    assert response.status_code == 400
+
+    # mismatched confirmation — must return 400
+    response = client.post(
+        "/settings/password",
+        data={
+            "current_password": "oldpassword1",
+            "new_password": "newpassword1",
+            "confirm_password": "differentpassword1",
+        },
+    )
+    assert response.status_code == 400
+
+    # valid change — must redirect with no server error
+    response = client.post(
+        "/settings/password",
+        data={
+            "current_password": "oldpassword1",
+            "new_password": "newpassword1",
+            "confirm_password": "newpassword1",
+        },
+    )
+    assert response.status_code == 302
+
+    with sqlite_app.app_context():
+        user = db.session.execute(
+            db.select(User).filter_by(username="pwuser")
+        ).scalar_one_or_none()
+        assert user.check_password("newpassword1")
+
+
 if __name__ == "__main__":
     pass

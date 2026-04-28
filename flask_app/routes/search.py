@@ -296,16 +296,15 @@ def settings_clear_history():
 def settings_password():
     """
     Input: current_password, new_password, confirm_password (form POST)
-    Output: redirect to settings with success/error flash
+    Output: 302 redirect on success; 400 with rendered settings page on error
     Details:
         Changes the current user's password. Requires current password to be correct.
     """
-    from flask import flash, redirect
+    from flask import flash, redirect, url_for, make_response
     from flask_app import db
 
     if not current_user.is_authenticated:
-        from flask import url_for as _url_for
-        return redirect(_url_for("auth.login"))
+        return redirect(url_for("auth.login"))
 
     current_pw = request.form.get("current_password", "")
     new_pw = request.form.get("new_password", "")
@@ -313,15 +312,23 @@ def settings_password():
 
     if not current_user.check_password(current_pw):
         flash("Current password is incorrect.", "error")
-    elif len(new_pw) < 8:
+        return make_response(
+            render_template("settings.html", current_theme=session.get("theme", "light")), 400
+        )
+    if len(new_pw) < 8:
         flash("New password must be at least 8 characters.", "error")
-    elif new_pw != confirm_pw:
+        return make_response(
+            render_template("settings.html", current_theme=session.get("theme", "light")), 400
+        )
+    if new_pw != confirm_pw:
         flash("New passwords do not match.", "error")
-    else:
-        current_user.set_password(new_pw)
-        db.session.commit()
-        flash("Password changed successfully.", "success")
+        return make_response(
+            render_template("settings.html", current_theme=session.get("theme", "light")), 400
+        )
 
+    current_user.set_password(new_pw)
+    db.session.commit()
+    flash("Password changed successfully.", "success")
     return redirect(url_for("search.settings"))
 
 
