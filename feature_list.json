@@ -180,6 +180,13 @@
       "docs_testing_md": { "passes": true }
     }
   },
+  "epic_10b_ui_fixes": {
+    "description": "Hamburger login button for anon users; accurate semantic search warning",
+    "items": {
+      "hamburger_login_button": { "passes": true },
+      "semantic_warning_fix": { "passes": true }
+    }
+  },
   "epic_15_mcp_server": {
     "description": "Post-MVP FastAPI MCP server with search_homelab tool",
     "items": {

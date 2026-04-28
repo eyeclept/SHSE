@@ -296,11 +296,12 @@ def test_vectorize_pending_embeds_all_docs():
     embed_resp.json.return_value = {"data": [{"embedding": [0.1] * 768}]}
     llm_session.post.return_value = embed_resp
 
-    count = _vectorize_pending_impl(
+    vectorized, attempted = _vectorize_pending_impl(
         os_client=os_client, llm_session=llm_session, page_size=10
     )
 
-    assert count == 2
+    assert vectorized == 2
+    assert attempted == 2
     assert os_client.update.call_count == 2
     call_body = os_client.update.call_args_list[0].kwargs["body"]
     assert call_body["doc"]["vectorized"] is True
@@ -325,11 +326,12 @@ def test_vectorize_pending_skips_on_llm_failure():
     llm_session = MagicMock()
     llm_session.post.side_effect = ConnectionError("unreachable")
 
-    count = _vectorize_pending_impl(
+    vectorized, attempted = _vectorize_pending_impl(
         os_client=os_client, llm_session=llm_session, page_size=10
     )
 
-    assert count == 0
+    assert vectorized == 0
+    assert attempted == 1
     os_client.update.assert_not_called()
 
 

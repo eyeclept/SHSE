@@ -32,22 +32,26 @@ def _build_app_context():
 def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
     """
     Input:
-        os_client  - optional OpenSearch client (injectable for tests)
+        os_client   - optional OpenSearch client (injectable for tests)
         llm_session - optional requests.Session for LLM API (injectable for tests)
-        page_size  - documents per pagination page (default 100)
+        page_size   - documents per pagination page (default 100)
     Output:
-        int — number of documents successfully vectorized
+        tuple (vectorized_count, attempted_count)
+        vectorized_count - docs successfully embedded and updated
+        attempted_count  - total docs found with vectorized=false
     Details:
         Paginates through docs where vectorized=false using get_unvectorized().
         For each doc, calls get_embedding() on its text field. If an embedding
         is returned, issues a partial update (doc.embedding + doc.vectorized=true).
         Docs where get_embedding() returns None are left unchanged (LLM API down).
+        Callers use the tuple to distinguish success / partial / deferred outcomes.
     """
     from flask_app.services.opensearch import get_unvectorized, get_client
     from flask_app.services.llm import get_embedding
 
     client = os_client or get_client()
     vectorized_count = 0
+    attempted_count = 0
     page = 0
 
     while True:
@@ -56,6 +60,7 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
             break
 
         for hit in hits:
+            attempted_count += 1
             doc_id = hit["_id"]
             text = hit.get("_source", {}).get("text", "")
             embedding = get_embedding(text, session=llm_session)
@@ -70,7 +75,7 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
 
         page += 1
 
-    return vectorized_count
+    return vectorized_count, attempted_count
 
 
 @celery.task
@@ -89,9 +94,10 @@ def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100, _db_se
         (tests only), CrawlJob tracking is skipped.
     """
     if _db_session is not None:
-        return _vectorize_pending_impl(
+        vectorized, attempted = _vectorize_pending_impl(
             os_client=_os_client, llm_session=_llm_session, page_size=_page_size,
         )
+        return vectorized
 
     from flask_app import create_app, db as _db
     from flask_app.models.crawl_job import CrawlJob
@@ -103,12 +109,22 @@ def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100, _db_se
         _db.session.commit()
 
         try:
-            count = _vectorize_pending_impl(
+            vectorized, attempted = _vectorize_pending_impl(
                 os_client=_os_client, llm_session=_llm_session, page_size=_page_size,
             )
-            job.status = "success"
+            if attempted == 0:
+                job.status = "success"
+                job.message = "No documents pending vectorization"
+            elif vectorized == attempted:
+                job.status = "success"
+                job.message = f"Vectorized {vectorized} document(s)"
+            elif vectorized == 0:
+                job.status = "deferred"
+                job.message = f"LLM API unavailable — {attempted} document(s) pending vectorization"
+            else:
+                job.status = "partial"
+                job.message = f"Vectorized {vectorized}/{attempted} document(s); LLM unavailable for remainder"
             job.finished_at = datetime.utcnow()
-            job.message = f"Vectorized {count} document(s)"
         except Exception as exc:
             job.status = "failure"
             job.finished_at = datetime.utcnow()
@@ -117,7 +133,7 @@ def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100, _db_se
             raise
 
         _db.session.commit()
-        return count
+        return vectorized
 
 
 if __name__ == "__main__":

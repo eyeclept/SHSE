@@ -57,6 +57,10 @@
     {% if u and u.role == 'admin' %}
       {{ _mi(url_for('admin.index'), 'Admin', icon.shield(14), request.endpoint and request.endpoint.startswith('admin.')) }}
     {% endif %}
+    {% if not u %}
+      {{ _mi(url_for('auth.login'),    'Login',    icon.lock(14),  request.endpoint == 'auth.login') }}
+      {{ _mi(url_for('auth.register'), 'Register', icon.user(14),  request.endpoint == 'auth.register') }}
+    {% endif %}
 
     <div style="height:1px; background:var(--shse-border); margin:4px 0;"></div>
 
