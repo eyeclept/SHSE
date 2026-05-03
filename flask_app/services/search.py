@@ -106,6 +106,98 @@ def _keyword_chips(vector_hits, query, max_chips=6):
     return top_words[:max_chips]
 
 
+def _dummy_vector_search(q, os_client):
+    """
+    Input:  q — search query; os_client — OpenSearch client
+    Output: empty list
+    Details:
+        Placeholder called by get_vector_hits when the embedding model is
+        unavailable. Returns no results so the semantic rail degrades cleanly.
+        TODO (Epic 25): replace with a BM25-based approximation that returns
+        real results without requiring the embedding model.
+    """
+    return []
+
+
+def get_vector_hits(q, os_client=None, llm_session=None):
+    """
+    Input:
+        q           - str, search query to embed and search
+        os_client   - optional OpenSearch client (injectable for tests)
+        llm_session - optional requests.Session for LLM API (injectable for tests)
+    Output:
+        tuple (hits, embedding_available) where:
+            hits               - list[dict] each with score, service, url, title,
+                                 snippet (200 chars for display), context (500 chars
+                                 for AI summary)
+            embedding_available - bool, False when embedding model was unreachable
+    Details:
+        Embeds the query with the embedding model and runs a k-NN vector search.
+        Falls back to _dummy_vector_search (returns []) when get_embedding returns
+        None, so callers always receive a valid list regardless of LLM state.
+        Independent of the generative model — only the embedding model is needed.
+    """
+    from flask_app.services.llm import get_embedding
+    from flask_app.services.opensearch import vector_search, get_client
+
+    client = os_client or get_client()
+
+    embedding = get_embedding(q, session=llm_session)
+    if embedding is None:
+        logger.warning("get_vector_hits: embedding model unavailable, using dummy fallback")
+        return _dummy_vector_search(q, client), False
+
+    try:
+        raw_hits = vector_search(embedding, k=_VECTOR_K, client=client)
+    except Exception:
+        logger.warning("get_vector_hits: vector_search failed", exc_info=True)
+        return _dummy_vector_search(q, client), False
+
+    hits = []
+    for h in raw_hits:
+        src = h.get("_source", {})
+        text = src.get("text", "")
+        hits.append({
+            "score":   round(h.get("_score", 0.0), 3),
+            "service": src.get("service_nickname", ""),
+            "url":     src.get("url", ""),
+            "title":   src.get("title") or src.get("url", ""),
+            "snippet": text[:200],
+            "context": text[:500],
+        })
+
+    return hits, True
+
+
+def _build_ai_summary(vector_hits, q, llm_session=None):
+    """
+    Input:
+        vector_hits - list of hit dicts from get_vector_hits
+        q           - str, search query
+        llm_session - optional requests.Session (injectable for tests)
+    Output:
+        dict {html, sources} or None if generative model unavailable or no context
+    Details:
+        Calls generate_summary with the context text from the top hits.
+        XSS-safe: LLM output is escaped before being marked safe in the template.
+        Independent of the embedding model — only the generative model is needed.
+    """
+    from flask_app.services.llm import generate_summary
+    from markupsafe import escape, Markup
+
+    if not vector_hits:
+        return None
+
+    context_chunks = [h["context"] for h in vector_hits]
+    summary_text = generate_summary(context_chunks, q, session=llm_session)
+    if not summary_text:
+        return None
+
+    safe_html = Markup(escape(summary_text).replace("\n", Markup("<br>")))
+    sources = sorted({h["service"] for h in vector_hits if h.get("service")})
+    return {"html": safe_html, "sources": sources}
+
+
 def semantic_results(q, os_client=None, llm_session=None):
     """
     Input:
@@ -113,73 +205,21 @@ def semantic_results(q, os_client=None, llm_session=None):
         os_client   - optional OpenSearch client (injectable for tests)
         llm_session - optional requests.Session for LLM API (injectable for tests)
     Output:
-        tuple (vector_hits, ai_summary, show_bm25_warning, keyword_chips) where:
-            vector_hits      - list[dict] for the right-rail semantic results
-            ai_summary       - dict {html, sources} or None
-            show_bm25_warning - bool, True when LLM API is unreachable
-            keyword_chips    - list[str] of suggested related search terms
+        tuple (vector_hits, ai_summary, show_bm25_warning, keyword_chips)
     Details:
-        Embeds the query, runs k-NN vector search, and generates a RAG summary.
-        Returns empty results and show_bm25_warning=True when the LLM API is down.
-        All errors are swallowed — callers always get a valid (possibly empty) result.
+        Backward-compatible wrapper used by the JSON /api/search endpoint.
+        Calls get_vector_hits, _build_ai_summary, and generate_keywords
+        independently so each degrades without blocking the others.
+        For the HTMX semantic rail, /api/semantic calls these directly.
     """
-    from flask_app.services.llm import get_embedding, generate_summary
-    from flask_app.services.opensearch import vector_search, get_client
+    from flask_app.services.llm import generate_keywords
 
-    client = os_client or get_client()
+    vector_hits, embedding_up = get_vector_hits(q, os_client=os_client, llm_session=llm_session)
+    ai_summary = _build_ai_summary(vector_hits, q, llm_session=llm_session)
+    context_for_chips = [h["snippet"] for h in vector_hits[:3]]
+    chips = generate_keywords(q, context_for_chips, session=llm_session)
 
-    try:
-        embedding = get_embedding(q, session=llm_session)
-    except Exception:
-        logger.warning("get_embedding raised unexpectedly in semantic_results", exc_info=True)
-        embedding = None
-
-    if embedding is None:
-        return [], None, True, []
-
-    try:
-        hits = vector_search(embedding, k=_VECTOR_K, client=client)
-    except Exception:
-        logger.warning("vector_search failed in semantic_results", exc_info=True)
-        return [], None, True, []
-
-    vector_hits = []
-    context_chunks = []
-    sources = set()
-
-    for h in hits:
-        src = h.get("_source", {})
-        text = src.get("text", "")
-        title = src.get("title") or src.get("url", "")
-        context_chunks.append(text[:500])
-        sources.add(src.get("service_nickname", ""))
-        vector_hits.append({
-            "score": round(h.get("_score", 0.0), 3),
-            "service": src.get("service_nickname", ""),
-            "url": src.get("url", ""),
-            "title": title,
-            "snippet": text[:200],
-        })
-
-    ai_summary = None
-    if context_chunks:
-        try:
-            summary_text = generate_summary(context_chunks, q, session=llm_session)
-            if summary_text:
-                # Escape the raw LLM output before marking it safe for the
-                # template. This prevents XSS even if the model produces
-                # HTML-like content. Newlines are preserved as <br>.
-                from markupsafe import escape, Markup
-                safe_html = Markup(escape(summary_text).replace("\n", Markup("<br>")))
-                ai_summary = {
-                    "html": safe_html,
-                    "sources": sorted(sources),
-                }
-        except Exception:
-            logger.warning("generate_summary failed in semantic_results", exc_info=True)
-
-    chips = _keyword_chips(vector_hits, q)
-    return vector_hits, ai_summary, False, chips
+    return vector_hits, ai_summary, not embedding_up, chips
 
 
 def hybrid_search(query, k=10, client=None, llm_session=None):

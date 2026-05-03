@@ -335,6 +335,70 @@ def test_vectorize_pending_skips_on_llm_failure():
     os_client.update.assert_not_called()
 
 
+def test_embed_text_passes_short_text_directly():
+    """
+    Input: None
+    Output: None
+    Details:
+        When text token count is within _SAFE_EMBED_TOKENS, _embed_text calls
+        get_embedding once without sub-chunking.
+    """
+    from celery_worker.tasks.vectorize import _embed_text, _enc, _SAFE_EMBED_TOKENS
+
+    short_text = "hello world"
+    assert len(_enc.encode(short_text)) < _SAFE_EMBED_TOKENS
+
+    fake_vec = [0.5] * 768
+    llm_session = MagicMock()
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = {"data": [{"embedding": fake_vec}]}
+    llm_session.post.return_value = resp
+
+    result = _embed_text(short_text, llm_session)
+
+    assert llm_session.post.call_count == 1
+    assert result == fake_vec
+
+
+def test_embed_text_sub_chunks_and_averages_long_text(monkeypatch):
+    """
+    Input: None
+    Output: None
+    Details:
+        When text exceeds _SAFE_EMBED_TOKENS, _embed_text splits it into
+        sub-chunks, embeds each, and returns the element-wise mean.
+        All sub-chunk embeddings return [1.0]*768; the average is [1.0]*768.
+        Monkeypatches _enc and _SAFE_EMBED_TOKENS so the failover fires on
+        a short test input without needing genuinely dense content.
+    """
+    import celery_worker.tasks.vectorize as vmod
+
+    monkeypatch.setattr(vmod, "_enc", type("FakeEnc", (), {
+        "encode": staticmethod(lambda text: list(range(len(text.split()) * 3)))
+    })())
+    # Force threshold to 5 so any multi-word text triggers sub-chunking
+    monkeypatch.setattr(vmod, "_SAFE_EMBED_TOKENS", 5)
+
+    text = " ".join(["word"] * 10)  # 10 words, well over threshold
+
+    fake_vec = [1.0] * 768
+    llm_session = MagicMock()
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    resp.json.return_value = {"data": [{"embedding": fake_vec}]}
+    llm_session.post.return_value = resp
+
+    result = vmod._embed_text(text, llm_session)
+
+    # Sub-chunking occurred (more than one post call)
+    assert llm_session.post.call_count > 1
+    # Average of identical vectors is the same vector
+    assert result is not None
+    assert abs(result[0] - 1.0) < 1e-6
+    assert len(result) == 768
+
+
 def test_vectorize_pending_all_docs_processed_across_pages():
     """
     Input: None

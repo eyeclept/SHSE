@@ -292,3 +292,143 @@ def test_save_history_not_written_for_anonymous_user(app, client):
     with app.app_context():
         count = db.session.query(SearchHistory).filter_by(query="anon-test").count()
         assert count == 0
+
+
+# ── Query rewriter ─────────────────────────────────────────────────────────
+
+def test_results_uses_rewritten_query_when_enabled(app, client):
+    """
+    Input: GET /search?q=please+find+server+config with QUERY_REWRITE_ENABLED=true
+    Output: OpenSearch called with the rewritten query, not the raw input
+    Details:
+        When QUERY_REWRITE_ENABLED is true and rewrite_query returns a different
+        string, the search route must use the rewritten query for the OpenSearch call.
+    """
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    with app.app_context():
+        app.config["QUERY_REWRITE_ENABLED"] = True
+
+    with patch("flask_app.routes.search.get_client", return_value=mock_client), \
+         patch("flask_app.config.Config.QUERY_REWRITE_ENABLED", True), \
+         patch("flask_app.services.llm.rewrite_query", return_value="server config") as rw_mock:
+        r = client.get("/search?q=please+find+server+config")
+
+    assert r.status_code == 200
+    rw_mock.assert_called_once()
+    call_body = mock_client.search.call_args.kwargs["body"]
+    assert call_body["query"]["multi_match"]["query"] == "server config"
+
+
+def test_results_skips_rewriter_when_disabled(app, client):
+    """
+    Input: GET /search?q=server with QUERY_REWRITE_ENABLED=false (default)
+    Output: rewrite_query is never called; OpenSearch receives preprocessed query
+    Details:
+        When QUERY_REWRITE_ENABLED is false, the rewriter is not invoked.
+    """
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    with patch("flask_app.routes.search.get_client", return_value=mock_client), \
+         patch("flask_app.config.Config.QUERY_REWRITE_ENABLED", False), \
+         patch("flask_app.services.llm.rewrite_query") as rw_mock:
+        r = client.get("/search?q=server")
+
+    assert r.status_code == 200
+    rw_mock.assert_not_called()
+
+
+def test_results_shows_rewriter_annotation(app, client):
+    """
+    Input: GET /search?q=please+tell+me+about+dns with QUERY_REWRITE_ENABLED=true
+    Output: response body contains "AI rewrote query to"
+    Details:
+        When rewritten_q differs from preprocessed_q, the annotation block in
+        results.html must be present in the rendered HTML.
+    """
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    with patch("flask_app.routes.search.get_client", return_value=mock_client), \
+         patch("flask_app.config.Config.QUERY_REWRITE_ENABLED", True), \
+         patch("flask_app.services.llm.rewrite_query", return_value="dns lookup"):
+        r = client.get("/search?q=please+tell+me+about+dns")
+
+    assert r.status_code == 200
+    assert b"AI rewrote query to" in r.data
+
+
+def test_results_raw_mode_skips_preprocessing(client):
+    """
+    Input: GET /search?q=please+find+server&raw=1
+    Output: OpenSearch called with the raw query, not the preprocessed form
+    Details:
+        When raw=1 is set, the preprocessing pipeline must be bypassed entirely.
+    """
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    with patch("flask_app.routes.search.get_client", return_value=mock_client), \
+         patch("flask_app.routes.search.strip_preamble") as spy_pre:
+        r = client.get("/search?q=please+find+server&raw=1")
+
+    assert r.status_code == 200
+    spy_pre.assert_not_called()
+    call_body = mock_client.search.call_args.kwargs["body"]
+    assert call_body["query"]["multi_match"]["query"] == "please find server"
+
+
+def test_results_raw_mode_shows_exact_notice(client):
+    """
+    Input: GET /search?q=test+query&raw=1
+    Output: response body contains "Searching for exactly" and "Use optimizations" link
+    """
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    with patch("flask_app.routes.search.get_client", return_value=mock_client):
+        r = client.get("/search?q=test+query&raw=1")
+
+    assert r.status_code == 200
+    assert b"Searching for exactly" in r.data
+    assert b"Use optimizations" in r.data
+
+
+def test_results_shows_exact_link_when_preprocessed(client):
+    """
+    Input: GET /search?q=please+find+server (preprocessing changes query)
+    Output: "Search for exactly" link appears in the annotation
+    """
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    with patch("flask_app.routes.search.get_client", return_value=mock_client), \
+         patch("flask_app.routes.search.strip_preamble", return_value="find server"), \
+         patch("flask_app.routes.search.normalize", return_value="find server"), \
+         patch("flask_app.routes.search.strip_stopwords", return_value="server"), \
+         patch("flask_app.routes.search.expand_synonyms", return_value="server"):
+        r = client.get("/search?q=please+find+server")
+
+    assert r.status_code == 200
+    assert b"Search for exactly" in r.data
+    assert b"raw=1" in r.data
+
+
+def test_results_no_annotation_when_rewriter_disabled(client):
+    """
+    Input: GET /search?q=dns with QUERY_REWRITE_ENABLED=false
+    Output: "AI rewrote query to" not in response body
+    Details:
+        When the rewriter is disabled, the annotation must be absent.
+    """
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    with patch("flask_app.routes.search.get_client", return_value=mock_client), \
+         patch("flask_app.config.Config.QUERY_REWRITE_ENABLED", False):
+        r = client.get("/search?q=dns")
+
+    assert r.status_code == 200
+    assert b"AI rewrote query to" not in r.data

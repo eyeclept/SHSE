@@ -11,11 +11,14 @@ Description:
 # Imports
 from datetime import datetime
 
+import tiktoken
 from celery.utils.log import get_task_logger
 from celery_worker.app import celery
 
 # Globals
 _INDEX_NAME = "shse_pages"
+_enc = tiktoken.get_encoding("cl100k_base")
+_SAFE_EMBED_TOKENS = 1600
 logger = get_task_logger(__name__)
 
 
@@ -29,6 +32,48 @@ def _build_app_context():
     """
     from flask_app import create_app, db as _db
     return create_app(), _db
+
+
+def _embed_text(text, llm_session):
+    """
+    Input:
+        text       - str to embed
+        llm_session - optional requests.Session (injectable for tests)
+    Output:
+        list[float] embedding or None if every attempt fails
+    Details:
+        Checks the token count with tiktoken before calling the LLM API.
+        If the text exceeds _SAFE_EMBED_TOKENS, splits it into word-based
+        sub-chunks that each fit under the limit, embeds each, and returns
+        the element-wise mean. This handles existing index documents whose
+        800-word chunks contain dense technical content (code, URLs, special
+        characters) that tokenizes to more than nomic-embed-text's 2048-token
+        architectural limit. Normal prose chunks pass through unchanged.
+    """
+    from flask_app.services.llm import get_embedding
+
+    tokens = _enc.encode(text)
+    if len(tokens) <= _SAFE_EMBED_TOKENS:
+        return get_embedding(text, session=llm_session)
+
+    # Estimate safe word count per sub-chunk from the actual token density
+    words = text.split()
+    tokens_per_word = len(tokens) / max(1, len(words))
+    words_per_sub = max(1, int(_SAFE_EMBED_TOKENS / tokens_per_word * 0.9))
+
+    vecs = []
+    for i in range(0, len(words), words_per_sub):
+        sub = " ".join(words[i : i + words_per_sub]).strip()
+        if sub:
+            v = get_embedding(sub, session=llm_session)
+            if v is not None:
+                vecs.append(v)
+
+    if not vecs:
+        return None
+
+    dim = len(vecs[0])
+    return [sum(v[j] for v in vecs) / len(vecs) for j in range(dim)]
 
 
 def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
@@ -53,7 +98,6 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
         Callers use the tuple to distinguish success / partial / deferred outcomes.
     """
     from flask_app.services.opensearch import get_unvectorized, get_client
-    from flask_app.services.llm import get_embedding
 
     client = os_client or get_client()
 
@@ -74,7 +118,7 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
     for hit in pending:
         doc_id = hit["_id"]
         text = hit.get("_source", {}).get("text", "")
-        embedding = get_embedding(text, session=llm_session)
+        embedding = _embed_text(text, llm_session)
         if embedding is None:
             continue
         client.update(

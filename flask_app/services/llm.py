@@ -22,7 +22,8 @@ import requests
 logger = logging.getLogger(__name__)
 _LLM_API_BASE = os.environ.get("LLM_API_BASE", "http://localhost:11434/v1")
 _LLM_EMBED_MODEL = os.environ.get("LLM_EMBED_MODEL", "nomic-embed-text")
-_LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "llama3")
+_LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "granite4.1:8b")
+_LLM_REWRITE_MODEL = os.environ.get("LLM_REWRITE_MODEL", "granite4.1:3b")
 
 _TIMEOUT = 30
 
@@ -100,6 +101,51 @@ def generate_summary(context_chunks, query, session=None):
         return None
 
 
+def rewrite_query(raw_query, session=None):
+    """
+    Input:
+        raw_query - str, the user's raw natural-language query
+        session   - optional requests.Session for injection in tests
+    Output:
+        str — rewritten terse search query, or raw_query unchanged on any failure
+    Details:
+        POSTs to {LLM_API_BASE}/chat/completions using LLM_REWRITE_MODEL.
+        The system prompt instructs the model to strip conversational preamble
+        and return only a concise 2-6 word search query. Always returns a
+        usable string: falls back to raw_query on connection error, HTTP error,
+        empty response, or any other exception so callers are never blocked.
+    """
+    requester = session or requests
+    url = f"{_LLM_API_BASE}/chat/completions"
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a search query optimizer. Rewrite the user's input as a "
+                "concise search query of 2-6 words. Remove conversational preamble, "
+                "filler, and politeness. Preserve the core intent. Return ONLY the "
+                "rewritten query — no explanation, no leading/trailing punctuation."
+            ),
+        },
+        {"role": "user", "content": raw_query},
+    ]
+    payload = {"model": _LLM_REWRITE_MODEL, "messages": messages}
+    try:
+        resp = requester.post(url, json=payload, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        if "error" in data:
+            logger.warning("LLM rewrite_query API returned error: %s", data.get("error"))
+            return raw_query
+        rewritten = data["choices"][0]["message"]["content"].strip()
+        if not rewritten:
+            return raw_query
+        return rewritten
+    except Exception:
+        logger.warning("rewrite_query failed", exc_info=True)
+        return raw_query
+
+
 def generate_keywords(query, context_chunks, session=None):
     """
     Input:
@@ -136,7 +182,7 @@ def generate_keywords(query, context_chunks, session=None):
             ),
         },
     ]
-    payload = {"model": _LLM_GEN_MODEL, "messages": messages}
+    payload = {"model": _LLM_REWRITE_MODEL, "messages": messages}
     try:
         resp = requester.post(url, json=payload, timeout=_TIMEOUT)
         resp.raise_for_status()

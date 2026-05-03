@@ -94,12 +94,28 @@ def results():
     """
     q = request.args.get("q", "").strip()
     tab = request.args.get("tab", "all")
+    raw = request.args.get("raw", "") in ("1", "true")
     try:
         page = max(1, int(request.args.get("page", 1)))
     except (ValueError, TypeError):
         page = 1
 
-    preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q)))) if q else q
+    from flask_app.config import Config
+    if raw:
+        # Bypass all optimizations; search exactly what the user typed
+        search_q = q
+        preprocessed_q = None
+        rewritten_q = None
+    else:
+        preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q)))) if q else q
+        rewritten_q = None
+        search_q = preprocessed_q
+        if q and Config.QUERY_REWRITE_ENABLED:
+            from flask_app.services.llm import rewrite_query
+            candidate = rewrite_query(preprocessed_q)
+            if candidate and candidate != preprocessed_q:
+                rewritten_q = candidate
+                search_q = rewritten_q
 
     result_rows = []
     total = 0
@@ -112,7 +128,7 @@ def results():
         try:
             client = get_client()
             body = bm25_body(
-                preprocessed_q, page=page, page_size=_PAGE_SIZE,
+                search_q, page=page, page_size=_PAGE_SIZE,
                 highlight_tags=('<strong class="shse-hit">', "</strong>"),
             )
             resp = client.search(index=_INDEX_NAME, body=body)
@@ -152,13 +168,15 @@ def results():
         # Semantic search runs asynchronously via HTMX (/api/semantic).
         # show_bm25_warning is only shown here if we can quickly determine
         # the LLM is not configured at all (no LLM_API_BASE set).
-        from flask_app.config import Config
         show_bm25_warning = not bool(Config.LLM_API_BASE)
 
     return render_template(
         "results.html",
         q=q,
-        preprocessed_q=preprocessed_q if preprocessed_q != q else None,
+        preprocessed_q=preprocessed_q if preprocessed_q and preprocessed_q != q else None,
+        rewritten_q=rewritten_q,
+        raw=raw,
+        raw_param="1" if raw else None,
         tab=tab,
         results=result_rows,
         total=total,

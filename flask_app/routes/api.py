@@ -76,6 +76,16 @@ def search():
 
     preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q)))) if q else q
 
+    from flask_app.config import Config
+    rewritten_q = None
+    search_q = preprocessed_q
+    if q and Config.QUERY_REWRITE_ENABLED:
+        from flask_app.services.llm import rewrite_query
+        candidate = rewrite_query(preprocessed_q)
+        if candidate and candidate != preprocessed_q:
+            rewritten_q = candidate
+            search_q = rewritten_q
+
     result_rows = []
     total = 0
     took_ms = 0
@@ -88,7 +98,7 @@ def search():
     if q:
         try:
             client = get_client()
-            body = bm25_body(preprocessed_q, page=page, page_size=_PAGE_SIZE)
+            body = bm25_body(search_q, page=page, page_size=_PAGE_SIZE)
             resp = client.search(index=_INDEX_NAME, body=body)
             took_ms = resp.get("took", 0)
             total = resp["hits"]["total"]["value"]
@@ -117,12 +127,13 @@ def search():
         except Exception:
             logger.warning("BM25 search failed on API endpoint", exc_info=True)
 
-        # Semantic search + AI summary (use preprocessed query for embedding too)
-        vector_hits, ai_summary, show_bm25_warning, _chips = semantic_results(preprocessed_q)
+        # Semantic search + AI summary (use effective search query for embedding)
+        vector_hits, ai_summary, show_bm25_warning, _chips = semantic_results(search_q)
 
     return jsonify({
         "q": q,
         "preprocessed_q": preprocessed_q if preprocessed_q != q else None,
+        "rewritten_q": rewritten_q,
         "tab": tab,
         "page": page,
         "page_count": page_count,
@@ -170,21 +181,37 @@ def semantic():
     Output: HTML fragment replacing the semantic rail aside element
     Details:
         Called by HTMX on the results page after BM25 results have rendered.
-        Runs vector search and generates an AI summary. Returns a complete
-        <aside> element that HTMX swaps in place of the loading placeholder.
-        Returns an empty aside when the LLM API is unavailable.
+        Calls three independent functions so each degrades without blocking
+        the others:
+          1. get_vector_hits  — k-NN search (requires embedding model only)
+          2. _build_ai_summary — RAG summary (requires generative model)
+          3. generate_keywords — suggested searches (requires rewriter model)
+        Returns an empty aside only when q is blank; partial results are always
+        rendered when at least one function succeeds.
     """
     q = request.args.get("q", "").strip()
     if not q:
         return "<aside></aside>"
 
-    vector_hits, ai_summary, show_bm25_warning, keyword_chips = semantic_results(q)
+    from flask_app.services.search import get_vector_hits, _build_ai_summary
+    from flask_app.services.llm import generate_keywords
+
+    # 1. Semantic search — embedding model only; degrades to [] if down
+    vector_hits, embedding_up = get_vector_hits(q)
+
+    # 2. AI summary — generative model; degrades to None if down or no context
+    ai_summary = _build_ai_summary(vector_hits, q)
+
+    # 3. Suggested searches — rewriter model; degrades to [] if down
+    context_for_chips = [h["snippet"] for h in vector_hits[:3]]
+    keyword_chips = generate_keywords(q, context_for_chips)
+
     return render_template(
         "_semantic_rail.html",
         q=q,
         vector_hits=vector_hits,
         ai_summary=ai_summary,
-        show_bm25_warning=show_bm25_warning,
+        show_bm25_warning=not embedding_up,
         keyword_chips=keyword_chips,
     )
 

@@ -25,11 +25,14 @@ Description:
 """
 # Imports
 import os
+import tiktoken
 from opensearchpy import OpenSearch, RequestsHttpConnection
 
 # Globals
 INDEX_NAME = "shse_pages"
 EMBEDDING_DIM = 768
+_enc = tiktoken.get_encoding("cl100k_base")
+_SAFE_EMBED_TOKENS = 1600  # conservative guard under nomic-embed-text's 2048-token limit
 
 INDEX_BODY = {
     "settings": {
@@ -96,42 +99,79 @@ def create_index(client=None):
     return client.indices.create(index=INDEX_NAME, body=INDEX_BODY)
 
 
-def _chunk_text(text, chunk_size=800):
+def _append_safe_chunks(word_list, out):
     """
-    Input: text — string to split; chunk_size — max tokens per chunk (default 800)
+    Input: word_list — list of whitespace-split words; out — list to append to
+    Output: None (appends to out in place)
+    Details:
+        Recursively halves word_list at the midpoint until each piece is within
+        _SAFE_EMBED_TOKENS. Preserves word boundaries; never cuts a word in half.
+        Used as a failover inside _chunk_text for chunks that would otherwise
+        exceed nomic-embed-text's 2048-token architectural limit.
+    """
+    if not word_list:
+        return
+    text = " ".join(word_list)
+    if len(_enc.encode(text)) <= _SAFE_EMBED_TOKENS or len(word_list) == 1:
+        if text:
+            out.append(text)
+        return
+    mid = len(word_list) // 2
+    _append_safe_chunks(word_list[:mid], out)
+    _append_safe_chunks(word_list[mid:], out)
+
+
+def _chunk_text(text, chunk_size=800, overlap=50):
+    """
+    Input: text — string to split;
+           chunk_size — target words per chunk (default 800);
+           overlap — words shared between adjacent chunks (default 50)
     Output: list of non-empty string chunks
     Details:
-        Splits on whitespace. Each whitespace-delimited word counts as one token.
-        This is an approximation; actual subword tokens average ~0.75 words each,
-        so 800 words is a conservative upper bound that fits within an 800-token
-        context window.
+        Overlapping word-based chunking. Adjacent chunks share `overlap` words
+        so context is not abruptly cut at chunk boundaries (improves RAG
+        retrieval quality). Chunk identity depends only on position (chunk_index),
+        not content, so the idempotent upsert in index_document works correctly.
+        If any chunk exceeds _SAFE_EMBED_TOKENS (measured by tiktoken cl100k_base),
+        it is recursively halved at word boundaries via _append_safe_chunks.
+        This handles dense technical content (code, URLs, mixed special characters)
+        whose word count is 800 but whose subword token count can exceed 2048.
     """
     words = text.split()
-    return [
-        " ".join(words[i : i + chunk_size])
-        for i in range(0, len(words), chunk_size)
-        if words[i : i + chunk_size]
-    ]
+    if not words:
+        return []
+    step = max(1, chunk_size - overlap)
+    result = []
+    i = 0
+    while i < len(words):
+        chunk_words = words[i : i + chunk_size]
+        if not chunk_words:
+            break
+        _append_safe_chunks(chunk_words, result)
+        if i + len(chunk_words) >= len(words):
+            break
+        i += step
+    return result
 
 
 def index_document(url, port, title, crawled_at, service_nickname, content_type, text,
-                   embeddings=None, chunk_size=800, source_type=None, client=None):
+                   embeddings=None, chunk_size=800, overlap=50, source_type=None, client=None):
     """
     Input: url, port, title, crawled_at, service_nickname, content_type — document metadata;
            text — full document text to chunk and index;
            embeddings — optional list of vectors, one per chunk; None triggers deferred path;
-           chunk_size — tokens per chunk (default 800);
+           chunk_size — target words per chunk (default 800);
+           overlap — words shared between adjacent chunks (default 50);
            source_type — ingest method label (e.g. "nutch", "oai-pmh", "rss", "api-push");
            client — optional OpenSearch client
     Output: list of OpenSearch index response dicts, one per written chunk; skipped chunks absent
     Details:
-        Splits text into chunk_size-word chunks. Document ID is sha256(url + chunk_index),
-        making every write an idempotent upsert. If an existing document with the same ID
-        already holds the same content_hash, the write is skipped (no-op). When embeddings
-        is provided, each chunk is stored with its vector and vectorized=true. When None
-        (LLM API unavailable or not yet run), chunks are stored with embedding=null and
-        vectorized=false for deferred processing. Indexing always proceeds regardless of
-        embedding availability.
+        Splits text into overlapping word-based chunks via _chunk_text. Document ID is
+        sha256(url + chunk_index), making every write an idempotent upsert. If an existing
+        document with the same ID already holds the same content_hash, the write is skipped.
+        When embeddings is provided, each chunk is stored with its vector and vectorized=true.
+        When None (LLM API unavailable), chunks are stored with embedding=null and
+        vectorized=false for deferred processing.
     """
     import hashlib
     from opensearchpy.exceptions import NotFoundError
@@ -139,7 +179,7 @@ def index_document(url, port, title, crawled_at, service_nickname, content_type,
     if client is None:
         client = get_client()
 
-    chunks = _chunk_text(text, chunk_size)
+    chunks = _chunk_text(text, chunk_size, overlap)
     responses = []
     for i, chunk in enumerate(chunks):
         doc_id = hashlib.sha256(f"{url}{i}".encode()).hexdigest()

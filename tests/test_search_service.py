@@ -140,6 +140,58 @@ def test_hybrid_empty_results_when_both_sources_empty():
     assert results == []
 
 
+def test_get_vector_hits_returns_hits_and_true():
+    """
+    Input:  embedding succeeds; vector_search returns two hits
+    Output: (hits, True) — hits populated, embedding_available=True
+    """
+    mock_hits = [
+        _make_hit("v1", score=0.9),
+        _make_hit("v2", score=0.7),
+    ]
+    mock_emb = [0.1] * 768
+
+    with patch("flask_app.services.llm.get_embedding", return_value=mock_emb), \
+         patch("flask_app.services.opensearch.vector_search", return_value=mock_hits):
+        from flask_app.services.search import get_vector_hits
+        hits, available = get_vector_hits("server config", os_client=MagicMock())
+
+    assert available is True
+    assert len(hits) == 2
+    assert hits[0]["score"] == 0.9
+    for h in hits:
+        assert "snippet" in h
+        assert "context" in h
+        assert "title" in h
+        assert "service" in h
+        assert "url" in h
+
+
+def test_get_vector_hits_returns_dummy_and_false_when_embedding_down():
+    """
+    Input:  get_embedding returns None (embedding model down)
+    Output: ([], False) — dummy fallback, embedding_available=False
+    """
+    with patch("flask_app.services.llm.get_embedding", return_value=None):
+        from flask_app.services.search import get_vector_hits
+        hits, available = get_vector_hits("server config", os_client=MagicMock())
+
+    assert available is False
+    assert hits == []
+
+
+def test_dummy_vector_search_returns_empty():
+    """
+    Input:  any query and client
+    Output: always []
+    Details:
+        Placeholder; must not call the LLM or raise.
+    """
+    from flask_app.services.search import _dummy_vector_search
+    result = _dummy_vector_search("anything", MagicMock())
+    assert result == []
+
+
 def test_hybrid_bm25_failure_returns_empty():
     """
     Input:  BM25 raises; embedding also None

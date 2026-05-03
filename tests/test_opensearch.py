@@ -159,17 +159,17 @@ def test_chunk_text_splits_at_boundary():
     Output: None
     Details:
         Verifies _chunk_text splits a word list at exactly the given boundary
-        and that no words are lost across all chunks.
+        with overlap=0 (no overlap). Word counts and chunk count match the
+        original non-overlapping behaviour.
     """
     words = ["word"] * 1700
     text = " ".join(words)
-    chunks = _chunk_text(text, chunk_size=800)
+    chunks = _chunk_text(text, chunk_size=800, overlap=0)
 
     assert len(chunks) == 3                          # 800 + 800 + 100
     assert len(chunks[0].split()) == 800
     assert len(chunks[1].split()) == 800
     assert len(chunks[2].split()) == 100
-    # no words lost
     total = sum(len(c.split()) for c in chunks)
     assert total == 1700
 
@@ -182,6 +182,75 @@ def test_chunk_text_empty_string():
         Verifies _chunk_text returns an empty list for an empty input string.
     """
     assert _chunk_text("") == []
+
+
+def test_chunk_text_overlap(monkeypatch):
+    """
+    Input: None
+    Output: None
+    Details:
+        Verifies overlapping chunks: adjacent chunks share exactly `overlap`
+        words. Monkeypatches _enc so the token-count failover never fires,
+        isolating the overlap logic from the token-limit path.
+    """
+    from flask_app.services import opensearch as os_mod
+
+    # Disable token failover for this test
+    monkeypatch.setattr(os_mod, "_enc", type("FakeEnc", (), {
+        "encode": staticmethod(lambda text: [0])   # always 1 token → never fails over
+    })())
+
+    overlap = 50
+    words = list(range(1700))           # unique integers as "words" for positional checks
+    text = " ".join(str(w) for w in words)
+    chunks = _chunk_text(text, chunk_size=800, overlap=overlap)
+
+    # 3 chunks: words[0:800], words[750:1550], words[1500:1700]
+    assert len(chunks) == 3
+
+    # Last `overlap` words of chunk 0 must equal first `overlap` words of chunk 1
+    end_of_0 = list(map(int, chunks[0].split()))[-overlap:]
+    start_of_1 = list(map(int, chunks[1].split()))[:overlap]
+    assert end_of_0 == start_of_1
+
+    # Last `overlap` words of chunk 1 must equal first `overlap` words of chunk 2
+    end_of_1 = list(map(int, chunks[1].split()))[-overlap:]
+    start_of_2 = list(map(int, chunks[2].split()))[:overlap]
+    assert end_of_1 == start_of_2
+
+    # Every original word present in at least one chunk
+    all_words_in_chunks = set()
+    for c in chunks:
+        all_words_in_chunks.update(map(int, c.split()))
+    assert all_words_in_chunks == set(words)
+
+
+def test_chunk_text_token_failover(monkeypatch):
+    """
+    Input: None
+    Output: None
+    Details:
+        When a chunk exceeds _SAFE_EMBED_TOKENS, _append_safe_chunks recursively
+        halves it. Monkeypatches _enc.encode to simulate a token-dense chunk
+        (3 tokens per word) so the failover fires without needing actual
+        over-dense content.
+    """
+    from flask_app.services import opensearch as os_mod
+
+    # Simulate 3 tokens per word so 800-word chunks = 2400 tokens > 1600
+    monkeypatch.setattr(os_mod, "_enc", type("FakeEnc", (), {
+        "encode": staticmethod(lambda text: list(range(len(text.split()) * 3)))
+    })())
+
+    words = ["word"] * 1600
+    text = " ".join(words)
+    chunks = _chunk_text(text, chunk_size=800, overlap=0)
+
+    # Each 800-word chunk tokenises to 2400 (> 1600) so gets halved:
+    # 800 → two 400-word pieces → each 1200 tokens (< 1600) → no further split
+    # Two original chunks × 2 halves = 4 chunks total
+    assert len(chunks) == 4
+    assert all(len(c.split()) == 400 for c in chunks)
 
 
 def test_index_doc(mock_client):
@@ -209,10 +278,11 @@ def test_index_doc(mock_client):
         content_type="text/html",
         text=text,
         chunk_size=800,
+        overlap=0,
         client=mock_client,
     )
 
-    # two chunks of 800 words each
+    # two chunks of 800 words each (overlap=0 gives non-overlapping behaviour)
     assert mock_client.index.call_count == 2
     assert len(responses) == 2
 

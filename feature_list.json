@@ -246,12 +246,12 @@
   "epic_24_ai_query_rewriter": {
     "description": "1B model rewrites raw user query to terse search query before hitting OpenSearch",
     "items": {
-      "rewrite_query_fn": { "passes": false },
-      "admin_toggle": { "passes": false },
-      "routes_wired": { "passes": false },
-      "ui_rewritten_query": { "passes": false },
-      "tests_written": { "passes": false },
-      "docs_query_rewriter_md": { "passes": false }
+      "rewrite_query_fn": { "passes": true },
+      "admin_toggle": { "passes": true },
+      "routes_wired": { "passes": true },
+      "ui_rewritten_query": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_query_rewriter_md": { "passes": true }
     }
   },
   "bugfix_vectorize_pagination": {
@@ -259,6 +259,16 @@
     "items": {
       "two_phase_collect_then_update": { "passes": true },
       "regression_test": { "passes": true }
+    }
+  },
+  "bugfix_embed_token_overflow": {
+    "description": "Fix 400 errors when embedding chunks that exceed nomic-embed-text's 2048-token limit; add overlapping word-based chunking",
+    "items": {
+      "tiktoken_dependency": { "passes": true },
+      "chunk_text_overlap": { "passes": true },
+      "chunk_text_token_failover": { "passes": true },
+      "embed_text_sub_chunk_averaging": { "passes": true },
+      "tests_written": { "passes": true }
     }
   }
 }

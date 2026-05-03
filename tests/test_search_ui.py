@@ -134,14 +134,14 @@ def test_search_opensearch_down_returns_empty(client):
 
 def test_ai_summary_card_hidden_when_llm_unreachable(client):
     """
-    Input: GET /api/semantic?q=test when LLM API is down
+    Input: GET /api/semantic?q=test when embedding model is down
     Output: 200 HTML fragment with no ai_summary card
     Details:
-        Patches semantic_results to return ([], None, True) — LLM unavailable.
-        The rendered fragment should show the BM25 warning, not an AI summary.
+        Patches get_vector_hits to return ([], False) — embedding unavailable.
+        With no vector hits, _build_ai_summary returns None, so no AI summary card.
     """
-    with patch("flask_app.routes.api.semantic_results",
-               return_value=([], None, True, [])):
+    with patch("flask_app.services.search.get_vector_hits", return_value=([], False)), \
+         patch("flask_app.services.llm.generate_keywords", return_value=[]):
         r = client.get("/api/semantic?q=test")
     assert r.status_code == 200
     assert b"AI summary" not in r.data
@@ -149,15 +149,17 @@ def test_ai_summary_card_hidden_when_llm_unreachable(client):
 
 def test_ai_summary_card_shown_when_llm_available(client):
     """
-    Input: GET /api/semantic?q=animal with working LLM mock
+    Input: GET /api/semantic?q=animal with embedding and summary available
     Output: 200 HTML fragment containing 'AI summary'
     """
-    fake_summary = {"html": "Animals are diverse organisms.", "sources": ["kiwix"]}
+    from markupsafe import Markup
+    fake_summary = {"html": Markup("Animals are diverse organisms."), "sources": ["kiwix"]}
     fake_hits = [{"score": 0.9, "service": "kiwix", "url": "http://k/A",
-                  "title": "A", "snippet": "text"}]
+                  "title": "A", "snippet": "text", "context": "text content"}]
 
-    with patch("flask_app.routes.api.semantic_results",
-               return_value=(fake_hits, fake_summary, False, [])):
+    with patch("flask_app.services.search.get_vector_hits", return_value=(fake_hits, True)), \
+         patch("flask_app.services.search._build_ai_summary", return_value=fake_summary), \
+         patch("flask_app.services.llm.generate_keywords", return_value=[]):
         r = client.get("/api/semantic?q=animal")
     assert r.status_code == 200
     assert b"AI summary" in r.data

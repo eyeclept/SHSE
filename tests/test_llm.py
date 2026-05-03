@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from flask_app.services.llm import get_embedding, generate_summary
+from flask_app.services.llm import get_embedding, generate_summary, rewrite_query
 
 # Globals
 
@@ -130,6 +130,59 @@ def test_summary_returns_none_on_error_field():
     session = _mock_session({"error": {"message": "quota exceeded"}})
     result = generate_summary(["chunk"], "query", session=session)
     assert result is None
+
+
+def test_rewrite_query_returns_model_response():
+    """
+    Input: None
+    Output: None
+    Details:
+        rewrite_query returns the model's stripped response on success.
+    """
+    body = {"choices": [{"message": {"content": "  server config  "}}]}
+    session = _mock_session(body)
+    result = rewrite_query("please tell me about how to configure a server", session=session)
+    assert result == "server config"
+
+
+def test_rewrite_query_returns_raw_on_connection_failure():
+    """
+    Input: None
+    Output: None
+    Details:
+        rewrite_query returns raw_query unchanged when the endpoint is unreachable.
+    """
+    session = _mock_session({}, raise_exc=ConnectionError("refused"))
+    raw = "please find me server info"
+    result = rewrite_query(raw, session=session)
+    assert result == raw
+
+
+def test_rewrite_query_returns_raw_on_empty_response():
+    """
+    Input: None
+    Output: None
+    Details:
+        rewrite_query returns raw_query when the model returns an empty string.
+    """
+    body = {"choices": [{"message": {"content": "   "}}]}
+    session = _mock_session(body)
+    raw = "what is dns"
+    result = rewrite_query(raw, session=session)
+    assert result == raw
+
+
+def test_rewrite_query_returns_raw_on_error_field():
+    """
+    Input: None
+    Output: None
+    Details:
+        rewrite_query returns raw_query when the response body contains an error field.
+    """
+    session = _mock_session({"error": {"message": "model not found"}})
+    raw = "show me all containers"
+    result = rewrite_query(raw, session=session)
+    assert result == raw
 
 
 if __name__ == "__main__":
