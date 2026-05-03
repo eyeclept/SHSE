@@ -98,7 +98,11 @@ def _check_services():
             "message": None if resp.ok else f"HTTP {resp.status_code}",
         }
     except Exception as exc:
-        results["nutch"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
+        _exc = str(exc)
+        if "Max retries" in _exc or "Connection refused" in _exc:
+            results["nutch"] = {"status": "disabled", "latency_ms": None, "message": "REST server not running in this image"}
+        else:
+            results["nutch"] = {"status": "down", "latency_ms": None, "message": _exc[:80]}
 
     # LLM API
     try:

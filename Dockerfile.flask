@@ -15,4 +15,4 @@ ENV FLASK_APP=flask_app
 ENV FLASK_RUN_HOST=0.0.0.0
 ENV FLASK_RUN_PORT=5000
 
-CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000"]
+CMD ["sh", "-c", "flask db upgrade && python -m flask run --host=0.0.0.0 --port=5000"]

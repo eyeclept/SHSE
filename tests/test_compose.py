@@ -60,8 +60,9 @@ def test_services_have_healthchecks():
     with open(COMPOSE_FILE) as f:
         compose = yaml.safe_load(f)
     services = compose.get("services", {})
-    # Celery services intentionally omit healthchecks (no standard probe endpoint).
-    exempt = {"celery_worker", "celery_beat"}
+    # Celery services: no standard probe endpoint.
+    # Init containers (restart: "no"): one-shot, complete before dependents start.
+    exempt = {"celery_worker", "celery_beat", "opensearch-init", "mariadb-init"}
     for name, svc in services.items():
         if name in exempt:
             continue

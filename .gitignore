@@ -48,6 +48,10 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
+# --- Container data (bind mounts) ---
+data/
+!data/.gitkeep
+
 # --- Logs ---
 logs/
 

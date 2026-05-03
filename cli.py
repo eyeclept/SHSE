@@ -369,6 +369,50 @@ def cmd_search(args):
         print(f"  next page: python cli.py search \"{q}\" --page {page + 1}")
 
 
+def _reset_admin_password_impl(db_session, username, new_password):
+    """
+    Input: db_session, username str, new_password str
+    Output: None (prints success) or raises SystemExit(1) on failure
+    Details:
+        Queries users for an admin-role row matching username.
+        Sets the new bcrypt password and commits. Server-shell access is the
+        authorization gate; no current-password check is performed.
+    """
+    from flask_app.models.user import User
+    user = db_session.query(User).filter_by(username=username).first()
+    if user is None:
+        print(f"error: no user '{username}' found", file=sys.stderr)
+        sys.exit(1)
+    if user.role != "admin":
+        print(f"error: user '{username}' is not an admin (role={user.role!r})", file=sys.stderr)
+        sys.exit(1)
+    user.set_password(new_password)
+    db_session.commit()
+    print(f"password updated for admin user '{username}'")
+
+
+def cmd_reset_admin_password(args):
+    """
+    Input: args.username — admin username to reset
+    Output: prompts for new password; prints success or error
+    Details:
+        Server-side recovery tool. Does not require the current password.
+        Exits non-zero if the user does not exist or is not an admin.
+    """
+    _load_env()
+    pw1 = input("New password: ")
+    if not pw1:
+        print("error: password cannot be empty", file=sys.stderr)
+        sys.exit(1)
+    pw2 = input("Confirm password: ")
+    if pw1 != pw2:
+        print("error: passwords do not match", file=sys.stderr)
+        sys.exit(1)
+    app, db = _get_app()
+    with app.app_context():
+        _reset_admin_password_impl(db.session, args.username, pw1)
+
+
 def cmd_jobs(args):
     """
     Input: args.limit — max rows to show (default 20)
@@ -454,6 +498,10 @@ def _build_parser():
     sr.add_argument("--limit", type=int, default=10, metavar="N",
                     help="results per page (default 10)")
 
+    rap = sub.add_parser("reset-admin-password",
+                         help="change an admin user's password (server-side recovery)")
+    rap.add_argument("username", metavar="USERNAME", help="admin username to reset")
+
     return p
 
 
@@ -468,8 +516,9 @@ _DISPATCH = {
     "vectorize":      cmd_vectorize,
     "create-index":   cmd_create_index,
     "wipe-index":     cmd_wipe_index,
-    "jobs":           cmd_jobs,
-    "search":         cmd_search,
+    "jobs":                  cmd_jobs,
+    "search":                cmd_search,
+    "reset-admin-password":  cmd_reset_admin_password,
 }
 
 

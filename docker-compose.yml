@@ -1,5 +1,18 @@
 services:
 
+  opensearch-init:
+    image: busybox
+    container_name: opensearch_init
+    user: root
+    # OpenSearch runs as UID 1000 inside the container; bind-mount dirs created
+    # by Docker are owned by root. This init container fixes ownership before
+    # OpenSearch starts, so it works on every `docker compose up` without
+    # any manual chown on the host.
+    command: ["sh", "-c", "mkdir -p /mnt/data && chown -R 1000:1000 /mnt/data"]
+    volumes:
+      - ./data/opensearch:/mnt/data
+    restart: "no"
+
   opensearch:
     image: opensearchproject/opensearch:latest
     container_name: opensearch
@@ -15,13 +28,26 @@ services:
       - "9200:9200"
       # - "9600:9600"  # Only needed for Performance Analyzer
     volumes:
-      - opensearch_data:/usr/share/opensearch/data
+      - ./data/opensearch:/usr/share/opensearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -fs -u admin:$$OPENSEARCH_INITIAL_ADMIN_PASSWORD https://localhost:9200 -k || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 40s
+    depends_on:
+      opensearch-init:
+        condition: service_completed_successfully
+
+  mariadb-init:
+    image: busybox
+    container_name: mariadb_init
+    user: root
+    # MariaDB runs as UID 999 (mysql user); fix ownership before MariaDB starts.
+    command: ["sh", "-c", "mkdir -p /mnt/data && chown -R 999:999 /mnt/data"]
+    volumes:
+      - ./data/mariadb:/mnt/data
+    restart: "no"
 
   mariadb:
     image: mariadb:11
@@ -35,13 +61,16 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - mariadb_data:/var/lib/mysql
+      - ./data/mariadb:/var/lib/mysql
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 20s
       timeout: 5s
       retries: 5
       start_period: 30s
+    depends_on:
+      mariadb-init:
+        condition: service_completed_successfully
 
   # Ollama is already set up on the local host — uncomment if needed
   # ollama:
@@ -189,13 +218,16 @@ services:
       start_period: 20s
 
   nutch:
-    image: apache/nutch:latest
+    # Pinned to the last build that ships the REST server (startserver command).
+    # apache/nutch:latest pulled after 2026-05-03 removed the REST module from
+    # the ant runtime build. Do NOT change to :latest or docker compose pull
+    # will overwrite this with a broken image.
+    image: apache/nutch@sha256:f6d1e4e7e9e7259bf3ce1435640d4b908494e9204321ac7fccbfd578bee9343b
     container_name: nutch
     restart: unless-stopped
-    # Starts the Nutch REST server on all interfaces so other containers can reach it
     command: ["/bin/sh", "-c", "/root/nutch_source/runtime/local/bin/nutch startserver -host 0.0.0.0 -port 8081"]
     volumes:
-      - ./nutch_data:/nutch_data
+      - ./data/nutch:/nutch_data
     ports:
       - "8081:8081"
     healthcheck:
@@ -208,7 +240,5 @@ services:
       opensearch:
         condition: service_healthy
 
-volumes:
-  opensearch_data:
-  mariadb_data:
-  # ollama_data:
+# All persistent data is stored under ./data/ as bind mounts.
+# No named volumes declared.

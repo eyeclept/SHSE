@@ -432,3 +432,40 @@ def test_results_no_annotation_when_rewriter_disabled(client):
 
     assert r.status_code == 200
     assert b"AI rewrote query to" not in r.data
+
+
+# ── Epic 9c: vector_hits in template context ───────────────────────────────
+
+def test_vector_hits_in_context(app, client):
+    """
+    Input: GET /search?q=server with get_embedding mocked to return a vector
+    Output: template context contains a 'vector_hits' key
+    Details:
+        Semantic results are fetched asynchronously via HTMX (/api/semantic),
+        so search.results() always passes vector_hits=[] to the template.
+        This test confirms the key is present in the context (even as an empty
+        list) regardless of LLM availability — the HTMX rail is what populates
+        it at render time.
+    """
+    from flask import template_rendered
+
+    recorded = []
+
+    def _record(sender, template, context, **_extra):
+        recorded.append((template.name, context))
+
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    template_rendered.connect(_record, app)
+    try:
+        with patch("flask_app.routes.search.get_client", return_value=mock_client), \
+             patch("flask_app.services.llm.get_embedding", return_value=[0.1] * 768):
+            r = client.get("/search?q=server")
+    finally:
+        template_rendered.disconnect(_record, app)
+
+    assert r.status_code == 200
+    results_contexts = [ctx for name, ctx in recorded if name == "results.html"]
+    assert results_contexts, "results.html was not rendered"
+    assert "vector_hits" in results_contexts[0]
