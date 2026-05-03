@@ -13,11 +13,13 @@ Description:
     Falls back gracefully when the LLM API is unreachable.
 """
 # Imports
+import logging
 import os
 
 import requests
 
 # Globals
+logger = logging.getLogger(__name__)
 _LLM_API_BASE = os.environ.get("LLM_API_BASE", "http://localhost:11434/v1")
 _LLM_EMBED_MODEL = os.environ.get("LLM_EMBED_MODEL", "nomic-embed-text")
 _LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "llama3")
@@ -46,9 +48,11 @@ def get_embedding(text, session=None):
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
+            logger.warning("LLM embedding API returned error: %s", data.get("error"))
             return None
         return data["data"][0]["embedding"]
     except Exception:
+        logger.warning("get_embedding failed", exc_info=True)
         return None
 
 
@@ -88,9 +92,11 @@ def generate_summary(context_chunks, query, session=None):
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
+            logger.warning("LLM generate_summary API returned error: %s", data.get("error"))
             return None
         return data["choices"][0]["message"]["content"]
     except Exception:
+        logger.warning("generate_summary failed", exc_info=True)
         return None
 
 
@@ -136,6 +142,7 @@ def generate_keywords(query, context_chunks, session=None):
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
+            logger.warning("LLM generate_keywords API returned error: %s", data.get("error"))
             return []
         raw = data["choices"][0]["message"]["content"]
         seen = set()
@@ -149,6 +156,7 @@ def generate_keywords(query, context_chunks, session=None):
                 break
         return chips
     except Exception:
+        logger.warning("generate_keywords failed", exc_info=True)
         return []
 
 

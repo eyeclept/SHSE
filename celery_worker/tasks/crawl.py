@@ -14,12 +14,14 @@ Description:
 # Imports
 from datetime import datetime
 
+from celery.utils.log import get_task_logger
 from celery_worker.app import celery
 from flask_app.services.nutch import _discover_urls, _fetch_page_text
 from flask_app.services.opensearch import index_document, delete_stale
 
 # Globals
 _INDEX_NAME = "shse_pages"
+logger = get_task_logger(__name__)
 
 
 # Functions
@@ -61,6 +63,7 @@ def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None
     )
     db_session.add(job)
     db_session.commit()
+    logger.info("CrawlJob %s started — target_id=%s task_id=%s", job.id, target_id, job.task_id)
 
     try:
         if target.target_type in ("service", "network"):
@@ -74,10 +77,12 @@ def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None
         job.status = "success"
         job.finished_at = datetime.utcnow()
         job.message = None
+        logger.info("CrawlJob %s success — target_id=%s", job.id, target_id)
     except Exception as exc:
         job.status = "failure"
         job.finished_at = datetime.utcnow()
         job.message = str(exc)[:500]
+        logger.exception("CrawlJob %s failure — target_id=%s", job.id, target_id)
         db_session.commit()
         raise exc
 
@@ -91,7 +96,7 @@ def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None
             from celery_worker.tasks.vectorize import vectorize_pending
             vectorize_pending.delay()
     except Exception:
-        pass
+        logger.warning("Failed to dispatch vectorize_pending after crawl job %s", job.id, exc_info=True)
 
     return job.id
 
@@ -182,6 +187,7 @@ def _oai_fetch(base_url, endpoint, resumption_token=None):
         resp.raise_for_status()
         root = ET.fromstring(resp.content)
     except Exception:
+        logger.warning("_oai_fetch failed for %s", url, exc_info=True)
         return [], None
 
     records = []
@@ -268,6 +274,7 @@ def _feed_fetch(base_url, feed_path):
             content = resp.read()
         root = ET.fromstring(content)
     except Exception:
+        logger.warning("_feed_fetch failed for %s", feed_url, exc_info=True)
         return []
 
     docs = []
@@ -357,7 +364,10 @@ def _push_api_content_impl(target, os_client=None, _docs=None):
                 mod = importlib.import_module(f"flask_app.adapters.{adapter_name}")
                 docs = mod.fetch(target)
             except Exception:
-                pass
+                logger.exception(
+                    "_push_api_content_impl: adapter '%s' failed for target %s",
+                    adapter_name, target.nickname or target.id,
+                )
 
     for doc in docs:
         index_document(
@@ -439,6 +449,7 @@ def scheduled_crawl(nickname, _db_session=None, _nutch_session=None, _os_client=
     def _impl(db_session):
         target = db_session.query(CrawlerTarget).filter_by(nickname=nickname).first()
         if target is None:
+            logger.warning("scheduled_crawl: no target found for nickname '%s' — skipping", nickname)
             return None
         return _crawl_target_impl(target.id, db_session, _nutch_session, _os_client)
 

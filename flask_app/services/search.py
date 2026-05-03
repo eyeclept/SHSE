@@ -9,12 +9,16 @@ Description:
     Used by both the HTML search route and the JSON API endpoint.
 """
 # Imports
+import logging
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Globals
+logger = logging.getLogger(__name__)
 _INDEX_NAME = "shse_pages"
 _PAGE_SIZE = 10
 _VECTOR_K = 5
+_RRF_K = 60
 
 
 # Functions
@@ -127,6 +131,7 @@ def semantic_results(q, os_client=None, llm_session=None):
     try:
         embedding = get_embedding(q, session=llm_session)
     except Exception:
+        logger.warning("get_embedding raised unexpectedly in semantic_results", exc_info=True)
         embedding = None
 
     if embedding is None:
@@ -135,6 +140,7 @@ def semantic_results(q, os_client=None, llm_session=None):
     try:
         hits = vector_search(embedding, k=_VECTOR_K, client=client)
     except Exception:
+        logger.warning("vector_search failed in semantic_results", exc_info=True)
         return [], None, True, []
 
     vector_hits = []
@@ -170,10 +176,89 @@ def semantic_results(q, os_client=None, llm_session=None):
                     "sources": sorted(sources),
                 }
         except Exception:
-            pass
+            logger.warning("generate_summary failed in semantic_results", exc_info=True)
 
     chips = _keyword_chips(vector_hits, q)
     return vector_hits, ai_summary, False, chips
+
+
+def hybrid_search(query, k=10, client=None, llm_session=None):
+    """
+    Input:
+        query      - str, the search query (should already be preprocessed)
+        k          - int, max results to return after fusion (default 10)
+        client     - optional OpenSearch client (injectable for tests)
+        llm_session - optional requests.Session for LLM API (injectable for tests)
+    Output:
+        list[dict] — top-k result dicts sorted by descending RRF score, each
+        containing _source fields merged with an 'rrf_score' float field.
+    Details:
+        Runs BM25 and vector search in parallel via ThreadPoolExecutor.
+        Applies Reciprocal Rank Fusion (RRF): for each document at rank r
+        in list L, its score increases by 1 / (_RRF_K + r). Documents
+        appearing in both lists are summed. Returns the top-k by fused score.
+        Falls back to BM25-only results when get_embedding() returns None
+        (LLM API unavailable) rather than raising.
+    """
+    from flask_app.services.opensearch import bm25_search, vector_search, get_client as _get_client
+    from flask_app.services.llm import get_embedding
+
+    os_client = client or _get_client()
+
+    bm25_hits = []
+    vec_hits = []
+
+    def _run_bm25():
+        return bm25_search(query, k=k * 2, client=os_client)
+
+    def _run_vector():
+        emb = get_embedding(query, session=llm_session)
+        if emb is None:
+            return None, []
+        return emb, vector_search(emb, k=k * 2, client=os_client)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        bm25_future = executor.submit(_run_bm25)
+        vec_future = executor.submit(_run_vector)
+
+        try:
+            bm25_hits = bm25_future.result()
+        except Exception:
+            logger.warning("BM25 search failed in hybrid_search", exc_info=True)
+            bm25_hits = []
+
+        embedding, vec_hits_result = None, []
+        try:
+            embedding, vec_hits_result = vec_future.result()
+        except Exception:
+            logger.warning("Vector search failed in hybrid_search", exc_info=True)
+
+        if embedding is not None:
+            vec_hits = vec_hits_result
+
+    # RRF fusion
+    scores: dict[str, float] = {}
+    sources: dict[str, dict] = {}
+
+    for rank, hit in enumerate(bm25_hits):
+        doc_id = hit["_id"]
+        scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (_RRF_K + rank)
+        sources[doc_id] = hit
+
+    for rank, hit in enumerate(vec_hits):
+        doc_id = hit["_id"]
+        scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (_RRF_K + rank)
+        if doc_id not in sources:
+            sources[doc_id] = hit
+
+    ranked = sorted(scores.items(), key=lambda x: -x[1])
+    results = []
+    for doc_id, rrf_score in ranked[:k]:
+        hit = sources[doc_id]
+        merged = dict(hit)
+        merged["rrf_score"] = round(rrf_score, 6)
+        results.append(merged)
+    return results
 
 
 if __name__ == "__main__":

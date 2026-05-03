@@ -201,6 +201,16 @@
       "autodismiss_script": { "passes": true }
     }
   },
+  "epic_9f_logging": {
+    "description": "Logging infrastructure (RotatingFileHandler), module loggers, logged fallbacks for all except blocks, CrawlJob lifecycle logs, test_logging.py",
+    "items": {
+      "logging_infrastructure": { "passes": true },
+      "module_level_loggers": { "passes": true },
+      "logged_fallbacks": { "passes": true },
+      "crawljob_lifecycle_logs": { "passes": true },
+      "tests_written": { "passes": true }
+    }
+  },
   "epic_15_mcp_server": {
     "description": "Post-MVP FastAPI MCP server with search_homelab tool",
     "items": {
@@ -210,6 +220,45 @@
       "env_keys_added": { "passes": false },
       "tests_written": { "passes": false },
       "docs_mcp_md": { "passes": false }
+    }
+  },
+  "epic_22_system_reset": {
+    "description": "reset.sh wipe script, CLI admin password recovery, container data under data/",
+    "items": {
+      "reset_sh": { "passes": false },
+      "cli_reset_admin_password": { "passes": false },
+      "data_dir_layout": { "passes": false },
+      "tests_written": { "passes": false }
+    }
+  },
+  "epic_23_search_quality": {
+    "description": "Query preprocessor (preamble strip, normalize, stopwords, synonyms), hybrid BM25+vector RRF fusion",
+    "items": {
+      "query_preprocessor_module": { "passes": true },
+      "synonym_expansion": { "passes": true },
+      "hybrid_rrf_search": { "passes": true },
+      "routes_wired": { "passes": true },
+      "ui_preprocessed_query": { "passes": true },
+      "tests_written": { "passes": true },
+      "docs_search_quality_md": { "passes": true }
+    }
+  },
+  "epic_24_ai_query_rewriter": {
+    "description": "1B model rewrites raw user query to terse search query before hitting OpenSearch",
+    "items": {
+      "rewrite_query_fn": { "passes": false },
+      "admin_toggle": { "passes": false },
+      "routes_wired": { "passes": false },
+      "ui_rewritten_query": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_query_rewriter_md": { "passes": false }
+    }
+  },
+  "bugfix_vectorize_pagination": {
+    "description": "Fix from/size pagination skip in _vectorize_pending_impl: collect all docs before updating",
+    "items": {
+      "two_phase_collect_then_update": { "passes": true },
+      "regression_test": { "passes": true }
     }
   }
 }

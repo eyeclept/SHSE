@@ -1,0 +1,20 @@
+# Homelab synonym groups for query expansion.
+# Each entry is a list of equivalent terms. When a query contains any term
+# in a group, the remaining terms in the group are appended to the query.
+# Terms are matched and stored lowercase. Add new groups as needed.
+
+- [server, host, machine, node]
+- [network, networking, net, lan, wan]
+- [storage, disk, drive, volume, hdd, ssd, nas]
+- [container, docker, pod, instance]
+- [database, db, datastore, data store, sql]
+- [backup, snapshot, archive, restore]
+- [proxy, reverse proxy, gateway, loadbalancer, load balancer]
+- [monitoring, metrics, observability, grafana, prometheus]
+- [auth, authentication, login, sso, oauth, oidc]
+- [dns, domain, hostname, resolver]
+- [certificate, cert, ssl, tls, https]
+- [config, configuration, settings, setup]
+- [log, logs, logging, syslog, journald]
+- [memory, ram, heap]
+- [cpu, processor, cores, compute]

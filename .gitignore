@@ -48,6 +48,9 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
+# --- Logs ---
+logs/
+
 # --- Database ---
 *.db
 *.sqlite3cert.pem

@@ -56,6 +56,12 @@
       About {{ "{:,}".format(total) }} results · {{ took_ms }}ms
     </div>
 
+    {% if preprocessed_q and preprocessed_q != q %}
+    <div style="font-size:12px; color:var(--shse-text-muted); margin-bottom:10px;">
+      Searching for: <em>{{ preprocessed_q }}</em>
+    </div>
+    {% endif %}
+
     {% if show_bm25_warning %}
       <div class="shse-card" style="padding:10px 14px; margin-bottom:14px;
                                     border-color:var(--shse-warning);

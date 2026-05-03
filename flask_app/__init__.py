@@ -7,6 +7,10 @@ Description:
     Flask application factory. Initialises extensions and registers blueprints.
 """
 # Imports
+import logging
+import os
+from logging.handlers import RotatingFileHandler
+
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
@@ -41,6 +45,16 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object("flask_app.config.Config")
 
+    log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    _fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
+    _handler = RotatingFileHandler(
+        os.path.join(log_dir, "flask.log"), maxBytes=5 * 1024 * 1024, backupCount=3
+    )
+    _handler.setFormatter(logging.Formatter(_fmt))
+    logging.root.setLevel(logging.INFO)
+    logging.root.addHandler(_handler)
+
     db.init_app(app)
     login_manager.init_app(app)
     oauth.init_app(app)
@@ -72,6 +86,8 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(api_bp)
 
+    _init_logger = logging.getLogger(__name__)
+
     # Ensure a default admin account exists on first boot.
     # Username: admin  Password: admin  (change after first login)
     with app.app_context():
@@ -84,7 +100,7 @@ def create_app():
                 db.session.add(default_admin)
                 db.session.commit()
         except Exception:
-            pass
+            _init_logger.exception("Default admin seeding failed")
 
     return app
 

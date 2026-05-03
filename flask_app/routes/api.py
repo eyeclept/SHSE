@@ -9,15 +9,20 @@ Description:
     the index without parsing HTML.
 """
 # Imports
+import logging
 import math
 
 from flask import Blueprint, jsonify, render_template, request
 from flask_login import current_user
 from flask_app.services.opensearch import get_client
 from flask_app.services.search import bm25_body, semantic_results
+from flask_app.services.query_preprocessor import (
+    strip_preamble, normalize, strip_stopwords, expand_synonyms,
+)
 
 # Globals
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+logger = logging.getLogger(__name__)
 
 _INDEX_NAME = "shse_pages"
 _PAGE_SIZE = 10
@@ -69,6 +74,8 @@ def search():
     except (ValueError, TypeError):
         page = 1
 
+    preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q)))) if q else q
+
     result_rows = []
     total = 0
     took_ms = 0
@@ -81,7 +88,7 @@ def search():
     if q:
         try:
             client = get_client()
-            body = bm25_body(q, page=page, page_size=_PAGE_SIZE)
+            body = bm25_body(preprocessed_q, page=page, page_size=_PAGE_SIZE)
             resp = client.search(index=_INDEX_NAME, body=body)
             took_ms = resp.get("took", 0)
             total = resp["hits"]["total"]["value"]
@@ -108,13 +115,14 @@ def search():
             sources = [{"name": b["key"], "n": b["doc_count"]} for b in buckets]
 
         except Exception:
-            pass
+            logger.warning("BM25 search failed on API endpoint", exc_info=True)
 
-        # Semantic search + AI summary
-        vector_hits, ai_summary, show_bm25_warning, _chips = semantic_results(q)
+        # Semantic search + AI summary (use preprocessed query for embedding too)
+        vector_hits, ai_summary, show_bm25_warning, _chips = semantic_results(preprocessed_q)
 
     return jsonify({
         "q": q,
+        "preprocessed_q": preprocessed_q if preprocessed_q != q else None,
         "tab": tab,
         "page": page,
         "page_count": page_count,
@@ -151,6 +159,7 @@ def stats():
         last_crawl = hits[0]["_source"].get("crawled_at", "")[:19] if hits else None
         return jsonify({"docs": count, "services": svc_count, "last_crawl": last_crawl})
     except Exception:
+        logger.warning("OpenSearch unavailable — returning zero stats", exc_info=True)
         return jsonify({"docs": 0, "services": 0, "last_crawl": None})
 
 
@@ -205,7 +214,7 @@ def job_logs(job_id):
             if ar.failed():
                 result["traceback"] = str(ar.traceback)
         except Exception:
-            pass
+            logger.warning("Failed to fetch Celery traceback for job %s", job_id, exc_info=True)
     return jsonify(result)
 
 

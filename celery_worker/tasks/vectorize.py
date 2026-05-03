@@ -11,10 +11,12 @@ Description:
 # Imports
 from datetime import datetime
 
+from celery.utils.log import get_task_logger
 from celery_worker.app import celery
 
 # Globals
 _INDEX_NAME = "shse_pages"
+logger = get_task_logger(__name__)
 
 
 # Functions
@@ -40,9 +42,13 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
         vectorized_count - docs successfully embedded and updated
         attempted_count  - total docs found with vectorized=false
     Details:
-        Paginates through docs where vectorized=false using get_unvectorized().
-        For each doc, calls get_embedding() on its text field. If an embedding
-        is returned, issues a partial update (doc.embedding + doc.vectorized=true).
+        Phase 1: collects all unvectorized doc IDs and text via paginated reads
+        with no updates happening, so the from/size offsets remain stable.
+        Phase 2: processes the collected list, calling get_embedding() per doc
+        and issuing a partial update on success. Separating read from write
+        avoids a skip bug: updating docs during from/size pagination removes
+        them from the result set, causing the next page's offset to jump over
+        docs that shifted into the vacated positions.
         Docs where get_embedding() returns None are left unchanged (LLM API down).
         Callers use the tuple to distinguish success / partial / deferred outcomes.
     """
@@ -50,30 +56,33 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
     from flask_app.services.llm import get_embedding
 
     client = os_client or get_client()
-    vectorized_count = 0
-    attempted_count = 0
-    page = 0
 
+    # Phase 1: collect all unvectorized docs before any updates
+    pending = []
+    page = 0
     while True:
         hits = get_unvectorized(page=page, page_size=page_size, client=client)
         if not hits:
             break
-
-        for hit in hits:
-            attempted_count += 1
-            doc_id = hit["_id"]
-            text = hit.get("_source", {}).get("text", "")
-            embedding = get_embedding(text, session=llm_session)
-            if embedding is None:
-                continue
-            client.update(
-                index=_INDEX_NAME,
-                id=doc_id,
-                body={"doc": {"embedding": embedding, "vectorized": True}},
-            )
-            vectorized_count += 1
-
+        pending.extend(hits)
         page += 1
+
+    attempted_count = len(pending)
+    vectorized_count = 0
+
+    # Phase 2: embed and update the collected list
+    for hit in pending:
+        doc_id = hit["_id"]
+        text = hit.get("_source", {}).get("text", "")
+        embedding = get_embedding(text, session=llm_session)
+        if embedding is None:
+            continue
+        client.update(
+            index=_INDEX_NAME,
+            id=doc_id,
+            body={"doc": {"embedding": embedding, "vectorized": True}},
+        )
+        vectorized_count += 1
 
     return vectorized_count, attempted_count
 
@@ -107,6 +116,7 @@ def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100, _db_se
         job = CrawlJob(kind="vectorize", status="started", started_at=datetime.utcnow())
         _db.session.add(job)
         _db.session.commit()
+        logger.info("CrawlJob %s started — kind=vectorize task_id=%s", job.id, job.task_id)
 
         try:
             vectorized, attempted = _vectorize_pending_impl(
@@ -125,10 +135,12 @@ def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100, _db_se
                 job.status = "partial"
                 job.message = f"Vectorized {vectorized}/{attempted} document(s); LLM unavailable for remainder"
             job.finished_at = datetime.utcnow()
+            logger.info("CrawlJob %s %s — %s", job.id, job.status, job.message)
         except Exception as exc:
             job.status = "failure"
             job.finished_at = datetime.utcnow()
             job.message = str(exc)[:500]
+            logger.exception("CrawlJob %s failure — kind=vectorize", job.id)
             _db.session.commit()
             raise
 

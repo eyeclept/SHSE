@@ -115,7 +115,7 @@ Single index with the following core fields:
 | `url` | keyword | Source URL |
 | `port` | integer | Source port |
 | `text` | text | Chunk content (BM25 target) |
-| `embedding` | dense_vector | Cosine similarity; `null` if deferred |
+| `embedding` | knn_vector (768-dim) | Cosine similarity; `null` if deferred |
 | `title` | text | Page title from Nutch |
 | `crawled_at` | date | Ingest timestamp |
 | `service_nickname` | keyword | User-defined label |
@@ -124,7 +124,7 @@ Single index with the following core fields:
 | `source_type` | keyword | `nutch`, `oai-pmh`, `rss`, `api-push` — tracks ingestion path |
 | `content_hash` | keyword | SHA-256 of normalized `text`; used for idempotent upsert and change detection |
 
-- **Chunk size**: 800 tokens
+- **Chunk size**: 800 words (word count used as a proxy for token count; 800 words is a conservative upper bound on an 800 subword-token limit for English prose; may produce larger chunks for code or non-English text)
 - **Deferred vectorization**: `vectorized: false` + `embedding: null` on initial index; backfilled by Celery when LLM API is available
 - **Document identity**: each chunk is identified by a deterministic ID derived from `sha256(url + chunk_index)`. All OpenSearch writes use `_index` with this ID, making every write an upsert. A chunk whose `content_hash` has not changed since the last crawl is skipped entirely — no re-embedding, no re-write.
 - **Stale document removal**: at the end of each crawl run for a target, any document in OpenSearch with a `crawled_at` older than the run start timestamp and matching `service_nickname` is deleted. This handles page removals and URL changes without a full reindex.
@@ -418,7 +418,62 @@ SSO_CLIENT_SECRET=
 
 ---
 
-## 11. Ingestion Coverage — What Gets Indexed and How
+## 11. Observability and Logging
+
+SHSE runs unattended (Celery Beat, scheduled crawls) and integrates several external
+services that can fail independently. Silent failures are the most dangerous failure
+mode — the system appears to work while indexing nothing, skipping crawls, or losing
+history writes.
+
+### Logging strategy
+
+Every Python module uses the stdlib `logging` module with a module-level logger:
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+```
+
+All `except` blocks call `logger.exception("context message")` before returning or
+raising. Bare `except: pass` is forbidden. The distinction between expected and
+unexpected failures is made explicit:
+
+| Situation | Correct pattern |
+|---|---|
+| External service unavailable (expected) | `logger.warning("opensearch unreachable: %s", exc)` → return fallback |
+| Unexpected error in business logic | `logger.exception("unexpected error in index_document")` → re-raise or return None with log |
+| Background task failure | `logger.exception("crawl_target %s failed", target_id)` → update CrawlJob.status |
+
+### Log destinations
+
+| Component | Handler | Location |
+|---|---|---|
+| Flask app | `RotatingFileHandler` | `logs/flask.log` |
+| Celery workers | `celery.utils.log.get_task_logger` | `logs/celery.log` |
+| Celery Beat | `celery.utils.log.get_task_logger` | `logs/celery.log` |
+
+Log directory: `logs/` at project root, created by `create_app()` and the Celery app
+init if absent. Added to `.gitignore`.
+
+### Log levels
+
+| Level | When to use |
+|---|---|
+| `DEBUG` | Per-document operations (chunk count, embedding size, doc ID) |
+| `INFO` | Task start/complete, service probe results, crawl job lifecycle transitions |
+| `WARNING` | Expected external service failures, fallback behaviour activated |
+| `ERROR` / `EXCEPTION` | Unexpected failures, data integrity issues, unhandled states |
+
+### Health and status surface
+
+The existing `/admin/_health` endpoint probes all services and reports status.
+The existing `CrawlJob` table records task lifecycle. These are the operational
+visibility surfaces — log output fills in the detail underneath them.
+
+---
+
+## 12. Ingestion Coverage — What Gets Indexed and How
+
 
 This section maps the university lab service stack to ingestion paths. The goal is anonymous-public-only indexing: content is in the index if and only if it is visible to an unauthenticated visitor.
 
@@ -474,7 +529,7 @@ All infrastructure and admin tools, all authenticated-only services, all chat hi
 
 ---
 
-## 12. Out of Scope (v1)
+## 13. Out of Scope (v1)
 
 - Expanded AI / chat mode — future moonshot; OpenWebUI covers interactive chat
 - Network diagram software config import
@@ -484,7 +539,7 @@ All infrastructure and admin tools, all authenticated-only services, all chat hi
 
 ---
 
-## 13. MCP Integration (Post-MVP)
+## 14. MCP Integration (Post-MVP)
 
 ### Overview
 
@@ -527,7 +582,7 @@ Added to `docker-compose.yml` as an optional service. Shares OpenSearch endpoint
 
 ---
 
-## 14. Stretch Goal — Supplementary Ingestion for Nutch-Insufficient Sources
+## 15. Stretch Goal — Supplementary Ingestion for Nutch-Insufficient Sources
 
 > This section is out of scope for v1. It documents service categories where Nutch alone cannot produce adequate index coverage, and proposes purpose-built ingestion pipelines for each.
 

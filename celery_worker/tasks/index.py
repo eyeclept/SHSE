@@ -8,11 +8,13 @@ Description:
     for the entire index, then re-crawl to rebuild from scratch.
 """
 # Imports
+from celery.utils.log import get_task_logger
 from celery_worker.app import celery
 from celery_worker.tasks.crawl import _crawl_target_impl, crawl_target
 from flask_app.services.opensearch import delete_by_nickname, wipe_index
 
 # Globals
+logger = get_task_logger(__name__)
 
 
 # Functions

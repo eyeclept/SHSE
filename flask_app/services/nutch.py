@@ -15,10 +15,14 @@ Description:
         seed/create → INJECT → GENERATE → FETCH → PARSE → UPDATEDB
 """
 # Imports
+import logging
 import os
 import time
 import uuid
 import requests
+
+# Module logger — defined before Globals so it is available everywhere below
+logger = logging.getLogger(__name__)
 
 # Globals
 NUTCH_HOST = os.environ.get("NUTCH_HOST", "localhost")
@@ -263,6 +267,7 @@ def _fetch_page_text(url, tls_verify=True, timeout=10):
         text = extractor.get_text()
         return text if text.strip() else url
     except Exception:
+        logger.warning("_fetch_page_text failed for %s — indexing URL only", url, exc_info=True)
         return url
 
 
@@ -317,6 +322,7 @@ def _discover_urls(seed_url, tls_verify=True, max_depth=2, max_urls=500, timeout
             resp = requests.get(norm, timeout=timeout, verify=tls_verify, allow_redirects=True)
             resp.raise_for_status()
         except Exception:
+            logger.warning("_discover_urls: skipping %s", norm, exc_info=True)
             continue
 
         final_url = resp.url.split("#")[0]

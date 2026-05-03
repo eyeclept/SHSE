@@ -335,6 +335,49 @@ def test_vectorize_pending_skips_on_llm_failure():
     os_client.update.assert_not_called()
 
 
+def test_vectorize_pending_all_docs_processed_across_pages():
+    """
+    Input: None
+    Output: None
+    Details:
+        Regression test for the from/size pagination skip bug. When docs are
+        spread across two pages, all docs must be attempted and vectorized.
+        The fix collects all docs before updating, so the result set does not
+        shift during processing and no docs are skipped.
+    """
+    from celery_worker.tasks.vectorize import _vectorize_pending_impl
+
+    page1_hits = [
+        {"_id": "id1", "_source": {"text": "doc one"}},
+        {"_id": "id2", "_source": {"text": "doc two"}},
+    ]
+    page2_hits = [
+        {"_id": "id3", "_source": {"text": "doc three"}},
+    ]
+    os_client = MagicMock()
+    os_client.search.side_effect = [
+        {"hits": {"hits": page1_hits}},   # collection page 0
+        {"hits": {"hits": page2_hits}},   # collection page 1
+        {"hits": {"hits": []}},           # collection page 2: empty sentinel
+    ]
+
+    llm_session = MagicMock()
+    embed_resp = MagicMock()
+    embed_resp.raise_for_status.return_value = None
+    embed_resp.json.return_value = {"data": [{"embedding": [0.1] * 768}]}
+    llm_session.post.return_value = embed_resp
+
+    vectorized, attempted = _vectorize_pending_impl(
+        os_client=os_client, llm_session=llm_session, page_size=2
+    )
+
+    assert attempted == 3
+    assert vectorized == 3
+    assert os_client.update.call_count == 3
+    updated_ids = {c.kwargs["id"] for c in os_client.update.call_args_list}
+    assert updated_ids == {"id1", "id2", "id3"}
+
+
 def test_scheduled_crawl_dispatches_by_nickname(db_session, service_target):
     """
     Input: None

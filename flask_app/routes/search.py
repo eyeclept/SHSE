@@ -8,15 +8,20 @@ Description:
     and user settings.
 """
 # Imports
+import logging
 import math
 
 from flask import Blueprint, render_template, request, session
 from flask_login import current_user
 from flask_app.services.opensearch import get_client
 from flask_app.services.search import bm25_body
+from flask_app.services.query_preprocessor import (
+    strip_preamble, normalize, strip_stopwords, expand_synonyms,
+)
 
 # Globals
 search_bp = Blueprint("search", __name__)
+logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 10
 _INDEX_NAME = "shse_pages"
@@ -51,6 +56,7 @@ def _get_stats():
         hits = last_resp["hits"]["hits"]
         last_crawl = hits[0]["_source"].get("crawled_at", "")[:10] if hits else "never"
     except Exception:
+        logger.warning("OpenSearch unavailable — returning zero stats", exc_info=True)
         doc_count = 0
         svc_count = 0
         service_names = []
@@ -93,6 +99,8 @@ def results():
     except (ValueError, TypeError):
         page = 1
 
+    preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q)))) if q else q
+
     result_rows = []
     total = 0
     took_ms = 0
@@ -104,7 +112,7 @@ def results():
         try:
             client = get_client()
             body = bm25_body(
-                q, page=page, page_size=_PAGE_SIZE,
+                preprocessed_q, page=page, page_size=_PAGE_SIZE,
                 highlight_tags=('<strong class="shse-hit">', "</strong>"),
             )
             resp = client.search(index=_INDEX_NAME, body=body)
@@ -139,7 +147,7 @@ def results():
                 _save_history(q)
 
         except Exception:
-            pass
+            logger.warning("BM25 search failed", exc_info=True)
 
         # Semantic search runs asynchronously via HTMX (/api/semantic).
         # show_bm25_warning is only shown here if we can quickly determine
@@ -150,6 +158,7 @@ def results():
     return render_template(
         "results.html",
         q=q,
+        preprocessed_q=preprocessed_q if preprocessed_q != q else None,
         tab=tab,
         results=result_rows,
         total=total,
@@ -180,7 +189,7 @@ def _save_history(query):
         db.session.add(row)
         db.session.commit()
     except Exception:
-        pass
+        logger.warning("Failed to save search history", exc_info=True)
 
 
 @search_bp.route("/history")

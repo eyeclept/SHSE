@@ -8,6 +8,8 @@ Description:
     Local password auth is on by default. SSO (OIDC) is optional via SSO_ENABLED.
 """
 # Imports
+import logging
+
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 from flask_login import login_user, logout_user
 from flask_app import db, oauth
@@ -15,6 +17,7 @@ from flask_app.models.user import User
 
 # Globals
 auth_bp = Blueprint("auth", __name__)
+logger = logging.getLogger(__name__)
 
 # Functions
 @auth_bp.route("/login", methods=["GET", "POST"])

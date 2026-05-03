@@ -9,6 +9,7 @@ Description:
     All routes require admin role; enforced by @admin_required.
 """
 # Imports
+import logging
 import time
 from datetime import datetime, timedelta
 from functools import wraps
@@ -23,6 +24,7 @@ from sqlalchemy import text
 
 # Globals
 admin_bp = Blueprint("admin", __name__)
+logger = logging.getLogger(__name__)
 
 _INDEX_NAME = "shse_pages"
 _PROBE_TIMEOUT = 3   # seconds per health probe
@@ -62,6 +64,8 @@ def _check_services():
     from flask_app import db
 
     results = {}
+
+    # TODO: these should be threaded, they don't need to be in sequence
 
     # OpenSearch
     try:
@@ -192,6 +196,7 @@ def _get_index_stats(client=None):
             "indexed_24h": 0,
         }
     except Exception:
+        logger.warning("OpenSearch unavailable — returning zero index stats", exc_info=True)
         return {
             "docs": 0, "services": 0, "last_crawl": "—",
             "vector_coverage_pct": 0, "queue_depth": 0, "indexed_24h": 0,
@@ -272,7 +277,7 @@ def _target_to_dict(t):
         try:
             sched = _yaml.safe_load(t.schedule_yaml) or {}
         except Exception:
-            pass
+            logger.warning("_target_to_dict: malformed schedule_yaml for target %s", t.id, exc_info=True)
     return {
         "id": t.id,
         "target_type": t.target_type,
@@ -594,7 +599,7 @@ def job_logs(job_id):
             if ar.failed():
                 result["traceback"] = str(ar.traceback)
         except Exception:
-            pass
+            logger.warning("Failed to fetch Celery traceback for job %s", job_id, exc_info=True)
 
     return jsonify(result)
 
@@ -684,7 +689,7 @@ def crawler_config():
                 try:
                     d["schedule"] = _yaml.safe_load(t.schedule_yaml)
                 except Exception:
-                    pass
+                    logger.warning("YAML export: malformed schedule_yaml for target %s", t.id, exc_info=True)
             target_dicts.append(d)
         yaml_text = _yaml.dump({"defaults": {}, "targets": target_dicts},
                                default_flow_style=False, allow_unicode=True)
@@ -746,6 +751,7 @@ def index_ops():
             .get("total", {}).get("store", {}).get("size_in_bytes", 0) / 1e6, 1
         )
     except Exception:
+        logger.warning("Failed to fetch OpenSearch store size", exc_info=True)
         store_mb = 0
 
     return render_template(

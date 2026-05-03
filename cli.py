@@ -17,8 +17,11 @@ Usage:
 """
 # Imports
 import argparse
+import logging
 import os
 import sys
+
+logger = logging.getLogger(__name__)
 
 # Globals
 _COMMANDS = {}
@@ -121,7 +124,7 @@ def cmd_list_targets(_args):
                     s = _yaml.safe_load(t.schedule_yaml)
                     sched = s.get("frequency", "") if s else ""
                 except Exception:
-                    pass
+                    logger.warning("list-targets: malformed schedule_yaml for target %s", t.id, exc_info=True)
             print(fmt.format(
                 t.id,
                 (t.nickname or "")[:24],

@@ -8,12 +8,24 @@ Description:
     Beat handles scheduled crawls defined in the YAML crawler config.
 """
 # Imports
+import logging
 import os
+from logging.handlers import RotatingFileHandler
 
 from celery import Celery
 
 # Globals
 _REDIS_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+
+_log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
+os.makedirs(_log_dir, exist_ok=True)
+_fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
+_celery_handler = RotatingFileHandler(
+    os.path.join(_log_dir, "celery.log"), maxBytes=5 * 1024 * 1024, backupCount=3
+)
+_celery_handler.setFormatter(logging.Formatter(_fmt))
+logging.root.setLevel(logging.INFO)
+logging.root.addHandler(_celery_handler)
 
 celery = Celery(
     "shse",
@@ -52,6 +64,8 @@ def load_beat_schedule(_db_session=None):
     from flask_app.config_parser import to_beat_entry
     from flask_app.models.crawler_target import CrawlerTarget
 
+    _logger = logging.getLogger(__name__)
+
     def _build(db_session):
         targets = db_session.query(CrawlerTarget).all()
         schedule = {}
@@ -61,6 +75,11 @@ def load_beat_schedule(_db_session=None):
             try:
                 sched_dict = _yaml.safe_load(t.schedule_yaml)
             except Exception:
+                _logger.warning(
+                    "load_beat_schedule: malformed schedule_yaml for target %s — skipping",
+                    t.nickname or t.id,
+                    exc_info=True,
+                )
                 continue
             entry = to_beat_entry({
                 "type": t.target_type,
@@ -82,7 +101,7 @@ def load_beat_schedule(_db_session=None):
         with app.app_context():
             _build(db.session)
     except Exception:
-        pass
+        _logger.exception("load_beat_schedule failed — Beat starts with empty schedule")
 
 
 @celery.on_after_finalize.connect
