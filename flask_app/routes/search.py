@@ -43,7 +43,7 @@ def _get_stats():
         agg_resp = client.search(index=_INDEX_NAME, body={
             "size": 0,
             "aggs": {
-                "services": {"terms": {"field": "service_nickname", "size": 100}},
+                "services": {"terms": {"field": "service_nickname.keyword", "size": 100}},
             },
         })
         buckets = agg_resp["aggregations"]["services"]["buckets"]

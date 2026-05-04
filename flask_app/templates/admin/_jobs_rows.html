@@ -56,8 +56,9 @@
                                   color:var(--shse-text-muted);">{{ j.took or '—' }}</td>
     <td style="padding:12px 14px; text-align:right; white-space:nowrap;">
       {% if j.message or j.status == 'failure' %}
+        {% set _log_color = 'var(--shse-danger)' if j.status in ('failure', 'partial', 'deferred') else 'var(--shse-text-muted)' %}
         <button type="button" class="shse-btn shse-btn-ghost"
-                style="font-size:12px; color:var(--shse-danger);"
+                style="font-size:12px; color:{{ _log_color }};"
                 onclick="showJobLogs({{ j.id }})">
           {{ icon.alert(12) }} Logs
         </button>

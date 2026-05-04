@@ -175,23 +175,55 @@
     </div>
     {% endif %}
 
-    {# Semantic rail — fetched asynchronously so BM25 renders immediately #}
+    {# Semantic rail — three sections load independently via HTMX #}
     {% if q %}
-    <aside id="semantic-rail"
-           hx-get="{{ url_for('api.semantic', q=q) }}"
-           hx-trigger="load"
-           hx-swap="outerHTML">
+    <style>@keyframes shse-spin { to { transform:rotate(360deg); } }</style>
+
+    {# 1. Suggested searches — rewriter model, no vector dependency #}
+    <div hx-get="{{ url_for('api.semantic_chips', q=q) }}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+      <div class="shse-card" style="padding:12px 14px;">
+        <div style="display:flex; align-items:center; gap:8px; color:var(--shse-text-muted);">
+          <span aria-hidden="true"
+                style="display:inline-block; width:12px; height:12px; flex-shrink:0;
+                       border:2px solid var(--shse-text-faint); border-top-color:transparent;
+                       border-radius:50%; animation:shse-spin .7s linear infinite;"></span>
+          <span style="font-size:11px; color:var(--shse-text-faint);">Suggested searches…</span>
+        </div>
+      </div>
+    </div>
+
+    {# 2. AI summary — generative model #}
+    <div hx-get="{{ url_for('api.semantic_summary', q=q) }}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
       <div class="shse-card" style="padding:14px;">
         <div style="display:flex; align-items:center; gap:10px; color:var(--shse-text-muted);">
           <span aria-hidden="true"
                 style="display:inline-block; width:14px; height:14px; flex-shrink:0;
                        border:2px solid var(--shse-accent); border-top-color:transparent;
                        border-radius:50%; animation:shse-spin .7s linear infinite;"></span>
-          <span style="font-size:13px;">Loading AI summary…</span>
+          <span style="font-size:13px;">AI summary…</span>
         </div>
       </div>
-    </aside>
-    <style>@keyframes shse-spin { to { transform:rotate(360deg); } }</style>
+    </div>
+
+    {# 3. Semantic matches — embedding model #}
+    <div hx-get="{{ url_for('api.semantic_vector', q=q) }}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+      <div class="shse-card" style="padding:14px;">
+        <div style="display:flex; align-items:center; gap:10px; color:var(--shse-text-muted);">
+          <span aria-hidden="true"
+                style="display:inline-block; width:14px; height:14px; flex-shrink:0;
+                       border:2px solid var(--shse-accent); border-top-color:transparent;
+                       border-radius:50%; animation:shse-spin .7s linear infinite;"></span>
+          <span style="font-size:13px;">Semantic matches…</span>
+        </div>
+      </div>
+    </div>
+
     {% endif %}
 
   </div>

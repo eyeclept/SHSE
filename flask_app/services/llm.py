@@ -77,14 +77,19 @@ def generate_summary(context_chunks, query, session=None):
         {
             "role": "system",
             "content": (
-                "You are a search assistant for a private homelab. "
-                "Answer using only the context provided. "
-                "If the context does not contain the answer, say so."
+                "You know exactly the following facts and nothing else:\n\n"
+                f"{context}\n\n"
+                "Rules you must never break:\n"
+                "1. Answer using only the facts above. Never use your training knowledge.\n"
+                "2. If the facts above do not contain the answer, respond with exactly: "
+                "\"The index doesn't contain information about that.\"\n"
+                "3. Answer directly in 1-3 sentences. Do not say 'based on', 'according to', "
+                "'the context', 'provided information', or any phrase that references a source."
             ),
         },
         {
             "role": "user",
-            "content": f"Context:\n{context}\n\nQuestion: {query}",
+            "content": query,
         },
     ]
     payload = {"model": _LLM_GEN_MODEL, "messages": messages}

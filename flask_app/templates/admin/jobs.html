@@ -133,7 +133,7 @@ function showJobLogs(jobId) {
     .then(function(r) { return r.json(); })
     .then(function(d) {
       var text = '';
-      if (d.message)   text += 'Error: ' + d.message + '\n\n';
+      if (d.message)   text += d.message + '\n\n';
       if (d.traceback) text += d.traceback;
       body.textContent = text || '(no details recorded)';
     })

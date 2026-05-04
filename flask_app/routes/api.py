@@ -9,6 +9,7 @@ Description:
     the index without parsing HTML.
 """
 # Imports
+import hashlib
 import logging
 import math
 
@@ -26,6 +27,34 @@ logger = logging.getLogger(__name__)
 
 _INDEX_NAME = "shse_pages"
 _PAGE_SIZE = 10
+_SEMANTIC_CACHE_TTL = 3600  # 1 hour
+
+
+def _redis():
+    """Return a Redis client using the app's configured host/port."""
+    import redis
+    from flask_app.config import Config
+    return redis.Redis(host=Config.REDIS_HOST, port=Config.REDIS_PORT, db=1)
+
+
+def _cache_key(component, q):
+    digest = hashlib.sha256(q.encode()).hexdigest()[:16]
+    return f"shse:semantic:{component}:{digest}"
+
+
+def _cache_get(component, q):
+    try:
+        val = _redis().get(_cache_key(component, q))
+        return val.decode() if val else None
+    except Exception:
+        return None
+
+
+def _cache_set(component, q, html):
+    try:
+        _redis().setex(_cache_key(component, q), _SEMANTIC_CACHE_TTL, html)
+    except Exception:
+        pass
 
 
 # Functions
@@ -160,7 +189,7 @@ def stats():
         count = client.count(index=_INDEX_NAME).get("count", 0)
         agg = client.search(index=_INDEX_NAME, body={
             "size": 0,
-            "aggs": {"svc": {"cardinality": {"field": "service_nickname"}}},
+            "aggs": {"svc": {"cardinality": {"field": "service_nickname.keyword"}}},
         })
         svc_count = agg["aggregations"]["svc"]["value"]
         last = client.search(index=_INDEX_NAME, body={
@@ -174,46 +203,84 @@ def stats():
         return jsonify({"docs": 0, "services": 0, "last_crawl": None})
 
 
-@api_bp.route("/semantic")
-def semantic():
+@api_bp.route("/semantic/vector")
+def semantic_vector():
     """
     Input: q (query string)
-    Output: HTML fragment replacing the semantic rail aside element
+    Output: HTML fragment for the semantic matches section
     Details:
-        Called by HTMX on the results page after BM25 results have rendered.
-        Calls three independent functions so each degrades without blocking
-        the others:
-          1. get_vector_hits  — k-NN search (requires embedding model only)
-          2. _build_ai_summary — RAG summary (requires generative model)
-          3. generate_keywords — suggested searches (requires rewriter model)
-        Returns an empty aside only when q is blank; partial results are always
-        rendered when at least one function succeeds.
+        Runs k-NN vector search. Result cached in Redis for 1 hour.
+        Returns empty string when q is blank.
     """
     q = request.args.get("q", "").strip()
     if not q:
-        return "<aside></aside>"
+        return ""
+    cached = _cache_get("vector", q)
+    if cached:
+        return cached
 
-    from flask_app.services.search import get_vector_hits, _build_ai_summary
-    from flask_app.services.llm import generate_keywords
-
-    # 1. Semantic search — embedding model only; degrades to [] if down
+    from flask_app.services.search import get_vector_hits
     vector_hits, embedding_up = get_vector_hits(q)
 
-    # 2. AI summary — generative model; degrades to None if down or no context
-    ai_summary = _build_ai_summary(vector_hits, q)
+    html = render_template("_semantic_vector.html",
+                           vector_hits=vector_hits,
+                           show_bm25_warning=not embedding_up)
+    _cache_set("vector", q, html)
+    return html
 
-    # 3. Suggested searches — rewriter model; degrades to [] if down
-    context_for_chips = [h["snippet"] for h in vector_hits[:3]]
-    keyword_chips = generate_keywords(q, context_for_chips)
 
-    return render_template(
-        "_semantic_rail.html",
-        q=q,
-        vector_hits=vector_hits,
-        ai_summary=ai_summary,
-        show_bm25_warning=not embedding_up,
-        keyword_chips=keyword_chips,
+@api_bp.route("/semantic/summary")
+def semantic_summary():
+    """
+    Input: q (query string)
+    Output: HTML fragment for the AI summary section
+    Details:
+        Builds RAG summary from vector hits. Computes its own vector hits
+        (cached result from /semantic/vector will be a Redis hit on any
+        concurrent or repeat search). Result cached in Redis for 1 hour.
+    """
+    q = request.args.get("q", "").strip()
+    if not q:
+        return ""
+    cached = _cache_get("summary", q)
+    if cached:
+        return cached
+
+    from flask_app.services.search import get_vector_hits, _build_ai_summary
+    from flask_app.services.query_preprocessor import (
+        strip_preamble, normalize, strip_stopwords, expand_synonyms,
     )
+    preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q))))
+    vector_hits, _ = get_vector_hits(q)
+    ai_summary = _build_ai_summary(vector_hits, q, preprocessed_q=preprocessed_q)
+
+    html = render_template("_semantic_summary.html", ai_summary=ai_summary)
+    _cache_set("summary", q, html)
+    return html
+
+
+@api_bp.route("/semantic/chips")
+def semantic_chips():
+    """
+    Input: q (query string)
+    Output: HTML fragment for the suggested searches section
+    Details:
+        Generates keyword chips via the rewriter model. Independent of vector
+        hits. Result cached in Redis for 1 hour.
+    """
+    q = request.args.get("q", "").strip()
+    if not q:
+        return ""
+    cached = _cache_get("chips", q)
+    if cached:
+        return cached
+
+    from flask_app.services.llm import generate_keywords
+    keyword_chips = generate_keywords(q, [])
+
+    html = render_template("_semantic_chips.html", q=q, keyword_chips=keyword_chips)
+    _cache_set("chips", q, html)
+    return html
 
 
 @api_bp.route("/jobs/<int:job_id>/logs")

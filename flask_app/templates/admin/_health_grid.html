@@ -24,6 +24,23 @@
   {% set s = health.get(key, {'status': 'unknown', 'latency_ms': None, 'message': None}) %}
   {% set color, soft, text = _palette[s.status] %}
   <div class="shse-card" style="padding:14px;">
+    {% if s.message %}
+    <details>
+      <summary style="list-style:none; display:flex; align-items:center;
+                      gap:8px; margin-bottom:6px; cursor:pointer;">
+        <span style="width:8px; height:8px; border-radius:50%; background:{{ color }};
+                     box-shadow: 0 0 0 4px {{ soft }}; flex-shrink:0;"></span>
+        <span style="font-size:13px; font-weight:500;">{{ label }}</span>
+        <div style="flex:1;"></div>
+        <span style="font-size:11px; color:{{ color }}; text-transform:uppercase;
+                     letter-spacing:0.04em; text-decoration:underline dotted;
+                     cursor:pointer;">{{ text }}</span>
+      </summary>
+      <div style="font-size:11px; margin-top:2px; margin-bottom:6px; padding:6px 8px;
+                  border-radius:4px; background:{{ soft }};
+                  color:{{ color }}; word-break:break-word;">{{ s.message }}</div>
+    </details>
+    {% else %}
     <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
       <span style="width:8px; height:8px; border-radius:50%; background:{{ color }};
                    box-shadow: 0 0 0 4px {{ soft }};"></span>
@@ -32,16 +49,11 @@
       <span style="font-size:11px; color:{{ color }};
                    text-transform:uppercase; letter-spacing:0.04em;">{{ text }}</span>
     </div>
-    <div style="display:flex; gap:8px; align-items:center;
-                font-size:11px; color:var(--shse-text-faint);">
-      {% if s.latency_ms is not none %}
-        <span class="shse-mono">{{ s.latency_ms }}ms</span>
-      {% endif %}
-      {% if s.message %}
-        <span style="color:{{ 'var(--shse-danger)' if s.status == 'down' else 'var(--shse-text-muted)' }};">
-          {{ s.message }}
-        </span>
-      {% endif %}
+    {% endif %}
+    {% if s.latency_ms is not none %}
+    <div style="font-size:11px; color:var(--shse-text-faint);">
+      <span class="shse-mono">{{ s.latency_ms }}ms</span>
     </div>
+    {% endif %}
   </div>
 {% endfor %}

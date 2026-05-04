@@ -1,0 +1,30 @@
+{#
+  AI summary partial — rendered by GET /api/semantic/summary
+  Context: ai_summary {html, sources} | None
+#}
+{% import "_icons.html" as icon %}
+{% if ai_summary %}
+<details id="semantic-summary"
+         class="shse-card"
+         style="padding:0; overflow:hidden;
+                border-color:color-mix(in oklab, var(--shse-accent) 30%, var(--shse-border));"
+         open>
+  <summary style="display:flex; align-items:center; gap:8px;
+                  padding:10px 14px; cursor:pointer; list-style:none;">
+    <span style="color:var(--shse-accent); display:flex;">{{ icon.spark(14) }}</span>
+    <span style="font-size:12px; font-weight:600;
+                 text-transform:uppercase; letter-spacing:0.04em;">AI summary</span>
+  </summary>
+  <div style="border-top:1px solid var(--shse-border); padding:10px 14px 14px;">
+    <div style="font-size:12.5px; color:var(--shse-text); line-height:1.6;">
+      {{ ai_summary.html }}
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; margin-top:12px; flex-wrap:wrap;">
+      <span style="font-size:11px; color:var(--shse-text-faint);">sources:</span>
+      {% for s in ai_summary.sources %}
+        <span class="shse-pill" style="font-size:10px; padding:1px 6px;">{{ s }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</details>
+{% endif %}

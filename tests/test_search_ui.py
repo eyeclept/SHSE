@@ -134,22 +134,24 @@ def test_search_opensearch_down_returns_empty(client):
 
 def test_ai_summary_card_hidden_when_llm_unreachable(client):
     """
-    Input: GET /api/semantic?q=test when embedding model is down
-    Output: 200 HTML fragment with no ai_summary card
+    Input: GET /api/semantic/summary?q=test when embedding model is down
+    Output: 200 HTML fragment with no AI summary card (empty string)
     Details:
         Patches get_vector_hits to return ([], False) — embedding unavailable.
-        With no vector hits, _build_ai_summary returns None, so no AI summary card.
+        With no vector hits, _build_ai_summary returns None, so no card rendered.
     """
     with patch("flask_app.services.search.get_vector_hits", return_value=([], False)), \
-         patch("flask_app.services.llm.generate_keywords", return_value=[]):
-        r = client.get("/api/semantic?q=test")
+         patch("flask_app.services.search._build_ai_summary", return_value=None), \
+         patch("flask_app.routes.api._cache_get", return_value=None), \
+         patch("flask_app.routes.api._cache_set"):
+        r = client.get("/api/semantic/summary?q=test")
     assert r.status_code == 200
     assert b"AI summary" not in r.data
 
 
 def test_ai_summary_card_shown_when_llm_available(client):
     """
-    Input: GET /api/semantic?q=animal with embedding and summary available
+    Input: GET /api/semantic/summary?q=animal with embedding and summary available
     Output: 200 HTML fragment containing 'AI summary'
     """
     from markupsafe import Markup
@@ -159,8 +161,9 @@ def test_ai_summary_card_shown_when_llm_available(client):
 
     with patch("flask_app.services.search.get_vector_hits", return_value=(fake_hits, True)), \
          patch("flask_app.services.search._build_ai_summary", return_value=fake_summary), \
-         patch("flask_app.services.llm.generate_keywords", return_value=[]):
-        r = client.get("/api/semantic?q=animal")
+         patch("flask_app.routes.api._cache_get", return_value=None), \
+         patch("flask_app.routes.api._cache_set"):
+        r = client.get("/api/semantic/summary?q=animal")
     assert r.status_code == 200
     assert b"AI summary" in r.data
 

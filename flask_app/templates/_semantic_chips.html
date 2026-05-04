@@ -1,0 +1,22 @@
+{#
+  Suggested searches partial — rendered by GET /api/semantic/chips
+  Context: q str, keyword_chips list[str]
+#}
+{% if keyword_chips %}
+<div id="semantic-chips" class="shse-card" style="padding:12px 14px;">
+  <div style="font-size:11px; color:var(--shse-text-faint);
+              text-transform:uppercase; letter-spacing:0.06em;
+              margin-bottom:8px;">Suggested searches</div>
+  <div style="display:flex; flex-wrap:wrap; gap:6px;">
+    {% for chip in keyword_chips %}
+      <a href="{{ url_for('search.results', q=chip) }}"
+         class="shse-pill"
+         style="background:var(--shse-surface-2); color:var(--shse-text-muted);
+                border-color:var(--shse-border); font-size:11px;
+                text-decoration:none; cursor:pointer;">
+        {{ chip }}
+      </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

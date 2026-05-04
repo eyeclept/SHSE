@@ -1,0 +1,46 @@
+{#
+  Semantic matches partial — rendered by GET /api/semantic/vector
+  Context: vector_hits list[{score, service, url, title, snippet}],
+           show_bm25_warning bool
+#}
+{% import "_icons.html" as icon %}
+{% if show_bm25_warning %}
+<div id="semantic-vector-warning"
+     class="shse-card"
+     style="padding:12px 14px; border-color:var(--shse-warning);
+            background:var(--shse-warning-soft);">
+  <div style="display:flex; align-items:flex-start; gap:8px;">
+    <span style="color:var(--shse-warning); flex-shrink:0; margin-top:2px;">{{ icon.alert(13) }}</span>
+    <p style="margin:0; font-size:12px; color:var(--shse-text-muted); line-height:1.5;">
+      <strong style="color:var(--shse-warning);">Keyword-only results.</strong>
+      LLM API unreachable — new documents may not have embeddings; semantic results may be incomplete.
+    </p>
+  </div>
+</div>
+{% endif %}
+
+{% if vector_hits %}
+<div id="semantic-vector" class="shse-card" style="padding:14px;">
+  <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+    <span style="color:var(--shse-accent); display:flex;">{{ icon.spark(14) }}</span>
+    <span style="font-size:12px; font-weight:600; letter-spacing:0.04em;
+                 text-transform:uppercase; color:var(--shse-text-muted);">Semantic matches</span>
+  </div>
+  <ul style="list-style:none; padding:0; margin:0;
+             display:flex; flex-direction:column; gap:14px;">
+    {% for v in vector_hits %}
+    <li>
+      <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:2px;">
+        <span class="shse-pill shse-pill-accent" style="font-size:10px; padding:1px 6px;">
+          {{ "%.2f"|format(v.score) }}
+        </span>
+        <span style="font-size:11px; color:var(--shse-text-faint);">{{ v.service }}</span>
+      </div>
+      <a href="{{ v.url }}" style="font-size:13px; font-weight:500; display:block;">{{ v.title }}</a>
+      <p class="shse-mono" style="margin:3px 0 0; font-size:11px;
+                                   color:var(--shse-text-muted); line-height:1.45;">{{ v.snippet }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}

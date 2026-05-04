@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 logger = logging.getLogger(__name__)
 _INDEX_NAME = "shse_pages"
 _PAGE_SIZE = 10
-_VECTOR_K = 5
+_VECTOR_K = 10
 _RRF_K = 60
 
 
@@ -58,7 +58,7 @@ def bm25_body(q, page=1, page_size=_PAGE_SIZE, highlight_tags=None):
             "fragment_size": 180,
         },
         "aggs": {
-            "by_service": {"terms": {"field": "service_nickname", "size": 20}},
+            "by_service": {"terms": {"field": "service_nickname.keyword", "size": 20}},
         },
     }
 
@@ -158,6 +158,7 @@ def get_vector_hits(q, os_client=None, llm_session=None):
         src = h.get("_source", {})
         text = src.get("text", "")
         hits.append({
+            "_id":     h.get("_id", ""),
             "score":   round(h.get("_score", 0.0), 3),
             "service": src.get("service_nickname", ""),
             "url":     src.get("url", ""),
@@ -169,26 +170,59 @@ def get_vector_hits(q, os_client=None, llm_session=None):
     return hits, True
 
 
-def _build_ai_summary(vector_hits, q, llm_session=None):
+def _build_ai_summary(vector_hits, q, llm_session=None, os_client=None, preprocessed_q=None):
     """
     Input:
         vector_hits - list of hit dicts from get_vector_hits
         q           - str, search query
         llm_session - optional requests.Session (injectable for tests)
+        os_client   - optional OpenSearch client (injectable for tests)
     Output:
         dict {html, sources} or None if generative model unavailable or no context
     Details:
-        Calls generate_summary with the context text from the top hits.
+        Merges vector hits with a BM25 pass over the same query so that
+        keyword-relevant chunks (e.g. a "list of X" article whose current entry
+        is semantically distant from a generic query) are included alongside the
+        nearest-neighbour vector hits. Deduplicates by OpenSearch document ID.
         XSS-safe: LLM output is escaped before being marked safe in the template.
-        Independent of the embedding model — only the generative model is needed.
     """
     from flask_app.services.llm import generate_summary
+    from flask_app.services.opensearch import bm25_search, get_client
     from markupsafe import escape, Markup
 
-    if not vector_hits:
+    # Augment vector hits with BM25 hits; use expanded query when available
+    # so synonym expansion improves keyword recall for any topic.
+    bm25_query = preprocessed_q or q
+    try:
+        client = os_client or get_client()
+        bm25_raw = bm25_search(bm25_query, k=10, client=client)
+        bm25_contexts = {}
+        for hit in bm25_raw:
+            src = hit.get("_source", {})
+            bm25_contexts[hit["_id"]] = src.get("text", "")[:500]
+    except Exception:
+        logger.warning("_build_ai_summary: BM25 augmentation failed", exc_info=True)
+        bm25_contexts = {}
+
+    # Merge: BM25 hits first (keyword-precise for factual queries), then vector hits
+    # for semantic coverage. Deduplicate by doc ID; cap at 8 total to keep context
+    # focused — diluting with 15+ chunks degrades LLM accuracy on factual questions.
+    seen_ids = set()
+    context_chunks = []
+    for doc_id, text in bm25_contexts.items():
+        if doc_id not in seen_ids:
+            context_chunks.append(text)
+            seen_ids.add(doc_id)
+    for h in vector_hits:
+        hid = h.get("_id", "")
+        if hid not in seen_ids:
+            context_chunks.append(h["context"])
+            seen_ids.add(hid)
+
+    context_chunks = context_chunks[:8]
+    if not context_chunks:
         return None
 
-    context_chunks = [h["context"] for h in vector_hits]
     summary_text = generate_summary(context_chunks, q, session=llm_session)
     if not summary_text:
         return None

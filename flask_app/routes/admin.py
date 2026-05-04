@@ -74,10 +74,25 @@ def _check_services():
         health = client.cluster.health()
         ms = int((time.monotonic() - t0) * 1000)
         status_map = {"green": "up", "yellow": "degraded", "red": "down"}
+        os_status = status_map.get(health.get("status", "red"), "down")
+        num_nodes = health.get("number_of_nodes", 1)
+        unassigned = health.get("unassigned_shards", 0)
+        relocating = health.get("relocating_shards", 0)
+        detail = None
+        if os_status == "degraded":
+            parts = []
+            if unassigned:
+                note = " — replica shards cannot be placed on a single-node cluster (harmless)" if num_nodes == 1 else ""
+                parts.append(f"{unassigned} unassigned shard(s){note}")
+            if relocating:
+                parts.append(f"{relocating} relocating shard(s)")
+            detail = "; ".join(parts) if parts else "cluster status yellow"
+        elif os_status == "down":
+            detail = f"cluster status red — {unassigned} unassigned shard(s)"
         results["opensearch"] = {
-            "status": status_map.get(health.get("status", "red"), "down"),
+            "status": os_status,
             "latency_ms": ms,
-            "message": None,
+            "message": detail,
         }
     except Exception as exc:
         results["opensearch"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
@@ -178,7 +193,7 @@ def _get_index_stats(client=None):
         agg_resp = c.search(index=_INDEX_NAME, body={
             "size": 0,
             "aggs": {
-                "svc": {"cardinality": {"field": "service_nickname"}},
+                "svc": {"cardinality": {"field": "service_nickname.keyword"}},
                 "vectorized": {"filter": {"term": {"vectorized": True}}},
             },
         })

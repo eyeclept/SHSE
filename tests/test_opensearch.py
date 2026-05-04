@@ -383,8 +383,9 @@ def test_idempotent_upsert(mock_client):
     expected_hash = hashlib.sha256(chunk_text.encode()).hexdigest()
     doc_id = hashlib.sha256(f"http://host/page0".encode()).hexdigest()
 
-    # Simulate existing document with matching content_hash — should skip
-    mock_client.get.return_value = {"_source": {"content_hash": expected_hash}}
+    # Simulate existing document with matching content_hash AND current chunk_algo — should skip
+    from flask_app.services.opensearch import CHUNK_ALGO_VERSION
+    mock_client.get.return_value = {"_source": {"content_hash": expected_hash, "chunk_algo": CHUNK_ALGO_VERSION}}
     mock_client.index.return_value = {"result": "updated", "_id": doc_id}
 
     responses = index_document(
@@ -546,7 +547,7 @@ def test_delete_by_nickname(mock_client):
     call_args = mock_client.delete_by_query.call_args
     body = call_args.kwargs.get("body") or call_args.args[1]
     assert call_args.kwargs.get("index") == INDEX_NAME or call_args.args[0] == INDEX_NAME
-    assert body["query"]["term"]["service_nickname"] == "my-service"
+    assert body["query"]["term"]["service_nickname.keyword"] == "my-service"
     assert result["deleted"] == 3
     assert result["failures"] == []
 
@@ -573,7 +574,7 @@ def test_stale_removal(mock_client):
     must = body["query"]["bool"]["must"]
     term_clause = next(c for c in must if "term" in c)
     range_clause = next(c for c in must if "range" in c)
-    assert term_clause["term"]["service_nickname"] == "my-svc"
+    assert term_clause["term"]["service_nickname.keyword"] == "my-svc"
     assert range_clause["range"]["crawled_at"]["lt"] == run_start
     assert result["deleted"] == 5
     assert result["failures"] == []

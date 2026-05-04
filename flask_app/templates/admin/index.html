@@ -111,6 +111,15 @@
           bar.style.animation = 'poll-progress 5s linear forwards';
         }
       });
+      // Cancel the poll request if any detail panel is currently open
+      // so an expanded card is not collapsed by the swap.
+      document.body.addEventListener('htmx:beforeRequest', function(e) {
+        if (e.detail.target && e.detail.target.id === 'health-grid') {
+          if (e.detail.target.querySelector('details[open]')) {
+            e.preventDefault();
+          }
+        }
+      });
     </script>
 
     <div id="health-grid"

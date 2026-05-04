@@ -81,7 +81,7 @@ def cmd_stats(_args):
         count = client.count(index="shse_pages").get("count", 0)
         agg = client.search(index="shse_pages", body={
             "size": 0,
-            "aggs": {"svc": {"cardinality": {"field": "service_nickname"}}},
+            "aggs": {"svc": {"cardinality": {"field": "service_nickname.keyword"}}},
         })
         svc_count = agg["aggregations"]["svc"]["value"]
         last = client.search(index="shse_pages", body={

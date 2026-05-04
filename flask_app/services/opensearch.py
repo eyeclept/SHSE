@@ -34,6 +34,10 @@ EMBEDDING_DIM = 768
 _enc = tiktoken.get_encoding("cl100k_base")
 _SAFE_EMBED_TOKENS = 1600  # conservative guard under nomic-embed-text's 2048-token limit
 
+# Increment when _chunk_text algorithm changes (overlap, size, tokenizer).
+# Stored on every chunk so stale chunks from old algorithms are detectable.
+CHUNK_ALGO_VERSION = 2  # v1=non-overlapping 800w, v2=800w/50w-overlap+tiktoken
+
 INDEX_BODY = {
     "settings": {
         "index": {
@@ -55,6 +59,7 @@ INDEX_BODY = {
             "vectorized":       {"type": "boolean"},
             "source_type":      {"type": "keyword"},
             "content_hash":     {"type": "keyword"},
+            "chunk_algo":       {"type": "short"},
         }
     },
 }
@@ -187,7 +192,9 @@ def index_document(url, port, title, crawled_at, service_nickname, content_type,
 
         try:
             existing = client.get(index=INDEX_NAME, id=doc_id)
-            if existing["_source"].get("content_hash") == content_hash:
+            src = existing["_source"]
+            if (src.get("content_hash") == content_hash
+                    and src.get("chunk_algo") == CHUNK_ALGO_VERSION):
                 continue
         except NotFoundError:
             pass
@@ -211,6 +218,7 @@ def index_document(url, port, title, crawled_at, service_nickname, content_type,
             "vectorized": vectorized,
             "source_type": source_type,
             "content_hash": content_hash,
+            "chunk_algo": CHUNK_ALGO_VERSION,
         }
         resp = client.index(index=INDEX_NAME, id=doc_id, body=doc)
         responses.append(resp)
@@ -337,7 +345,7 @@ def delete_by_nickname(service_nickname, client=None):
     body = {
         "query": {
             "term": {
-                "service_nickname": service_nickname,
+                "service_nickname.keyword": service_nickname,
             }
         }
     }
@@ -365,7 +373,7 @@ def delete_stale(service_nickname, run_start, client=None):
         "query": {
             "bool": {
                 "must": [
-                    {"term": {"service_nickname": service_nickname}},
+                    {"term": {"service_nickname.keyword": service_nickname}},
                     {"range": {"crawled_at": {"lt": run_start}}},
                 ]
             }
