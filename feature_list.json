@@ -456,25 +456,25 @@
     }
   },
   "epic_15_mcp_server": {
-    "description": "Post-MVP FastAPI MCP server with search_homelab tool",
+    "description": "Post-MVP FastAPI MCP server with search_lab tool",
     "items": {
       "fastapi_skeleton": {
-        "passes": false
+        "passes": true
       },
       "search_homelab_tool": {
-        "passes": false
+        "passes": true
       },
       "mcp_in_compose": {
-        "passes": false
+        "passes": true
       },
       "env_keys_added": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
-        "passes": false
+        "passes": true
       },
       "docs_mcp_md": {
-        "passes": false
+        "passes": true
       }
     }
   },
