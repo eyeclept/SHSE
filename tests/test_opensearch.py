@@ -101,6 +101,7 @@ def test_index_schema_fields():
     assert props["embedding"]["dimension"] == EMBEDDING_DIM
     assert props["title"]["type"] == "text"
     assert props["crawled_at"]["type"] == "date"
+    assert props["last_changed_at"]["type"] == "date"
     assert props["service_nickname"]["type"] == "keyword"
     assert props["content_type"]["type"] == "keyword"
     assert props["vectorized"]["type"] == "boolean"
@@ -383,7 +384,8 @@ def test_idempotent_upsert(mock_client):
     expected_hash = hashlib.sha256(chunk_text.encode()).hexdigest()
     doc_id = hashlib.sha256(f"http://host/page0".encode()).hexdigest()
 
-    # Simulate existing document with matching content_hash AND current chunk_algo — should skip
+    # Simulate existing document with matching content_hash AND current chunk_algo
+    # — full re-index must be skipped, but crawled_at must be touched via update.
     from flask_app.services.opensearch import CHUNK_ALGO_VERSION
     mock_client.get.return_value = {"_source": {"content_hash": expected_hash, "chunk_algo": CHUNK_ALGO_VERSION}}
     mock_client.index.return_value = {"result": "updated", "_id": doc_id}
@@ -400,11 +402,16 @@ def test_idempotent_upsert(mock_client):
         client=mock_client,
     )
 
-    # content_hash matches — write must be skipped
+    # content_hash matches — full re-index skipped; only crawled_at updated, NOT last_changed_at
     mock_client.index.assert_not_called()
+    mock_client.update.assert_called_once_with(
+        index=INDEX_NAME, id=doc_id,
+        body={"doc": {"crawled_at": "2026-04-23T00:00:00"}},
+    )
+    assert "last_changed_at" not in mock_client.update.call_args.kwargs["body"]["doc"]
     assert responses == []
 
-    # Now simulate stale document (different hash) — write must proceed
+    # Changed content (different hash) — full re-index with both timestamps
     mock_client.reset_mock()
     mock_client.get.return_value = {"_source": {"content_hash": "stale_hash"}}
     mock_client.index.return_value = {"result": "updated", "_id": doc_id}
@@ -426,9 +433,10 @@ def test_idempotent_upsert(mock_client):
     assert call_kwargs.kwargs.get("id") == doc_id or call_kwargs.args[1] == doc_id
     written_doc = call_kwargs.kwargs.get("body") or call_kwargs.args[2]
     assert written_doc["content_hash"] == expected_hash
+    assert written_doc["last_changed_at"] == "2026-04-23T00:00:00"
     assert len(responses) == 1
 
-    # New document (NotFoundError on get) — write must proceed
+    # New document (NotFoundError on get) — write with both timestamps
     mock_client.reset_mock()
     mock_client.get.side_effect = NotFoundError(404, "not found", {})
     mock_client.index.return_value = {"result": "created", "_id": doc_id}
@@ -446,6 +454,8 @@ def test_idempotent_upsert(mock_client):
     )
 
     mock_client.index.assert_called_once()
+    new_doc = mock_client.index.call_args.kwargs.get("body") or mock_client.index.call_args.args[2]
+    assert new_doc["last_changed_at"] == "2026-04-23T00:00:00"
     assert len(responses) == 1
 
 
@@ -547,7 +557,7 @@ def test_delete_by_nickname(mock_client):
     call_args = mock_client.delete_by_query.call_args
     body = call_args.kwargs.get("body") or call_args.args[1]
     assert call_args.kwargs.get("index") == INDEX_NAME or call_args.args[0] == INDEX_NAME
-    assert body["query"]["term"]["service_nickname.keyword"] == "my-service"
+    assert body["query"]["term"]["service_nickname"] == "my-service"
     assert result["deleted"] == 3
     assert result["failures"] == []
 
@@ -574,7 +584,7 @@ def test_stale_removal(mock_client):
     must = body["query"]["bool"]["must"]
     term_clause = next(c for c in must if "term" in c)
     range_clause = next(c for c in must if "range" in c)
-    assert term_clause["term"]["service_nickname.keyword"] == "my-svc"
+    assert term_clause["term"]["service_nickname"] == "my-svc"
     assert range_clause["range"]["crawled_at"]["lt"] == run_start
     assert result["deleted"] == 5
     assert result["failures"] == []

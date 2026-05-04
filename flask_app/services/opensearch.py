@@ -13,7 +13,8 @@ Description:
         text            text        chunk content (BM25 target)
         embedding       knn_vector  cosine similarity; null if deferred
         title           text        page title from Nutch
-        crawled_at      date        ingest timestamp
+        crawled_at      date        last time the crawler visited this URL (updated every crawl)
+        last_changed_at date        last time the chunk content actually changed (null until first change detected)
         service_nickname keyword    user-defined label
         content_type    keyword     MIME type
         vectorized      boolean     false until LLM API processes the chunk
@@ -54,6 +55,7 @@ INDEX_BODY = {
             "embedding":        {"type": "knn_vector", "dimension": EMBEDDING_DIM},
             "title":            {"type": "text"},
             "crawled_at":       {"type": "date"},
+            "last_changed_at":  {"type": "date"},
             "service_nickname": {"type": "keyword"},
             "content_type":     {"type": "keyword"},
             "vectorized":       {"type": "boolean"},
@@ -195,6 +197,9 @@ def index_document(url, port, title, crawled_at, service_nickname, content_type,
             src = existing["_source"]
             if (src.get("content_hash") == content_hash
                     and src.get("chunk_algo") == CHUNK_ALGO_VERSION):
+                # Content unchanged — bump crawled_at only; last_changed_at stays.
+                client.update(index=INDEX_NAME, id=doc_id,
+                               body={"doc": {"crawled_at": crawled_at}})
                 continue
         except NotFoundError:
             pass
@@ -211,6 +216,7 @@ def index_document(url, port, title, crawled_at, service_nickname, content_type,
             "port": port,
             "title": title,
             "crawled_at": crawled_at,
+            "last_changed_at": crawled_at,
             "service_nickname": service_nickname,
             "content_type": content_type,
             "text": chunk,
@@ -345,7 +351,7 @@ def delete_by_nickname(service_nickname, client=None):
     body = {
         "query": {
             "term": {
-                "service_nickname.keyword": service_nickname,
+                "service_nickname": service_nickname,
             }
         }
     }
@@ -373,7 +379,7 @@ def delete_stale(service_nickname, run_start, client=None):
         "query": {
             "bool": {
                 "must": [
-                    {"term": {"service_nickname.keyword": service_nickname}},
+                    {"term": {"service_nickname": service_nickname}},
                     {"range": {"crawled_at": {"lt": run_start}}},
                 ]
             }

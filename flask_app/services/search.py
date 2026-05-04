@@ -58,7 +58,7 @@ def bm25_body(q, page=1, page_size=_PAGE_SIZE, highlight_tags=None):
             "fragment_size": 180,
         },
         "aggs": {
-            "by_service": {"terms": {"field": "service_nickname.keyword", "size": 20}},
+            "by_service": {"terms": {"field": "service_nickname", "size": 20}},
         },
     }
 

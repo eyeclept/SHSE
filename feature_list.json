@@ -635,5 +635,128 @@
         "passes": false
       }
     }
+  },
+  "epic_10d_nginx_verification": {
+    "description": "Nginx smoke tests: HTTP→HTTPS redirect, HTTPS proxy to Flask, /admin/* auth_request enforcement",
+    "items": {
+      "live_http_redirect": {
+        "passes": false
+      },
+      "live_https_proxy": {
+        "passes": false
+      },
+      "live_admin_auth": {
+        "passes": false
+      },
+      "tests_written": {
+        "passes": true
+      }
+    }
+  },
+  "epic_17a_dictionary_search": {
+    "description": "OED dictionary lookup via StarDict files; answer card above BM25 results; AI context injection",
+    "items": {
+      "stardict_reader": { "passes": false },
+      "oed_reader_markup_strip": { "passes": false },
+      "query_detection": { "passes": false },
+      "answer_card_template": { "passes": false },
+      "ai_context_injection": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_dictionary_md": { "passes": false }
+    }
+  },
+  "epic_17b_datetime_cards": {
+    "description": "Date and time answer card: current date/time via NTP, day-of-week lookup, days-until, leap year; AI context injection",
+    "items": {
+      "datetime_service": { "passes": false },
+      "ntp_support": { "passes": false },
+      "query_detection": { "passes": false },
+      "route_wiring": { "passes": false },
+      "ai_context_injection": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_datetime_cards_md": { "passes": false }
+    }
+  },
+  "epic_17c_weather_cards": {
+    "description": "Weather answer card with HA, InfluxDB, Open-Meteo, and NWS/NOAA adapters; priority fallback chain; AI context injection",
+    "items": {
+      "adapter_framework": { "passes": false },
+      "ha_adapter": { "passes": false },
+      "influxdb_adapter": { "passes": false },
+      "open_meteo_adapter": { "passes": false },
+      "nws_adapter": { "passes": false },
+      "query_detection": { "passes": false },
+      "route_wiring": { "passes": false },
+      "ai_context_injection": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_weather_cards_md": { "passes": false }
+    }
+  },
+  "epic_18a_llm_settings": {
+    "description": "SystemSetting model + migration; YAML settings.llm block parsed and persisted; llm.py reads from DB with env-var fallback",
+    "items": {
+      "system_setting_model": { "passes": false },
+      "yaml_llm_block_parsing": { "passes": false },
+      "llm_py_db_override": { "passes": false },
+      "default_summary_template": { "passes": false },
+      "docs_and_example_yaml": { "passes": false },
+      "tests_written": { "passes": false }
+    }
+  },
+  "epic_18b_ai_summary_admin": {
+    "description": "Admin enable/disable toggle and model selection for AI summary; per-user toggle; semantic rail gated on admin setting",
+    "items": {
+      "admin_config_ui": { "passes": false },
+      "model_validation": { "passes": false },
+      "semantic_rail_gate": { "passes": false },
+      "per_user_toggle": { "passes": false },
+      "tests_written": { "passes": false }
+    }
+  },
+  "epic_18c_semantic_fallback": {
+    "description": "BM25-based fallback for _dummy_vector_search when embedding model is unavailable",
+    "items": {
+      "bm25_fallback_impl": { "passes": false },
+      "tests_written": { "passes": false }
+    }
+  },
+  "epic_19a_sso_ui": {
+    "description": "SSO login button on login/register pages; SSO health row in admin health grid",
+    "items": {
+      "login_page_button": { "passes": false },
+      "register_page_button": { "passes": false },
+      "admin_health_row": { "passes": false },
+      "tests_written": { "passes": false }
+    }
+  },
+  "epic_19b_email_recovery": {
+    "description": "Forgot-password email flow: SMTP config, reset token model, forgot/reset routes, login page link",
+    "items": {
+      "smtp_config": { "passes": false },
+      "reset_token_model": { "passes": false },
+      "forgot_password_route": { "passes": false },
+      "reset_password_route": { "passes": false },
+      "login_page_link": { "passes": false },
+      "tests_written": { "passes": false }
+    }
+  },
+  "epic_19c_totp": {
+    "description": "TOTP 2FA: model migration, enroll in settings, login challenge, disable",
+    "items": {
+      "totp_model_migration": { "passes": false },
+      "enroll_ui": { "passes": false },
+      "login_challenge": { "passes": false },
+      "disable_totp": { "passes": false },
+      "tests_written": { "passes": false }
+    }
+  },
+  "epic_19d_user_roles": {
+    "description": "Admin UI to list users and promote/demote roles without DB access",
+    "items": {
+      "user_list_page": { "passes": true },
+      "promote_demote_routes": { "passes": true },
+      "subnav_link": { "passes": true },
+      "tests_written": { "passes": true }
+    }
   }
 }

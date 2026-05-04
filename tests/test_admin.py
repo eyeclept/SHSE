@@ -257,3 +257,92 @@ def test_vectorize_button_dispatches_task(admin_client):
         r = admin_client.post("/admin/vectorize")
     assert r.status_code == 302
     mock_task.delay.assert_called_once()
+
+
+# ── User role management (19d) ────────────────────────────────────────────
+
+def test_users_page_lists_all_users(app, admin_client):
+    """
+    Input: GET /admin/users as admin
+    Output: 200 HTML listing all users with current roles
+    """
+    from flask_app.models.user import User
+    with app.app_context():
+        u = User(username="regular", role="user")
+        u.set_password("pass")
+        db.session.add(u)
+        db.session.commit()
+
+    r = admin_client.get("/admin/users")
+    assert r.status_code == 200
+    assert b"testadmin" in r.data
+    assert b"regular" in r.data
+
+
+def test_users_page_returns_403_for_non_admin(user_client):
+    """
+    Input: GET /admin/users as non-admin
+    Output: 403
+    """
+    r = user_client.get("/admin/users")
+    assert r.status_code == 403
+
+
+def test_promote_changes_role_to_admin(app, admin_client):
+    """
+    Input: POST /admin/users/<id>/promote as admin for a 'user' role account
+    Output: redirect to users list; role changed to 'admin' in DB
+    """
+    from flask_app.models.user import User
+    with app.app_context():
+        u = User(username="promo_target", role="user")
+        u.set_password("pass")
+        db.session.add(u)
+        db.session.commit()
+        uid = u.id
+
+    r = admin_client.post(f"/admin/users/{uid}/promote")
+    assert r.status_code == 302
+
+    with app.app_context():
+        updated = db.session.get(User, uid)
+        assert updated.role == "admin"
+
+
+def test_demote_changes_role_to_user(app, admin_client):
+    """
+    Input: POST /admin/users/<id>/demote as admin for another admin account
+    Output: redirect to users list; role changed to 'user' in DB
+    """
+    from flask_app.models.user import User
+    with app.app_context():
+        u = User(username="demote_target", role="admin")
+        u.set_password("pass")
+        db.session.add(u)
+        db.session.commit()
+        uid = u.id
+
+    r = admin_client.post(f"/admin/users/{uid}/demote")
+    assert r.status_code == 302
+
+    with app.app_context():
+        updated = db.session.get(User, uid)
+        assert updated.role == "user"
+
+
+def test_self_demote_is_rejected(app, admin_client):
+    """
+    Input: POST /admin/users/<self_id>/demote as admin
+    Output: redirect to users list; role remains 'admin' in DB
+    """
+    from flask_app.models.user import User
+    with app.app_context():
+        self_user = db.session.query(User).filter_by(username="testadmin").first()
+        self_id = self_user.id
+
+    r = admin_client.post(f"/admin/users/{self_id}/demote")
+    assert r.status_code == 302
+
+    with app.app_context():
+        updated = db.session.get(User, self_id)
+        assert updated.role == "admin"

@@ -189,7 +189,7 @@ def stats():
         count = client.count(index=_INDEX_NAME).get("count", 0)
         agg = client.search(index=_INDEX_NAME, body={
             "size": 0,
-            "aggs": {"svc": {"cardinality": {"field": "service_nickname.keyword"}}},
+            "aggs": {"svc": {"cardinality": {"field": "service_nickname"}}},
         })
         svc_count = agg["aggregations"]["svc"]["value"]
         last = client.search(index=_INDEX_NAME, body={

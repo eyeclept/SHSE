@@ -95,6 +95,7 @@ def _check_services():
             "message": detail,
         }
     except Exception as exc:
+        logger.warning("OpenSearch probe failed", exc_info=True)
         results["opensearch"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
 
     # Nutch
@@ -115,8 +116,10 @@ def _check_services():
     except Exception as exc:
         _exc = str(exc)
         if "Max retries" in _exc or "Connection refused" in _exc:
+            logger.warning("Nutch REST server unreachable — reporting disabled", exc_info=True)
             results["nutch"] = {"status": "disabled", "latency_ms": None, "message": "REST server not running in this image"}
         else:
+            logger.warning("Nutch probe failed", exc_info=True)
             results["nutch"] = {"status": "down", "latency_ms": None, "message": _exc[:80]}
 
     # LLM API
@@ -131,6 +134,7 @@ def _check_services():
             "message": None if resp.ok else f"HTTP {resp.status_code}",
         }
     except Exception as exc:
+        logger.warning("LLM API probe failed", exc_info=True)
         results["llm_api"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
 
     # Redis
@@ -146,6 +150,7 @@ def _check_services():
         ms = int((time.monotonic() - t0) * 1000)
         results["redis"] = {"status": "up", "latency_ms": ms, "message": None}
     except Exception as exc:
+        logger.warning("Redis probe failed", exc_info=True)
         results["redis"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
 
     # Celery workers (broadcast ping via Redis broker)
@@ -165,6 +170,7 @@ def _check_services():
         else:
             results["celery"] = {"status": "down", "latency_ms": ms, "message": "No workers responded"}
     except Exception as exc:
+        logger.warning("Celery probe failed", exc_info=True)
         results["celery"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
 
     # MariaDB
@@ -174,6 +180,7 @@ def _check_services():
         ms = int((time.monotonic() - t0) * 1000)
         results["mariadb"] = {"status": "up", "latency_ms": ms, "message": None}
     except Exception as exc:
+        logger.warning("MariaDB probe failed", exc_info=True)
         results["mariadb"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
 
     return results
@@ -193,7 +200,7 @@ def _get_index_stats(client=None):
         agg_resp = c.search(index=_INDEX_NAME, body={
             "size": 0,
             "aggs": {
-                "svc": {"cardinality": {"field": "service_nickname.keyword"}},
+                "svc": {"cardinality": {"field": "service_nickname"}},
                 "vectorized": {"filter": {"term": {"vectorized": True}}},
             },
         })
@@ -677,6 +684,7 @@ def crawler_config():
                 validation = {"ok": True, "errors": [], "warnings": [f"{len(parsed)} target(s) imported."]}
                 flash(f"YAML imported — {len(parsed)} target(s) loaded.", "success")
             except Exception as exc:
+                logger.warning("YAML parse/import failed", exc_info=True)
                 validation = {"ok": False, "errors": [{"line": None, "message": str(exc)}], "warnings": []}
                 flash("YAML parse failed.", "error")
         else:
@@ -742,6 +750,7 @@ def config_validate():
             "warnings": [f"{len(parsed)} target(s) parsed."],
         }
     except Exception as exc:
+        logger.warning("YAML validation failed", exc_info=True)
         validation = {
             "ok": False,
             "errors": [{"line": None, "message": str(exc)}],
@@ -837,8 +846,73 @@ def wipe_index():
         create_index()
         flash("Index wiped and recreated.", "success")
     except Exception as exc:
+        logger.exception("Index wipe/recreate failed")
         flash(f"Wipe failed: {exc}", "error")
     return redirect(url_for("admin.index_ops"))
+
+
+# ── Users ──────────────────────────────────────────────────────────────────
+
+@admin_bp.route("/users")
+@admin_required
+def users():
+    """
+    Input: None
+    Output: rendered user list page with promote/demote buttons
+    Details:
+        Lists all User rows ordered by username. Admins can promote any user
+        to admin role or demote any admin to user role (self-demote blocked).
+    """
+    from flask_app import db
+    from flask_app.models.user import User
+
+    all_users = db.session.query(User).order_by(User.username).all()
+    return render_template("admin/users.html", users=all_users)
+
+
+@admin_bp.route("/users/<int:user_id>/promote", methods=["POST"])
+@admin_required
+def promote_user(user_id):
+    """
+    Input: user_id URL param
+    Output: redirect to users list
+    Details:
+        Sets role='admin' for the target user. No-op if already admin.
+    """
+    from flask_app import db
+    from flask_app.models.user import User
+
+    u = db.session.get(User, user_id)
+    if u is None:
+        abort(404)
+    u.role = "admin"
+    db.session.commit()
+    flash(f"'{u.username}' promoted to admin.", "success")
+    return redirect(url_for("admin.users"))
+
+
+@admin_bp.route("/users/<int:user_id>/demote", methods=["POST"])
+@admin_required
+def demote_user(user_id):
+    """
+    Input: user_id URL param
+    Output: redirect to users list
+    Details:
+        Sets role='user' for the target user. Blocks self-demote.
+    """
+    from flask_app import db
+    from flask_app.models.user import User
+
+    u = db.session.get(User, user_id)
+    if u is None:
+        abort(404)
+    if u.id == current_user.id:
+        flash("You cannot demote yourself.", "error")
+        return redirect(url_for("admin.users"))
+    u.role = "user"
+    db.session.commit()
+    flash(f"'{u.username}' demoted to user.", "success")
+    return redirect(url_for("admin.users"))
 
 
 if __name__ == "__main__":

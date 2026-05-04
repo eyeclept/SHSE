@@ -153,6 +153,21 @@ def test_admin_check_403_for_anonymous(api_client):
 # ── Live proxy tests (skipped when Nginx is not running) ──────────────────
 
 @pytest.mark.skipif(not _nginx_up(), reason="Nginx not running — start docker compose")
+def test_http_redirects_to_https():
+    """
+    Input: HTTP GET to Nginx at port 8888
+    Output: 301 redirect to HTTPS
+    Details:
+        Verifies the plain-HTTP listener returns 301 rather than serving
+        content directly or timing out. allow_redirects=False captures the
+        redirect response without following it.
+    """
+    r = _requests.get("http://localhost:8888/", verify=False, timeout=5,
+                      allow_redirects=False)
+    assert r.status_code == 301
+
+
+@pytest.mark.skipif(not _nginx_up(), reason="Nginx not running — start docker compose")
 def test_https_proxy_forwards_to_flask():
     """
     Input: HTTPS GET to Nginx at port 8443
@@ -163,9 +178,9 @@ def test_https_proxy_forwards_to_flask():
     """
     r = _requests.get(_HTTPS_BASE + "/", verify=False, timeout=5,
                       allow_redirects=True)
-    # Any response that came through the proxy is acceptable — 502 would mean
-    # Nginx couldn't reach Flask at all.
-    assert r.status_code != 502
+    # Any response that came through the proxy is acceptable — 502/504 would
+    # mean Nginx couldn't reach Flask at all.
+    assert r.status_code not in (502, 504)
 
 
 @pytest.mark.skipif(not _nginx_up(), reason="Nginx not running — start docker compose")

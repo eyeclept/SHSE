@@ -7,6 +7,7 @@
     /admin/jobs      → Jobs          admin.jobs
     /admin/config    → Config        admin.crawler_config
     /admin/index     → Index ops     admin.index_ops
+    /admin/users     → Users         admin.users
 #}
 <nav aria-label="Admin sections"
      style="display:flex; gap:2px; padding:0 24px;
@@ -31,5 +32,9 @@
   <a href="{{ url_for('admin.index_ops') }}" class="shse-tab"
      aria-current="{{ 'page' if request.endpoint == 'admin.index_ops' else '' }}">
     {{ icon.list(14) }} Index
+  </a>
+  <a href="{{ url_for('admin.users') }}" class="shse-tab"
+     aria-current="{{ 'page' if request.endpoint == 'admin.users' else '' }}">
+    {{ icon.user(14) }} Users
   </a>
 </nav>
