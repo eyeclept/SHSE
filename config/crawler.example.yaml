@@ -1,3 +1,23 @@
+# Optional: configure LLM models and summary prompt.
+# Values are stored in the system_settings table on upload and take effect
+# on the next request (no container restart required).
+# settings:
+#   llm:
+#     embed_model: nomic-embed-text
+#     gen_model: granite3.3:latest
+#     summary_template: |
+#       You are a search assistant for a private homelab index. Answer using
+#       ONLY the context provided. Rules: (1) no outside knowledge, (2) 2–4
+#       sentences max, (3) if the answer is not in the context respond with
+#       exactly "The index doesn't contain information about that.",
+#       (4) do not speculate or mention you are an AI.
+#
+#       Context:
+#       {context}
+#
+#       Question: {query}
+#       Answer:
+
 defaults:
   service: http
   port: 80

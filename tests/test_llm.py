@@ -185,5 +185,86 @@ def test_rewrite_query_returns_raw_on_error_field():
     assert result == raw
 
 
+def test_get_llm_settings_falls_back_to_env_vars():
+    """
+    Input:  no Flask app context (DB unavailable)
+    Output: dict with env-var defaults, no exception raised
+    """
+    from flask_app.services.llm import _get_llm_settings, _DEFAULT_SUMMARY_TEMPLATE
+    result = _get_llm_settings()
+    assert "gen_model" in result
+    assert "embed_model" in result
+    assert "summary_template" in result
+    assert result["summary_template"] == _DEFAULT_SUMMARY_TEMPLATE
+
+
+def test_get_llm_settings_reads_from_db_session():
+    """
+    Input:  mock db_session returning a SystemSetting row
+    Output: dict with value from DB, not env var
+    """
+    from flask_app.services.llm import _get_llm_settings
+    from unittest.mock import MagicMock
+
+    mock_row = MagicMock()
+    mock_row.value = "custom-model"
+
+    def _get(model_cls, key):
+        if key == "llm.gen_model":
+            return mock_row
+        return None
+
+    mock_session = MagicMock()
+    mock_session.get.side_effect = _get
+
+    result = _get_llm_settings(db_session=mock_session)
+    assert result["gen_model"] == "custom-model"
+
+
+def test_generate_summary_uses_db_template():
+    """
+    Input:  mock db_session with a custom summary_template
+    Output: generate_summary sends the formatted template as the prompt
+    """
+    custom_template = "Context: {context}\nQ: {query}\nA:"
+    mock_row = MagicMock()
+    mock_row.value = custom_template
+
+    def _get(model_cls, key):
+        if key == "llm.summary_template":
+            return mock_row
+        if key == "llm.gen_model":
+            m = MagicMock()
+            m.value = "testmodel"
+            return m
+        return None
+
+    mock_db_session = MagicMock()
+    mock_db_session.get.side_effect = _get
+
+    captured = {}
+
+    def _fake_post(url, json=None, timeout=None):
+        captured["payload"] = json
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.raise_for_status = lambda: None
+        resp.json.return_value = {"choices": [{"message": {"content": "answer"}}]}
+        return resp
+
+    http_session = MagicMock()
+    http_session.post.side_effect = _fake_post
+
+    result = generate_summary(
+        ["chunk one"], "my query",
+        session=http_session, db_session=mock_db_session,
+    )
+
+    assert result == "answer"
+    prompt = captured["payload"]["messages"][0]["content"]
+    assert "chunk one" in prompt
+    assert "my query" in prompt
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

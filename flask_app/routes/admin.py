@@ -31,6 +31,38 @@ _PROBE_TIMEOUT = 3   # seconds per health probe
 
 
 # Functions
+def _upsert_setting(db_session, key, value):
+    from flask_app.models.system_setting import SystemSetting
+    row = db_session.get(SystemSetting, key)
+    if row is None:
+        db_session.add(SystemSetting(key=key, value=value))
+    else:
+        row.value = value
+
+
+def _validate_llm_model(model_name):
+    """
+    Input:  model_name — str to look for in the LLM API's model list
+    Output: None if valid (or API unreachable); error string if model not found
+    """
+    from flask_app.config import Config
+    if not Config.LLM_API_BASE:
+        return None
+    try:
+        resp = _requests.get(
+            f"{Config.LLM_API_BASE}/models", timeout=_PROBE_TIMEOUT
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        models = [m.get("id") or m.get("name", "") for m in data.get("models", data.get("data", []))]
+        if model_name not in models:
+            available = ", ".join(models[:10]) or "(none)"
+            return f"Model '{model_name}' not found. Available: {available}"
+    except Exception:
+        logger.warning("_validate_llm_model: LLM API unreachable, skipping validation", exc_info=True)
+    return None
+
+
 def admin_required(f):
     """
     Input: view function
@@ -688,8 +720,22 @@ def crawler_config():
                 validation = {"ok": False, "errors": [{"line": None, "message": str(exc)}], "warnings": []}
                 flash("YAML parse failed.", "error")
         else:
-            # Settings form path (future: persist to SystemSetting table)
-            flash("Settings saved.", "success")
+            # Settings form path — persist to system_settings table
+            ai_summary_enabled = "1" if request.form.get("ai_summary_enabled") else "0"
+            llm_embed_model = request.form.get("llm_embed_model", "").strip()
+            llm_gen_model = request.form.get("llm_gen_model", "").strip()
+
+            model_error = _validate_llm_model(llm_gen_model) if llm_gen_model else None
+            if model_error:
+                flash(model_error, "error")
+            else:
+                _upsert_setting(db.session, "llm.ai_summary_enabled", ai_summary_enabled)
+                if llm_embed_model:
+                    _upsert_setting(db.session, "llm.embed_model", llm_embed_model)
+                if llm_gen_model:
+                    _upsert_setting(db.session, "llm.gen_model", llm_gen_model)
+                db.session.commit()
+                flash("Settings saved.", "success")
 
     # Build current YAML snapshot from targets for export
     from flask_app.models.crawler_target import CrawlerTarget
@@ -721,14 +767,23 @@ def crawler_config():
         yaml_text = _yaml.dump({"defaults": {}, "targets": target_dicts},
                                default_flow_style=False, allow_unicode=True)
 
+    from flask_app.models.system_setting import SystemSetting
+
+    def _setting(key, default):
+        row = db.session.get(SystemSetting, key)
+        return row.value if row else default
+
+    ai_summary_enabled = _setting("llm.ai_summary_enabled", "1") != "0"
+
     return render_template(
         "admin/config.html",
         yaml_text=yaml_text,
         validation=validation,
         last_saved="—",
         llm_api_base=Config.LLM_API_BASE,
-        llm_embed_model=Config.LLM_EMBED_MODEL,
-        llm_gen_model=Config.LLM_GEN_MODEL,
+        llm_embed_model=_setting("llm.embed_model", Config.LLM_EMBED_MODEL),
+        llm_gen_model=_setting("llm.gen_model", Config.LLM_GEN_MODEL),
+        ai_summary_enabled=ai_summary_enabled,
     )
 
 

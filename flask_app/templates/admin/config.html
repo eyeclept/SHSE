@@ -25,6 +25,23 @@
     <h2 style="margin:0 0 16px; font-size:15px; font-weight:600;">LLM API</h2>
     <form method="post" action="{{ url_for('admin.crawler_config') }}">
       <input type="hidden" name="action" value="settings">
+
+      {# AI Summary toggle #}
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:18px;
+                  padding:12px 14px; background:var(--shse-surface-alt);
+                  border-radius:8px; border:1px solid var(--shse-border);">
+        <input type="hidden" name="ai_summary_enabled" value="">
+        <input type="checkbox" name="ai_summary_enabled" value="1" id="ai-summary-toggle"
+               {% if ai_summary_enabled %}checked{% endif %}
+               style="width:16px; height:16px; accent-color:var(--shse-accent);">
+        <label for="ai-summary-toggle" style="flex:1; cursor:pointer;">
+          <div style="font-size:14px; font-weight:500;">AI summary enabled</div>
+          <div style="font-size:12px; color:var(--shse-text-muted); margin-top:2px;">
+            Show AI-generated answer cards above search results. Users can also disable this in their settings.
+          </div>
+        </label>
+      </div>
+
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px 20px; margin-bottom:16px;">
         <label style="display:block;">
           <span style="font-size:12px; font-weight:500; color:var(--shse-text-muted);
@@ -49,13 +66,11 @@
           <input type="text" name="llm_gen_model" class="shse-input" style="width:100%;"
                  placeholder="granite3.3:latest"
                  value="{{ llm_gen_model }}">
+          <span style="font-size:11px; color:var(--shse-text-faint); margin-top:3px; display:block;">
+            Validated against LLM API on save.
+          </span>
         </label>
       </div>
-      <p style="margin:0 0 12px; font-size:12px; color:var(--shse-text-faint);">
-        To make model changes permanent, update <code style="font-size:11px;">LLM_EMBED_MODEL</code>
-        and <code style="font-size:11px;">LLM_GEN_MODEL</code> in <code style="font-size:11px;">.env</code>
-        then restart the stack. Per-target model overrides are coming in a future update.
-      </p>
       <button type="submit" class="shse-btn shse-btn-primary">
         {{ icon.check(14) }} Save settings
       </button>

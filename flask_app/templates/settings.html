@@ -62,6 +62,31 @@
       </div>
     </section>
 
+    {# ── AI Features (only when admin has enabled AI summary globally) ── #}
+    {% if ai_summary_globally_enabled %}
+    <section style="margin-bottom:28px;">
+      <h2 style="margin:0 0 12px; font-size:13px; font-weight:600;
+                 color:var(--shse-text-muted); text-transform:uppercase; letter-spacing:0.06em;">
+        AI Features
+      </h2>
+      <div class="shse-card" style="padding:0;">
+        <div style="display:flex; align-items:center; gap:20px; padding:16px 18px;">
+          <div style="flex:1;">
+            <div style="font-size:14px; font-weight:500;">AI summary</div>
+            <div style="font-size:12px; color:var(--shse-text-muted); margin-top:3px;">
+              Show an AI-generated answer above search results.
+            </div>
+          </div>
+          <input type="hidden" name="ai_summary_enabled" value="0">
+          <input type="checkbox" name="ai_summary_enabled" value="1"
+                 id="ai-summary-user-toggle"
+                 {% if ai_summary_user_enabled %}checked{% endif %}
+                 style="width:16px; height:16px; accent-color:var(--shse-accent);">
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
     <div style="display:flex; gap:10px; justify-content:flex-end; margin-bottom:32px;">
       <button type="submit" class="shse-btn shse-btn-primary">Save changes</button>
     </div>

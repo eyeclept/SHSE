@@ -305,11 +305,25 @@ def settings():
         theme = request.form.get("theme", "light")
         if theme in ("light", "dark"):
             session["theme"] = theme
+        if "ai_summary_enabled" in request.form:
+            session["ai_summary_enabled"] = request.form.get("ai_summary_enabled") == "1"
         flash("Settings saved.", "success")
+
+    # Read admin's global AI summary setting for conditional display
+    ai_summary_globally_enabled = True
+    try:
+        from flask_app import db
+        from flask_app.models.system_setting import SystemSetting
+        row = db.session.get(SystemSetting, "llm.ai_summary_enabled")
+        ai_summary_globally_enabled = row is None or row.value != "0"
+    except Exception:
+        logger.warning("settings: could not read system_setting", exc_info=True)
 
     return render_template(
         "settings.html",
         current_theme=session.get("theme", "light"),
+        ai_summary_globally_enabled=ai_summary_globally_enabled,
+        ai_summary_user_enabled=session.get("ai_summary_enabled", True),
     )
 
 

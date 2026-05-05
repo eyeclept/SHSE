@@ -15,6 +15,7 @@ Description:
 # Imports
 import logging
 import os
+import threading
 
 import requests
 
@@ -24,11 +25,55 @@ _LLM_API_BASE = os.environ.get("LLM_API_BASE", "http://localhost:11434/v1")
 _LLM_EMBED_MODEL = os.environ.get("LLM_EMBED_MODEL", "nomic-embed-text")
 _LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "granite4.1:8b")
 _LLM_REWRITE_MODEL = os.environ.get("LLM_REWRITE_MODEL", "granite4.1:3b")
+_CPU_EMBED_MODEL = "nomic-ai/nomic-embed-text-v1"
 
 _TIMEOUT = 30
+_cpu_model = None
+_cpu_model_lock = threading.Lock()
+
+_DEFAULT_SUMMARY_TEMPLATE = (
+    "You are a search assistant for a private homelab index. Answer using "
+    "ONLY the context provided. Rules: (1) no outside knowledge, "
+    "(2) 2–4 sentences max, (3) if the answer is not in the context respond "
+    'with exactly "The index doesn\'t contain information about that.", '
+    "(4) do not speculate or mention you are an AI.\n\n"
+    "Context:\n{context}\n\nQuestion: {query}\nAnswer:"
+)
 
 
 # Functions
+def _get_llm_settings(db_session=None):
+    """
+    Input:  db_session — optional SQLAlchemy session (injectable for tests)
+    Output: dict with gen_model, embed_model, summary_template
+    Details:
+        Reads from system_settings table; falls back to env-var values when
+        the DB is unreachable or the key is absent.  Called at query time so
+        admin changes take effect on the next request without a restart.
+    """
+    try:
+        from flask_app import db
+        from flask_app.models.system_setting import SystemSetting
+        session = db_session or db.session
+
+        def _get(k):
+            row = session.get(SystemSetting, k)
+            return row.value if row else None
+
+        return {
+            "gen_model":        _get("llm.gen_model")        or _LLM_GEN_MODEL,
+            "embed_model":      _get("llm.embed_model")      or _LLM_EMBED_MODEL,
+            "summary_template": _get("llm.summary_template") or _DEFAULT_SUMMARY_TEMPLATE,
+        }
+    except Exception:
+        logger.warning("_get_llm_settings: DB read failed, using env-var defaults", exc_info=True)
+        return {
+            "gen_model":        _LLM_GEN_MODEL,
+            "embed_model":      _LLM_EMBED_MODEL,
+            "summary_template": _DEFAULT_SUMMARY_TEMPLATE,
+        }
+
+
 def get_embedding(text, session=None):
     """
     Input:
@@ -57,42 +102,61 @@ def get_embedding(text, session=None):
         return None
 
 
-def generate_summary(context_chunks, query, session=None):
+def get_cpu_embedding(text):
+    """
+    Input:  text — str, the text to embed
+    Output: list[float] embedding vector, or None on any failure
+    Details:
+        CPU-based fallback for get_embedding() when the LLM API is unreachable.
+        Lazy-loads nomic-ai/nomic-embed-text-v1 via sentence-transformers on first
+        call (one-time download ~274 MB; cached in ~/.cache/huggingface/hub).
+        Produces 768-dimensional embeddings compatible with the stored index vectors
+        so vector_search() results remain semantically correct.
+        Thread-safe: uses a double-checked lock so only one thread loads the model.
+    """
+    global _cpu_model
+    if _cpu_model is None:
+        with _cpu_model_lock:
+            if _cpu_model is None:
+                try:
+                    from sentence_transformers import SentenceTransformer
+                    _cpu_model = SentenceTransformer(
+                        _CPU_EMBED_MODEL, trust_remote_code=True
+                    )
+                except Exception:
+                    logger.warning(
+                        "get_cpu_embedding: failed to load %s", _CPU_EMBED_MODEL, exc_info=True
+                    )
+                    return None
+    try:
+        return _cpu_model.encode(text).tolist()
+    except Exception:
+        logger.warning("get_cpu_embedding: encode failed", exc_info=True)
+        return None
+
+
+def generate_summary(context_chunks, query, session=None, db_session=None):
     """
     Input:
         context_chunks - list[str], document chunks retrieved by vector search
         query          - str, the user's original search query
         session        - optional requests.Session for injection in tests
+        db_session     - optional SQLAlchemy session for _get_llm_settings injection
     Output:
         str summary, or None if the LLM API is unreachable
     Details:
-        Builds a RAG prompt from context_chunks and query, then POSTs to
-        {LLM_API_BASE}/chat/completions using the model in LLM_GEN_MODEL.
+        Reads gen_model and summary_template from system_settings (via
+        _get_llm_settings) with env-var fallback.  Formats the template with
+        {context} and {query} substitution and sends a single user message.
         Returns None (no exception) when the endpoint is unreachable.
     """
+    settings = _get_llm_settings(db_session=db_session)
     requester = session or requests
     url = f"{_LLM_API_BASE}/chat/completions"
     context = "\n\n".join(context_chunks)
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You know exactly the following facts and nothing else:\n\n"
-                f"{context}\n\n"
-                "Rules you must never break:\n"
-                "1. Answer using only the facts above. Never use your training knowledge.\n"
-                "2. If the facts above do not contain the answer, respond with exactly: "
-                "\"The index doesn't contain information about that.\"\n"
-                "3. Answer directly in 1-3 sentences. Do not say 'based on', 'according to', "
-                "'the context', 'provided information', or any phrase that references a source."
-            ),
-        },
-        {
-            "role": "user",
-            "content": query,
-        },
-    ]
-    payload = {"model": _LLM_GEN_MODEL, "messages": messages}
+    prompt = settings["summary_template"].format(context=context, query=query)
+    messages = [{"role": "user", "content": prompt}]
+    payload = {"model": settings["gen_model"], "messages": messages}
     try:
         resp = requester.post(url, json=payload, timeout=_TIMEOUT)
         resp.raise_for_status()

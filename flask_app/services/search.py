@@ -113,8 +113,9 @@ def _dummy_vector_search(q, os_client):
     Details:
         Placeholder called by get_vector_hits when the embedding model is
         unavailable. Returns no results so the semantic rail degrades cleanly.
-        TODO (Epic 25): replace with a BM25-based approximation that returns
-        real results without requiring the embedding model.
+        TODO (Epic 18c): replace with a CPU-based embedding fallback so the
+        semantic rail still returns real vector results when the GPU/API
+        embedding model is down.
     """
     return []
 
@@ -132,19 +133,26 @@ def get_vector_hits(q, os_client=None, llm_session=None):
                                  for AI summary)
             embedding_available - bool, False when embedding model was unreachable
     Details:
-        Embeds the query with the embedding model and runs a k-NN vector search.
-        Falls back to _dummy_vector_search (returns []) when get_embedding returns
-        None, so callers always receive a valid list regardless of LLM state.
-        Independent of the generative model — only the embedding model is needed.
+        Embeds the query and runs a k-NN vector search. Two-tier embedding:
+        1. LLM API (get_embedding) — fast, GPU-backed.
+        2. CPU fallback (get_cpu_embedding, sentence-transformers) — slower but
+           produces compatible 768-d vectors so vector search remains accurate.
+        Falls back to _dummy_vector_search (returns []) only when both fail.
+        Returns embedding_available=True whenever real vector hits are returned
+        (regardless of which embedding tier was used).
     """
-    from flask_app.services.llm import get_embedding
+    from flask_app.services.llm import get_embedding, get_cpu_embedding
     from flask_app.services.opensearch import vector_search, get_client
 
     client = os_client or get_client()
 
     embedding = get_embedding(q, session=llm_session)
     if embedding is None:
-        logger.warning("get_vector_hits: embedding model unavailable, using dummy fallback")
+        logger.warning("get_vector_hits: LLM API unavailable, trying CPU embedding fallback")
+        embedding = get_cpu_embedding(q)
+
+    if embedding is None:
+        logger.warning("get_vector_hits: CPU embedding also unavailable, semantic rail empty")
         return _dummy_vector_search(q, client), False
 
     try:

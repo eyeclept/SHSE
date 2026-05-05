@@ -29,10 +29,11 @@ def app():
     Input: None
     Output: Flask test app with all blueprints and SQLite
     """
-    from flask_app.models.user import User                     # noqa: F401
-    from flask_app.models.search_history import SearchHistory  # noqa: F401
-    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
-    from flask_app.models.crawl_job import CrawlJob            # noqa: F401
+    from flask_app.models.user import User                         # noqa: F401
+    from flask_app.models.search_history import SearchHistory      # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget      # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob                # noqa: F401
+    from flask_app.models.system_setting import SystemSetting      # noqa: F401
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
     from flask_app.routes.admin import admin_bp
@@ -346,3 +347,79 @@ def test_self_demote_is_rejected(app, admin_client):
     with app.app_context():
         updated = db.session.get(User, self_id)
         assert updated.role == "admin"
+
+
+# ── 18b: AI Summary admin control ────────────────────────────────────────────
+
+def test_settings_save_ai_summary_enabled(app, admin_client):
+    """
+    Input:  POST /admin/config action=settings with ai_summary_enabled=1
+    Output: system_settings row llm.ai_summary_enabled == "1"
+    """
+    from flask_app.models.system_setting import SystemSetting
+    with patch("flask_app.routes.admin._validate_llm_model", return_value=None):
+        r = admin_client.post("/admin/config", data={
+            "action": "settings",
+            "ai_summary_enabled": "1",
+            "llm_gen_model": "",
+            "llm_embed_model": "",
+        })
+    assert r.status_code in (200, 302)
+    with app.app_context():
+        row = db.session.get(SystemSetting, "llm.ai_summary_enabled")
+        assert row is not None
+        assert row.value == "1"
+
+
+def test_settings_save_ai_summary_disabled(app, admin_client):
+    """
+    Input:  POST /admin/config action=settings without ai_summary_enabled field
+    Output: system_settings row llm.ai_summary_enabled == "0"
+    """
+    from flask_app.models.system_setting import SystemSetting
+    with patch("flask_app.routes.admin._validate_llm_model", return_value=None):
+        r = admin_client.post("/admin/config", data={
+            "action": "settings",
+            "llm_gen_model": "",
+            "llm_embed_model": "",
+        })
+    assert r.status_code in (200, 302)
+    with app.app_context():
+        row = db.session.get(SystemSetting, "llm.ai_summary_enabled")
+        assert row is not None
+        assert row.value == "0"
+
+
+def test_settings_model_validation_error_blocks_save(app, admin_client):
+    """
+    Input:  POST /admin/config with invalid llm_gen_model
+    Output: no system_settings row written; error flash shown
+    """
+    from flask_app.models.system_setting import SystemSetting
+    with patch("flask_app.routes.admin._validate_llm_model",
+               return_value="Model 'bad-model' not found. Available: granite3.3:latest"):
+        r = admin_client.post("/admin/config", data={
+            "action": "settings",
+            "ai_summary_enabled": "1",
+            "llm_gen_model": "bad-model",
+            "llm_embed_model": "",
+        })
+    assert r.status_code in (200, 302)
+    with app.app_context():
+        row = db.session.get(SystemSetting, "llm.gen_model")
+        assert row is None
+
+
+def test_semantic_summary_returns_empty_when_admin_disabled(app, admin_client):
+    """
+    Input:  llm.ai_summary_enabled = "0" in system_settings; GET /api/semantic/summary
+    Output: empty string (gate fires before any LLM/OS call)
+    """
+    from flask_app.models.system_setting import SystemSetting
+    with app.app_context():
+        db.session.add(SystemSetting(key="llm.ai_summary_enabled", value="0"))
+        db.session.commit()
+
+    r = admin_client.get("/api/semantic/summary?q=test")
+    assert r.status_code == 200
+    assert r.data == b""

@@ -45,6 +45,18 @@ def _deep_merge(base, override):
     return base
 
 
+def parse_llm_settings(yaml_str):
+    """
+    Input:  yaml_str — str, YAML configuration string
+    Output: dict with keys embed_model, gen_model, summary_template (all optional)
+    Details:
+        Extracts the settings.llm block from the YAML document.
+        Returns an empty dict if the block is absent.
+    """
+    doc = yaml.safe_load(yaml_str) or {}
+    return doc.get("settings", {}).get("llm", {})
+
+
 def parse_config(yaml_str):
     """
     Input:
@@ -224,6 +236,7 @@ def persist_targets(yaml_str, parsed_targets, db_session):
     """
     from flask_app.models.crawler_target import CrawlerTarget
     from flask_app.models.crawl_job import CrawlJob
+    from flask_app.models.system_setting import SystemSetting
 
     # Null out target references before deleting targets to satisfy the FK constraint.
     # Jobs are preserved for audit purposes; target_id becomes NULL.
@@ -256,6 +269,19 @@ def persist_targets(yaml_str, parsed_targets, db_session):
         created.append(row)
 
     db_session.commit()
+
+    llm = parse_llm_settings(yaml_str)
+    for field in ("embed_model", "gen_model", "summary_template"):
+        if field in llm:
+            k = f"llm.{field}"
+            row = db_session.get(SystemSetting, k)
+            if row is None:
+                db_session.add(SystemSetting(key=k, value=str(llm[field])))
+            else:
+                row.value = str(llm[field])
+    if llm:
+        db_session.commit()
+
     return created
 
 

@@ -93,10 +93,11 @@ def sqlite_app():
     Details:
         Minimal app; does not call create_app(); avoids MariaDB.
     """
-    from flask_app.models.search_history import SearchHistory  # noqa: F401
-    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
-    from flask_app.models.crawl_job import CrawlJob            # noqa: F401
-    from flask_app.models.user import User                     # noqa: F401
+    from flask_app.models.search_history import SearchHistory      # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget      # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob                # noqa: F401
+    from flask_app.models.user import User                         # noqa: F401
+    from flask_app.models.system_setting import SystemSetting      # noqa: F401
 
     app = Flask(
         "test_yaml",
@@ -501,6 +502,85 @@ def test_celery_beat_entries():
     assert all(e is not None for e in entries)
     assert all("schedule" in e for e in entries)
     assert all(isinstance(e["schedule"], crontab) for e in entries)
+
+
+def test_parse_llm_settings_extracts_block():
+    """
+    Input:  YAML with a settings.llm block
+    Output: dict containing gen_model, embed_model, summary_template
+    """
+    from flask_app.config_parser import parse_llm_settings
+
+    yaml_str = """\
+defaults: {}
+targets: []
+settings:
+  llm:
+    embed_model: nomic-embed-text
+    gen_model: granite3.3:latest
+    summary_template: "Answer: {context} Q: {query}"
+"""
+    result = parse_llm_settings(yaml_str)
+    assert result["embed_model"] == "nomic-embed-text"
+    assert result["gen_model"] == "granite3.3:latest"
+    assert "{context}" in result["summary_template"]
+    assert "{query}" in result["summary_template"]
+
+
+def test_parse_llm_settings_empty_when_absent():
+    """
+    Input:  YAML without a settings block
+    Output: empty dict
+    """
+    from flask_app.config_parser import parse_llm_settings
+
+    result = parse_llm_settings("defaults: {}\ntargets: []\n")
+    assert result == {}
+
+
+def test_persist_targets_writes_llm_settings(db_session):
+    """
+    Input:  YAML with settings.llm block
+    Output: system_settings rows written for llm.gen_model and llm.embed_model
+    """
+    from flask_app.config_parser import parse_config, persist_targets
+    from flask_app.models.system_setting import SystemSetting
+
+    yaml_str = """\
+defaults: {}
+targets:
+  - type: service
+    nickname: svc
+    url: lab.internal
+settings:
+  llm:
+    gen_model: granite3.3:latest
+    embed_model: nomic-embed-text
+"""
+    persist_targets(yaml_str, parse_config(yaml_str), db_session)
+
+    gen = db_session.get(SystemSetting, "llm.gen_model")
+    emb = db_session.get(SystemSetting, "llm.embed_model")
+    assert gen is not None and gen.value == "granite3.3:latest"
+    assert emb is not None and emb.value == "nomic-embed-text"
+
+
+def test_persist_targets_llm_settings_update_on_second_upload(db_session):
+    """
+    Input:  Two sequential uploads with different gen_model values
+    Output: DB row updated to the second value (upsert behaviour)
+    """
+    from flask_app.config_parser import parse_config, persist_targets
+    from flask_app.models.system_setting import SystemSetting
+
+    yaml1 = "defaults: {}\ntargets: []\nsettings:\n  llm:\n    gen_model: modelA\n"
+    yaml2 = "defaults: {}\ntargets: []\nsettings:\n  llm:\n    gen_model: modelB\n"
+
+    persist_targets(yaml1, parse_config(yaml1), db_session)
+    persist_targets(yaml2, parse_config(yaml2), db_session)
+
+    row = db_session.get(SystemSetting, "llm.gen_model")
+    assert row.value == "modelB"
 
 
 if __name__ == "__main__":

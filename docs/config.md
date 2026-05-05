@@ -1,7 +1,7 @@
 # Crawler Configuration (YAML)
 
 SHSE crawl targets are declared in a YAML file uploaded via the admin UI.
-The file has two top-level keys: `defaults` and `targets`.
+The file supports three top-level keys: `defaults`, `targets`, and `settings`.
 
 ---
 
@@ -136,3 +136,44 @@ Pulls content via a custom adapter script and pushes to OpenSearch.
 | `url` | yes | API base URL |
 | `adapter` | yes | Adapter module name (e.g. `discourse_adapter`) |
 | `schedule` | no | Pull schedule block |
+
+---
+
+## `settings` Block
+
+The optional `settings` block configures runtime behaviour that is stored in
+the `system_settings` database table on upload.  Values take effect on the next
+request without a container restart.
+
+### `settings.llm`
+
+| Field | Description | Default (env var) |
+|---|---|---|
+| `embed_model` | Embedding model name sent to the LLM API | `LLM_EMBED_MODEL` |
+| `gen_model` | Generative model name used for AI summaries | `LLM_GEN_MODEL` |
+| `summary_template` | Jinja-free template string; must contain `{context}` and `{query}` placeholders | Built-in strict template |
+
+**Example:**
+
+```yaml
+settings:
+  llm:
+    embed_model: nomic-embed-text
+    gen_model: granite3.3:latest
+    summary_template: |
+      You are a search assistant for a private homelab index. Answer using
+      ONLY the context provided. Rules: (1) no outside knowledge, (2) 2–4
+      sentences max, (3) if the answer is not in the context respond with
+      exactly "The index doesn't contain information about that.",
+      (4) do not speculate or mention you are an AI.
+
+      Context:
+      {context}
+
+      Question: {query}
+      Answer:
+```
+
+Values absent from the block are left unchanged in the DB (previous upload's
+values persist).  To reset a value to the env-var default, remove the key from
+the block and delete the corresponding row from `system_settings` manually.

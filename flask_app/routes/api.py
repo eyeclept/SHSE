@@ -13,7 +13,7 @@ import hashlib
 import logging
 import math
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template, request, session
 from flask_login import current_user
 from flask_app.services.opensearch import get_client
 from flask_app.services.search import bm25_body, semantic_results
@@ -238,7 +238,23 @@ def semantic_summary():
         Builds RAG summary from vector hits. Computes its own vector hits
         (cached result from /semantic/vector will be a Redis hit on any
         concurrent or repeat search). Result cached in Redis for 1 hour.
+        Returns empty string when AI summary is disabled globally (admin)
+        or by the user in their session preference.
     """
+    # Admin gate
+    try:
+        from flask_app import db
+        from flask_app.models.system_setting import SystemSetting
+        row = db.session.get(SystemSetting, "llm.ai_summary_enabled")
+        if row is not None and row.value == "0":
+            return ""
+    except Exception:
+        logger.warning("semantic_summary: could not read admin setting", exc_info=True)
+
+    # Per-user gate
+    if not session.get("ai_summary_enabled", True):
+        return ""
+
     q = request.args.get("q", "").strip()
     if not q:
         return ""

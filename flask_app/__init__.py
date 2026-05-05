@@ -74,10 +74,11 @@ def create_app():
     # Import all models before blueprints so SQLAlchemy can resolve
     # relationship strings (e.g. User.search_history → SearchHistory)
     # without hitting an InvalidRequestError on first mapper access.
-    from flask_app.models.user import User                     # noqa: F401
-    from flask_app.models.search_history import SearchHistory  # noqa: F401
-    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
-    from flask_app.models.crawl_job import CrawlJob            # noqa: F401
+    from flask_app.models.user import User                         # noqa: F401
+    from flask_app.models.search_history import SearchHistory      # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget      # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob                # noqa: F401
+    from flask_app.models.system_setting import SystemSetting      # noqa: F401
 
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
