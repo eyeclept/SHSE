@@ -64,6 +64,88 @@ def bm25_body(q, page=1, page_size=_PAGE_SIZE, highlight_tags=None):
 
 
 
+def bm25_body_with_dorks(raw_q, page=1, page_size=_PAGE_SIZE, highlight_tags=None):
+    """
+    Input:
+        raw_q          - str, raw query string (may contain dork operators)
+        page           - int, 1-indexed page number
+        page_size      - int, results per page
+        highlight_tags - tuple (pre, post) for highlight tags
+    Output:
+        dict — OpenSearch request body using bool query DSL
+    Details:
+        Parses dork operators from raw_q. When no operators are present,
+        falls back to bm25_body() multi-match behaviour (transparent).
+        Operators map to:
+            site:/inurl: → wildcard filter on `url`
+            intitle:     → match filter on `title`
+            filetype:    → term filter on `content_type`
+            "phrase"     → match_phrase clause in must
+            -term        → multi_match clause in must_not
+    """
+    from flask_app.services.dork_parser import parse_dorks, has_dorks
+
+    parsed = parse_dorks(raw_q)
+    if not has_dorks(parsed):
+        plain_q = " ".join(parsed["plain_terms"]) or raw_q
+        return bm25_body(plain_q, page=page, page_size=page_size, highlight_tags=highlight_tags)
+
+    pre_tag, post_tag = highlight_tags or ("", "")
+    must = []
+    filter_clauses = []
+    must_not = []
+
+    plain_q = " ".join(parsed["plain_terms"])
+    if plain_q:
+        must.append({
+            "multi_match": {
+                "query": plain_q,
+                "fields": ["title^2", "text"],
+                "type": "best_fields",
+                "fuzziness": "AUTO",
+                "prefix_length": 1,
+            }
+        })
+
+    for phrase in parsed["must_phrases"]:
+        must.append({"match_phrase": {"text": phrase}})
+
+    f = parsed["filters"]
+    if f["site"]:
+        filter_clauses.append({"wildcard": {"url": {"value": f"*{f['site']}*"}}})
+    if f["inurl"]:
+        filter_clauses.append({"wildcard": {"url": {"value": f"*{f['inurl']}*"}}})
+    if f["intitle"]:
+        filter_clauses.append({"match": {"title": f["intitle"]}})
+    if f["filetype"]:
+        filter_clauses.append({"term": {"content_type": f["filetype"]}})
+
+    for term in parsed["exclude_terms"]:
+        must_not.append({"multi_match": {"query": term, "fields": ["title", "text"]}})
+
+    bool_q: dict = {"must": must if must else [{"match_all": {}}]}
+    if filter_clauses:
+        bool_q["filter"] = filter_clauses
+    if must_not:
+        bool_q["must_not"] = must_not
+
+    return {
+        "from": (page - 1) * page_size,
+        "size": page_size,
+        "query": {"bool": bool_q},
+        "highlight": {
+            "fields": {"text": {}, "title": {}},
+            "pre_tags": [pre_tag],
+            "post_tags": [post_tag],
+            "number_of_fragments": 2,
+            "fragment_size": 180,
+        },
+        "aggs": {
+            "by_service": {"terms": {"field": "service_nickname", "size": 20}},
+        },
+    }
+
+
 _STOP_WORDS = {
     "the", "a", "an", "in", "of", "for", "to", "and", "or", "is", "are",
     "was", "were", "be", "been", "it", "its", "this", "that", "these",

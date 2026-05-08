@@ -148,7 +148,9 @@ def test_crawl_target_creates_crawl_job(db_session, service_target):
 
     os_client = MagicMock()
 
-    with patch("celery_worker.tasks.crawl._discover_urls", return_value=[]), \
+    with patch("celery_worker.tasks.crawl._discover_urls", return_value=["http://test.local/"]), \
+         patch("celery_worker.tasks.crawl._fetch_page_text", return_value="sample page text"), \
+         patch("celery_worker.tasks.crawl.index_document"), \
          patch("celery_worker.tasks.crawl.delete_stale"):
         job_id = _crawl_target_impl(
             service_target.id, db_session, None, os_client
@@ -180,6 +182,27 @@ def test_crawl_target_status_failure_on_exception(db_session, service_target):
 
     job = db_session.query(CrawlJob).filter_by(target_id=service_target.id).first()
     assert job.status == "failure"
+
+
+def test_crawl_target_fails_when_no_urls_discovered(db_session, service_target):
+    """
+    Input: None
+    Output: None
+    Details:
+        When _discover_urls returns an empty list (e.g. target host unreachable
+        from Docker), the CrawlJob must be marked failure, not success.
+        Reproduces the silent-success bug for hosts on isolated VM networks.
+    """
+    from flask_app.models.crawl_job import CrawlJob
+    from celery_worker.tasks.crawl import _crawl_target_impl
+
+    with patch("celery_worker.tasks.crawl._discover_urls", return_value=[]), \
+         pytest.raises(RuntimeError, match="no reachable URLs"):
+        _crawl_target_impl(service_target.id, db_session)
+
+    job = db_session.query(CrawlJob).filter_by(target_id=service_target.id).first()
+    assert job.status == "failure"
+    assert "no reachable URLs" in (job.message or "")
 
 
 def test_crawl_all_dispatches_one_per_target(db_session):
@@ -229,7 +252,9 @@ def test_reindex_target_deletes_then_crawls(db_session, service_target):
     os_client = MagicMock()
 
     with patch("celery_worker.tasks.index.delete_by_nickname") as del_mock, \
-         patch("celery_worker.tasks.crawl._discover_urls", return_value=[]), \
+         patch("celery_worker.tasks.crawl._discover_urls", return_value=["http://test.local/"]), \
+         patch("celery_worker.tasks.crawl._fetch_page_text", return_value="sample page text"), \
+         patch("celery_worker.tasks.crawl.index_document"), \
          patch("celery_worker.tasks.crawl.delete_stale"):
         reindex_target(
             service_target.id,
@@ -551,7 +576,9 @@ def test_crawl_job_lifecycle(db_session, service_target):
 
     os_client = MagicMock()
 
-    with patch("celery_worker.tasks.crawl._discover_urls", return_value=[]), \
+    with patch("celery_worker.tasks.crawl._discover_urls", return_value=["http://test.local/"]), \
+         patch("celery_worker.tasks.crawl._fetch_page_text", return_value="sample page text"), \
+         patch("celery_worker.tasks.crawl.index_document"), \
          patch("celery_worker.tasks.crawl.delete_stale"):
         job_id = _crawl_target_impl(service_target.id, db_session, None, os_client)
 

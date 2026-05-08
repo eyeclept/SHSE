@@ -14,7 +14,7 @@ import math
 from flask import Blueprint, render_template, request, session
 from flask_login import current_user
 from flask_app.services.opensearch import get_client
-from flask_app.services.search import bm25_body
+from flask_app.services.search import bm25_body_with_dorks
 from flask_app.services.query_preprocessor import (
     strip_preamble, normalize, strip_stopwords, expand_synonyms,
 )
@@ -127,7 +127,7 @@ def results():
     if q:
         try:
             client = get_client()
-            body = bm25_body(
+            body = bm25_body_with_dorks(
                 search_q, page=page, page_size=_PAGE_SIZE,
                 highlight_tags=('<strong class="shse-hit">', "</strong>"),
             )

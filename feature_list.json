@@ -692,6 +692,31 @@
       "docs_weather_cards_md": { "passes": false }
     }
   },
+  "epic_17d_calculator": {
+    "description": "Calculator inline answer card; AST-safe expression evaluator; detects math queries; displays result above BM25 results",
+    "items": {
+      "calculator_service": { "passes": false },
+      "ast_whitelist_eval": { "passes": false },
+      "query_detection": { "passes": false },
+      "route_wiring": { "passes": false },
+      "ai_context_injection": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_calculator_md": { "passes": false }
+    }
+  },
+  "epic_17e_unit_converter": {
+    "description": "Unit converter inline answer card; built-in factor table; temperature special-casing; detects '<n> <unit> to <unit>' queries",
+    "items": {
+      "converter_service": { "passes": false },
+      "unit_factor_table": { "passes": false },
+      "temperature_formulas": { "passes": false },
+      "query_detection": { "passes": false },
+      "route_wiring": { "passes": false },
+      "ai_context_injection": { "passes": false },
+      "tests_written": { "passes": false },
+      "docs_unit_converter_md": { "passes": false }
+    }
+  },
   "epic_18a_llm_settings": {
     "description": "SystemSetting model + migration; YAML settings.llm block parsed and persisted; llm.py reads from DB with env-var fallback",
     "items": {
@@ -757,6 +782,12 @@
       "promote_demote_routes": { "passes": true },
       "subnav_link": { "passes": true },
       "tests_written": { "passes": true }
+    }
+  },
+  "bugfixes": {
+    "description": "Discrete bug fixes not tied to a feature epic",
+    "items": {
+      "bf1_crawl_silent_success_on_unreachable_target": { "passes": true }
     }
   }
 }

@@ -16,7 +16,7 @@ import math
 from flask import Blueprint, jsonify, render_template, request, session
 from flask_login import current_user
 from flask_app.services.opensearch import get_client
-from flask_app.services.search import bm25_body, semantic_results
+from flask_app.services.search import bm25_body_with_dorks, semantic_results
 from flask_app.services.query_preprocessor import (
     strip_preamble, normalize, strip_stopwords, expand_synonyms,
 )
@@ -127,7 +127,7 @@ def search():
     if q:
         try:
             client = get_client()
-            body = bm25_body(search_q, page=page, page_size=_PAGE_SIZE)
+            body = bm25_body_with_dorks(search_q, page=page, page_size=_PAGE_SIZE)
             resp = client.search(index=_INDEX_NAME, body=body)
             took_ms = resp.get("took", 0)
             total = resp["hits"]["total"]["value"]

@@ -132,9 +132,19 @@ def _nutch_crawl(target, nutch_session=None, os_client=None):
 
     depth = target.crawl_depth if target.crawl_depth is not None else 2
     urls = _discover_urls(seed_url, tls_verify=tls_ok, max_depth=depth)
+    if not urls:
+        raise RuntimeError(
+            f"_discover_urls returned no reachable URLs from seed {seed_url!r} — "
+            "check network connectivity between the crawler and the target host "
+            "(e.g. Docker cannot reach the target network)"
+        )
+    logger.info("_nutch_crawl: discovered %d URL(s) from seed %s", len(urls), seed_url)
+
+    documents_indexed = 0
     for url in urls:
         page_text = _fetch_page_text(url, tls_verify=tls_ok)
         if not page_text or page_text == url:
+            logger.warning("_nutch_crawl: skipping %s — no text extracted", url)
             continue
         index_document(
             url=url,
@@ -147,6 +157,14 @@ def _nutch_crawl(target, nutch_session=None, os_client=None):
             source_type="nutch",
             client=os_client,
         )
+        documents_indexed += 1
+
+    if documents_indexed == 0:
+        raise RuntimeError(
+            f"_nutch_crawl indexed 0 documents from {len(urls)} discovered URL(s) "
+            f"(seed {seed_url!r}) — all pages returned no extractable text"
+        )
+    logger.info("_nutch_crawl: indexed %d document(s) for target '%s'", documents_indexed, nickname)
 
     delete_stale(nickname, run_start, client=os_client)
 
