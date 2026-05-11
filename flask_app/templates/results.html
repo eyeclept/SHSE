@@ -37,12 +37,71 @@
       </a>
     {% endfor %}
     <div style="flex:1;"></div>
-    <button class="shse-btn shse-btn-ghost" style="font-size:13px;" type="button">
-      {{ icon.filter(14) }} Filters
-    </button>
-    <button class="shse-btn shse-btn-ghost" style="font-size:13px;" type="button">
-      {{ icon.sort(14) }} Relevance
-    </button>
+
+    {# Filter panel #}
+    {% set active_filter_count = filter_services | length %}
+    <details style="position:relative;">
+      <summary class="shse-btn shse-btn-ghost" style="display:flex; align-items:center; gap:5px;
+                font-size:13px; cursor:pointer;">
+        {{ icon.filter(14) }} Filters{% if active_filter_count %} ({{ active_filter_count }}){% endif %}
+      </summary>
+      <div style="position:absolute; right:0; top:calc(100% + 4px); z-index:50;
+                  background:var(--shse-surface); border:1px solid var(--shse-border);
+                  border-radius:8px; padding:14px; min-width:210px;
+                  box-shadow:0 4px 16px rgba(0,0,0,.18);">
+        <form method="GET" action="{{ url_for('search.results') }}">
+          <input type="hidden" name="q" value="{{ q }}">
+          <input type="hidden" name="tab" value="{{ tab }}">
+          <input type="hidden" name="sort" value="{{ sort }}">
+          {% if raw_param %}<input type="hidden" name="raw" value="{{ raw_param }}">{% endif %}
+          <div style="font-size:11px; color:var(--shse-text-faint); margin-bottom:8px;
+                      text-transform:uppercase; letter-spacing:.08em;">Filter by service</div>
+          {% if sources %}
+            {% for s in sources %}
+            <label style="display:flex; align-items:center; gap:8px; padding:4px 0;
+                          font-size:13px; cursor:pointer;">
+              <input type="checkbox" name="filter_service" value="{{ s.name }}"
+                     {% if s.name in filter_services %}checked{% endif %}>
+              {{ s.name }}
+              <span style="color:var(--shse-text-faint); font-size:11px;">({{ s.n }})</span>
+            </label>
+            {% endfor %}
+          {% else %}
+            <div style="font-size:12px; color:var(--shse-text-muted); padding:4px 0;">
+              No services to filter.
+            </div>
+          {% endif %}
+          <div style="margin-top:10px; display:flex; gap:6px;">
+            <button type="submit" class="shse-btn shse-btn-primary" style="font-size:12px;">Apply</button>
+            <a href="{{ url_for('search.results', q=q, tab=tab, sort=sort) }}"
+               class="shse-btn shse-btn-ghost" style="font-size:12px;">Clear</a>
+          </div>
+        </form>
+      </div>
+    </details>
+
+    {# Sort dropdown #}
+    {% set _sort_labels = {'relevance': 'Relevance', 'date_desc': 'Newest first', 'date_asc': 'Oldest first'} %}
+    {% set _sort_label = _sort_labels.get(sort, 'Relevance') %}
+    <details style="position:relative;">
+      <summary class="shse-btn shse-btn-ghost" style="display:flex; align-items:center; gap:5px;
+                font-size:13px; cursor:pointer;">
+        {{ icon.sort(14) }} {{ _sort_label }}
+      </summary>
+      <div style="position:absolute; right:0; top:calc(100% + 4px); z-index:50;
+                  background:var(--shse-surface); border:1px solid var(--shse-border);
+                  border-radius:8px; padding:6px; min-width:160px;
+                  box-shadow:0 4px 16px rgba(0,0,0,.18);">
+        {% for s_val, s_label in [('relevance','Relevance'),('date_desc','Newest first'),('date_asc','Oldest first')] %}
+        <a href="{{ url_for('search.results', q=q, tab=tab, sort=s_val, filter_service=filter_services or none, raw=raw_param) }}"
+           style="display:block; padding:7px 10px; font-size:13px; border-radius:5px;
+                  text-decoration:none;
+                  {% if sort == s_val %}background:var(--shse-surface-2); color:var(--shse-text);{% else %}color:var(--shse-text-muted);{% endif %}">
+          {{ s_label }}
+        </a>
+        {% endfor %}
+      </div>
+    </details>
   </div>
 {% endblock %}
 

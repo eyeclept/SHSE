@@ -95,6 +95,10 @@ def results():
     q = request.args.get("q", "").strip()
     tab = request.args.get("tab", "all")
     raw = request.args.get("raw", "") in ("1", "true")
+    filter_services = request.args.getlist("filter_service") or None
+    sort = request.args.get("sort", "relevance")
+    if sort not in ("relevance", "date_desc", "date_asc"):
+        sort = "relevance"
     try:
         page = max(1, int(request.args.get("page", 1)))
     except (ValueError, TypeError):
@@ -130,6 +134,8 @@ def results():
             body = bm25_body_with_dorks(
                 search_q, page=page, page_size=_PAGE_SIZE,
                 highlight_tags=('<strong class="shse-hit">', "</strong>"),
+                filter_services=filter_services,
+                sort=sort,
             )
             resp = client.search(index=_INDEX_NAME, body=body)
             took_ms = resp.get("took", 0)
@@ -190,6 +196,8 @@ def results():
         sources=sources,
         ai_summary=None,
         show_bm25_warning=show_bm25_warning,
+        filter_services=filter_services or [],
+        sort=sort,
     )
 
 

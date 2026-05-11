@@ -226,3 +226,29 @@ def test_hybrid_bm25_failure_returns_empty():
         results = hybrid_search("query", k=5, client=MagicMock())
 
     assert results == []
+
+
+def test_bm25_body_service_filter():
+    """
+    Input:  filter_services=["kiwix"]
+    Output: body query is a bool with a terms filter on service_nickname
+    """
+    from flask_app.services.search import bm25_body
+    body = bm25_body("test query", filter_services=["kiwix"])
+    bool_q = body["query"]["bool"]
+    assert bool_q["must"]["multi_match"]["query"] == "test query"
+    filters = bool_q["filter"]
+    assert len(filters) == 1
+    assert filters[0]["terms"]["service_nickname"] == ["kiwix"]
+
+
+def test_bm25_body_sort_date_desc():
+    """
+    Input:  sort="date_desc"
+    Output: body contains sort block with crawled_at desc followed by _score
+    """
+    from flask_app.services.search import bm25_body
+    body = bm25_body("test query", sort="date_desc")
+    assert "sort" in body
+    assert body["sort"][0] == {"crawled_at": "desc"}
+    assert body["sort"][1] == "_score"

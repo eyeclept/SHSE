@@ -22,13 +22,15 @@ _RRF_K = 60
 
 
 # Functions
-def bm25_body(q, page=1, page_size=_PAGE_SIZE, highlight_tags=None):
+def bm25_body(q, page=1, page_size=_PAGE_SIZE, highlight_tags=None, filter_services=None, sort="relevance"):
     """
     Input:
-        q           - str, search query
-        page        - int, 1-indexed page number
-        page_size   - int, results per page
+        q              - str, search query
+        page           - int, 1-indexed page number
+        page_size      - int, results per page
         highlight_tags - tuple (pre, post) for highlight tags; defaults to plain text
+        filter_services - list[str] | None, service_nickname values to filter to
+        sort           - str, one of 'relevance' (default), 'date_desc', 'date_asc'
     Output:
         dict — OpenSearch request body for a multi_match BM25 query
     Details:
@@ -36,20 +38,33 @@ def bm25_body(q, page=1, page_size=_PAGE_SIZE, highlight_tags=None):
         fuzziness=AUTO provides 1–2 edit distance tolerance for typos.
         prefix_length=1 prevents fuzzing the first character of each term so
         very short queries don't match everything.
+        When filter_services is non-empty, wraps in a bool query with a terms filter.
+        When sort is date_desc/date_asc, adds an explicit sort block.
     """
     pre_tag, post_tag = highlight_tags or ("", "")
-    return {
+    match_clause = {
+        "multi_match": {
+            "query": q,
+            "fields": ["title^2", "text"],
+            "type": "best_fields",
+            "fuzziness": "AUTO",
+            "prefix_length": 1,
+        }
+    }
+    if filter_services:
+        query = {
+            "bool": {
+                "must": match_clause,
+                "filter": [{"terms": {"service_nickname": list(filter_services)}}],
+            }
+        }
+    else:
+        query = match_clause
+
+    body = {
         "from": (page - 1) * page_size,
         "size": page_size,
-        "query": {
-            "multi_match": {
-                "query": q,
-                "fields": ["title^2", "text"],
-                "type": "best_fields",
-                "fuzziness": "AUTO",
-                "prefix_length": 1,
-            }
-        },
+        "query": query,
         "highlight": {
             "fields": {"text": {}, "title": {}},
             "pre_tags": [pre_tag],
@@ -61,16 +76,23 @@ def bm25_body(q, page=1, page_size=_PAGE_SIZE, highlight_tags=None):
             "by_service": {"terms": {"field": "service_nickname", "size": 20}},
         },
     }
+    if sort == "date_desc":
+        body["sort"] = [{"crawled_at": "desc"}, "_score"]
+    elif sort == "date_asc":
+        body["sort"] = [{"crawled_at": "asc"}, "_score"]
+    return body
 
 
 
-def bm25_body_with_dorks(raw_q, page=1, page_size=_PAGE_SIZE, highlight_tags=None):
+def bm25_body_with_dorks(raw_q, page=1, page_size=_PAGE_SIZE, highlight_tags=None, filter_services=None, sort="relevance"):
     """
     Input:
-        raw_q          - str, raw query string (may contain dork operators)
-        page           - int, 1-indexed page number
-        page_size      - int, results per page
-        highlight_tags - tuple (pre, post) for highlight tags
+        raw_q           - str, raw query string (may contain dork operators)
+        page            - int, 1-indexed page number
+        page_size       - int, results per page
+        highlight_tags  - tuple (pre, post) for highlight tags
+        filter_services - list[str] | None, service_nickname values to filter to
+        sort            - str, one of 'relevance' (default), 'date_desc', 'date_asc'
     Output:
         dict — OpenSearch request body using bool query DSL
     Details:
@@ -82,13 +104,15 @@ def bm25_body_with_dorks(raw_q, page=1, page_size=_PAGE_SIZE, highlight_tags=Non
             filetype:    → term filter on `content_type`
             "phrase"     → match_phrase clause in must
             -term        → multi_match clause in must_not
+        filter_services and sort are passed through in both code paths.
     """
     from flask_app.services.dork_parser import parse_dorks, has_dorks
 
     parsed = parse_dorks(raw_q)
     if not has_dorks(parsed):
         plain_q = " ".join(parsed["plain_terms"]) or raw_q
-        return bm25_body(plain_q, page=page, page_size=page_size, highlight_tags=highlight_tags)
+        return bm25_body(plain_q, page=page, page_size=page_size, highlight_tags=highlight_tags,
+                         filter_services=filter_services, sort=sort)
 
     pre_tag, post_tag = highlight_tags or ("", "")
     must = []
@@ -119,6 +143,8 @@ def bm25_body_with_dorks(raw_q, page=1, page_size=_PAGE_SIZE, highlight_tags=Non
         filter_clauses.append({"match": {"title": f["intitle"]}})
     if f["filetype"]:
         filter_clauses.append({"term": {"content_type": f["filetype"]}})
+    if filter_services:
+        filter_clauses.append({"terms": {"service_nickname": list(filter_services)}})
 
     for term in parsed["exclude_terms"]:
         must_not.append({"multi_match": {"query": term, "fields": ["title", "text"]}})
@@ -129,7 +155,7 @@ def bm25_body_with_dorks(raw_q, page=1, page_size=_PAGE_SIZE, highlight_tags=Non
     if must_not:
         bool_q["must_not"] = must_not
 
-    return {
+    body = {
         "from": (page - 1) * page_size,
         "size": page_size,
         "query": {"bool": bool_q},
@@ -144,6 +170,11 @@ def bm25_body_with_dorks(raw_q, page=1, page_size=_PAGE_SIZE, highlight_tags=Non
             "by_service": {"terms": {"field": "service_nickname", "size": 20}},
         },
     }
+    if sort == "date_desc":
+        body["sort"] = [{"crawled_at": "desc"}, "_score"]
+    elif sort == "date_asc":
+        body["sort"] = [{"crawled_at": "asc"}, "_score"]
+    return body
 
 
 _STOP_WORDS = {

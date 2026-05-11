@@ -617,22 +617,22 @@
     "description": "Search filters (service, content type) and sort order (relevance, newest, oldest) via Filters and Relevance buttons on results page",
     "items": {
       "bm25_body_filter_sort": {
-        "passes": false
+        "passes": true
       },
       "route_wiring": {
-        "passes": false
+        "passes": true
       },
       "filter_panel_ui": {
-        "passes": false
+        "passes": true
       },
       "sort_dropdown_ui": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
-        "passes": false
+        "passes": true
       },
       "docs_search_filters_md": {
-        "passes": false
+        "passes": true
       }
     }
   },

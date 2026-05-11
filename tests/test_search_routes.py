@@ -436,6 +436,50 @@ def test_results_no_annotation_when_rewriter_disabled(client):
 
 # ── Epic 9c: vector_hits in template context ───────────────────────────────
 
+def test_results_filter_service_passed_to_opensearch(client):
+    """
+    Input:  GET /search?q=server&filter_service=kiwix
+    Output: OpenSearch called with a bool query containing a terms filter on service_nickname
+    Details:
+        When filter_service is present, results() must pass filter_services to
+        bm25_body_with_dorks(), which wraps the query in a bool with a terms filter.
+    """
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    with patch("flask_app.routes.search.get_client", return_value=mock_client):
+        r = client.get("/search?q=server&filter_service=kiwix")
+
+    assert r.status_code == 200
+    call_body = mock_client.search.call_args.kwargs["body"]
+    bool_q = call_body["query"]["bool"]
+    filters = bool_q.get("filter", [])
+    service_filter = next(
+        (f for f in filters if "terms" in f and "service_nickname" in f["terms"]), None
+    )
+    assert service_filter is not None
+    assert "kiwix" in service_filter["terms"]["service_nickname"]
+
+
+def test_results_unknown_sort_falls_back_to_relevance(client):
+    """
+    Input:  GET /search?q=server&sort=invalid_value
+    Output: no 'sort' key in OpenSearch body (relevance = OpenSearch default)
+    Details:
+        Invalid sort values must be silently coerced to 'relevance' so that
+        hand-crafted URLs can't inject arbitrary sort DSL.
+    """
+    mock_client = MagicMock()
+    mock_client.search.return_value = _fake_os_search_response([])
+
+    with patch("flask_app.routes.search.get_client", return_value=mock_client):
+        r = client.get("/search?q=server&sort=invalid_value")
+
+    assert r.status_code == 200
+    call_body = mock_client.search.call_args.kwargs["body"]
+    assert "sort" not in call_body
+
+
 def test_vector_hits_in_context(app, client):
     """
     Input: GET /search?q=server with get_embedding mocked to return a vector
