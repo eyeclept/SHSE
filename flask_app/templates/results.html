@@ -28,12 +28,34 @@
               padding:0 28px;
               border-bottom:1px solid var(--shse-border);
               background:var(--shse-surface);">
-    {% for t in [('all','All'),('docs','Documentation'),('web','Web UIs'),('code','Code')] %}
+    {# All tab — active when no service filter is set #}
+    <a href="{{ url_for('search.results', q=q, tab='all', sort=sort, raw=raw_param) }}"
+       role="tab" aria-selected="{{ 'true' if not filter_services else 'false' }}"
+       class="shse-tab">
+      All
+      <span style="font-size:11px; color:var(--shse-text-faint);">{{ tab_counts.get('all', 0) }}</span>
+    </a>
+
+    {# Unused content-type tabs — commented out until content_type filtering is wired
+    {% for t in [('docs','Documentation'),('web','Web UIs'),('code','Code')] %}
       <a href="{{ url_for('search.results', q=q, tab=t[0], raw=raw_param) }}"
          role="tab" aria-selected="{{ 'true' if tab == t[0] else 'false' }}"
          class="shse-tab">
         {{ t[1] }}
         <span style="font-size:11px; color:var(--shse-text-faint);">{{ tab_counts.get(t[0], 0) }}</span>
+      </a>
+    {% endfor %}
+    #}
+
+    {# Quick-filter tabs: top 3 sources by hit count. Active tab toggles off (returns to All). #}
+    {% for s in sources[:3] %}
+      {% set _active = filter_services | length == 1 and filter_services[0] == s.name %}
+      {% set _fs = none if _active else [s.name] %}
+      <a href="{{ url_for('search.results', q=q, tab='all', sort=sort, raw=raw_param, filter_service=_fs) }}"
+         role="tab" aria-selected="{{ 'true' if _active else 'false' }}"
+         class="shse-tab">
+        {{ s.name }}
+        <span style="font-size:11px; color:var(--shse-text-faint);">{{ s.n }}</span>
       </a>
     {% endfor %}
     <div style="flex:1;"></div>
