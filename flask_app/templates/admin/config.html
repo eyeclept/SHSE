@@ -64,10 +64,20 @@
           <span style="font-size:12px; font-weight:500; color:var(--shse-text-muted);
                        display:block; margin-bottom:5px;">Generative model</span>
           <input type="text" name="llm_gen_model" class="shse-input" style="width:100%;"
-                 placeholder="granite3.3:latest"
+                 placeholder="granite4.1:8b"
                  value="{{ llm_gen_model }}">
           <span style="font-size:11px; color:var(--shse-text-faint); margin-top:3px; display:block;">
-            Validated against LLM API on save.
+            AI summary. Validated against LLM API on save.
+          </span>
+        </label>
+        <label style="display:block;">
+          <span style="font-size:12px; font-weight:500; color:var(--shse-text-muted);
+                       display:block; margin-bottom:5px;">Suggested searches model</span>
+          <input type="text" name="llm_rewrite_model" class="shse-input" style="width:100%;"
+                 placeholder="granite4.1:3b"
+                 value="{{ llm_rewrite_model }}">
+          <span style="font-size:11px; color:var(--shse-text-faint); margin-top:3px; display:block;">
+            Suggested searches &amp; query rewriting. Lighter model.
           </span>
         </label>
       </div>

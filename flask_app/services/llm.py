@@ -63,6 +63,7 @@ def _get_llm_settings(db_session=None):
         return {
             "gen_model":        _get("llm.gen_model")        or _LLM_GEN_MODEL,
             "embed_model":      _get("llm.embed_model")      or _LLM_EMBED_MODEL,
+            "rewrite_model":    _get("llm.rewrite_model")    or _LLM_REWRITE_MODEL,
             "summary_template": _get("llm.summary_template") or _DEFAULT_SUMMARY_TEMPLATE,
         }
     except Exception:
@@ -70,6 +71,7 @@ def _get_llm_settings(db_session=None):
         return {
             "gen_model":        _LLM_GEN_MODEL,
             "embed_model":      _LLM_EMBED_MODEL,
+            "rewrite_model":    _LLM_REWRITE_MODEL,
             "summary_template": _DEFAULT_SUMMARY_TEMPLATE,
         }
 
@@ -184,6 +186,7 @@ def rewrite_query(raw_query, session=None):
         usable string: falls back to raw_query on connection error, HTTP error,
         empty response, or any other exception so callers are never blocked.
     """
+    settings = _get_llm_settings()
     requester = session or requests
     url = f"{_LLM_API_BASE}/chat/completions"
     messages = [
@@ -198,7 +201,7 @@ def rewrite_query(raw_query, session=None):
         },
         {"role": "user", "content": raw_query},
     ]
-    payload = {"model": _LLM_REWRITE_MODEL, "messages": messages}
+    payload = {"model": settings["rewrite_model"], "messages": messages}
     try:
         resp = requester.post(url, json=payload, timeout=_TIMEOUT)
         resp.raise_for_status()
@@ -229,6 +232,7 @@ def generate_keywords(query, context_chunks, session=None):
         no bullets, numbers, or explanation. Empty lines and duplicates are
         removed. Falls back to [] without raising.
     """
+    settings = _get_llm_settings()
     requester = session or requests
     url = f"{_LLM_API_BASE}/chat/completions"
     context = "\n\n".join(context_chunks[:3]) if context_chunks else ""
@@ -251,7 +255,7 @@ def generate_keywords(query, context_chunks, session=None):
             ),
         },
     ]
-    payload = {"model": _LLM_REWRITE_MODEL, "messages": messages}
+    payload = {"model": settings["rewrite_model"], "messages": messages}
     try:
         resp = requester.post(url, json=payload, timeout=_TIMEOUT)
         resp.raise_for_status()

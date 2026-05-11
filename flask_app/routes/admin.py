@@ -744,6 +744,7 @@ def crawler_config():
             ai_summary_enabled = "1" if request.form.get("ai_summary_enabled") else "0"
             llm_embed_model = request.form.get("llm_embed_model", "").strip()
             llm_gen_model = request.form.get("llm_gen_model", "").strip()
+            llm_rewrite_model = request.form.get("llm_rewrite_model", "").strip()
 
             model_error = _validate_llm_model(llm_gen_model) if llm_gen_model else None
             if model_error:
@@ -754,6 +755,8 @@ def crawler_config():
                     _upsert_setting(db.session, "llm.embed_model", llm_embed_model)
                 if llm_gen_model:
                     _upsert_setting(db.session, "llm.gen_model", llm_gen_model)
+                if llm_rewrite_model:
+                    _upsert_setting(db.session, "llm.rewrite_model", llm_rewrite_model)
                 db.session.commit()
                 flash("Settings saved.", "success")
 
@@ -803,6 +806,7 @@ def crawler_config():
         llm_api_base=Config.LLM_API_BASE,
         llm_embed_model=_setting("llm.embed_model", Config.LLM_EMBED_MODEL),
         llm_gen_model=_setting("llm.gen_model", Config.LLM_GEN_MODEL),
+        llm_rewrite_model=_setting("llm.rewrite_model", Config.LLM_REWRITE_MODEL),
         ai_summary_enabled=ai_summary_enabled,
     )
 
