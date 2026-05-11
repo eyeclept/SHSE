@@ -109,6 +109,7 @@ services:
       - NUTCH_PORT=8081
       - LLM_API_BASE=http://host.docker.internal:11434/v1
       - CELERY_BROKER_URL=redis://redis:6379/0
+      - STARDICT_DICT_PATH=/app/dicts
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -119,6 +120,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 20s
+    volumes:
+      - ./dicts:/app/dicts:ro
     depends_on:
       redis:
         condition: service_started

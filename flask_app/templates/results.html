@@ -2,7 +2,9 @@
   Results page.
   Context: q, tab, results, total, took_ms, page, page_count,
            tab_counts, vector_hits, keyword_chips, sources,
-           ai_summary, show_bm25_warning
+           ai_summary, show_bm25_warning,
+           answer_card (optional dict: type/word/body/source),
+           ai_context (optional str prepended to LLM summary)
 #}
 {% extends "base.html" %}
 {% import "_icons.html" as icon %}
@@ -170,6 +172,70 @@
             <strong style="color:var(--shse-warning);">Keyword-only results.</strong>
             LLM API not configured — new documents may not have embeddings; semantic results may be incomplete.
           </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if answer_card and answer_card.parsed %}
+      {% set parsed = answer_card.parsed %}
+      <div class="shse-card" style="padding:18px 20px; margin-bottom:20px;
+                                    border-color:var(--shse-accent);"
+           data-ai-context="{{ (ai_context or '')[:300] | e }}">
+
+        {# ── Header: word + IPA ── #}
+        <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+                    margin-bottom:12px;">
+          <span style="font-size:22px; font-weight:700;
+                       color:var(--shse-text);">{{ answer_card.word }}</span>
+          {% if parsed.sections and parsed.sections[0].pronunciation %}
+            <span style="font-size:14px; color:var(--shse-text-muted);
+                         font-style:italic;">({{ parsed.sections[0].pronunciation }})</span>
+          {% endif %}
+        </div>
+
+        {# ── POS sections ── #}
+        {% for section in parsed.sections %}
+          {% set active_defs = section.definitions | selectattr("obsolete", "eq", false) | list %}
+          {% if active_defs %}
+            <div style="margin-bottom:14px;">
+              {# POS label #}
+              {% if section.pos %}
+                <div style="font-size:11px; font-style:italic;
+                            color:var(--shse-text-faint);
+                            margin-bottom:6px;">{{ section.pos }}</div>
+              {% endif %}
+              {# Numbered definitions #}
+              <ol style="margin:0; padding-left:22px;
+                         display:flex; flex-direction:column; gap:5px;">
+                {% for defn in active_defs %}
+                  <li style="font-size:14px; color:var(--shse-text-muted);
+                              line-height:1.55;">{{ defn.text }}</li>
+                {% endfor %}
+              </ol>
+            </div>
+          {% endif %}
+        {% endfor %}
+
+        {# ── Etymology (collapsible) ── #}
+        {% set etym = parsed.sections[0].etymology if parsed.sections else "" %}
+        {% if etym %}
+          <details style="margin-top:8px;">
+            <summary style="font-size:12px; color:var(--shse-text-faint);
+                            cursor:pointer; user-select:none;
+                            list-style:none; display:flex; align-items:center; gap:5px;">
+              <span style="font-size:10px;">▶</span> Etymology
+            </summary>
+            <div style="margin-top:8px; font-size:12.5px;
+                        color:var(--shse-text-muted); line-height:1.6;
+                        border-left:2px solid var(--shse-border);
+                        padding-left:10px;">{{ etym }}</div>
+          </details>
+        {% endif %}
+
+        {# ── Source footer ── #}
+        <div style="margin-top:12px; font-size:11px;
+                    color:var(--shse-text-faint); text-align:right;">
+          {{ answer_card.source }}
         </div>
       </div>
     {% endif %}

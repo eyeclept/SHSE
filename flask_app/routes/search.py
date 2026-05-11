@@ -18,6 +18,7 @@ from flask_app.services.search import bm25_body_with_dorks
 from flask_app.services.query_preprocessor import (
     strip_preamble, normalize, strip_stopwords, expand_synonyms,
 )
+from flask_app.services.stardict import build_definition_card
 
 # Globals
 search_bp = Blueprint("search", __name__)
@@ -128,6 +129,8 @@ def results():
     page_count = 1
     show_bm25_warning = False
 
+    answer_card, ai_context = build_definition_card(q) if q else (None, None)
+
     if q:
         try:
             client = get_client()
@@ -198,6 +201,8 @@ def results():
         show_bm25_warning=show_bm25_warning,
         filter_services=filter_services or [],
         sort=sort,
+        answer_card=answer_card,
+        ai_context=ai_context,
     )
 
 

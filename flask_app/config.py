@@ -55,6 +55,9 @@ class Config:
     LLM_REWRITE_MODEL = os.environ.get("LLM_REWRITE_MODEL", "granite4.1:3b")
     QUERY_REWRITE_ENABLED = os.environ.get("QUERY_REWRITE_ENABLED", "false").lower() in ("true", "1")
 
+    # StarDict dictionaries (mounted at /app/dicts inside Docker)
+    STARDICT_DICT_PATH = os.environ.get("STARDICT_DICT_PATH", "/app/dicts")
+
     # TLS
     INTERNAL_TLS_VERIFY = os.environ.get("INTERNAL_TLS_VERIFY", "true").lower() == "true"
 

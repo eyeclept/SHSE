@@ -52,6 +52,10 @@ Thumbs.db
 data/
 !data/.gitkeep
 
+# --- StarDict dictionaries (user-supplied; never commit dict files) ---
+dicts/*
+!dicts/.gitkeep
+
 # --- Logs ---
 logs/
 
