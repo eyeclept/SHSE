@@ -8,6 +8,7 @@ Description:
     foreign key enforcement.  Requires the MariaDB Docker container to be running.
 """
 # Imports
+import logging
 import os
 
 import pymysql
@@ -15,6 +16,8 @@ import pytest
 from dotenv import load_dotenv
 
 # Globals
+logger = logging.getLogger(__name__)
+
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
 # Functions
@@ -86,7 +89,8 @@ def test_search_history_fk_enforced():
             )
         conn.commit()
         pytest.fail("Expected IntegrityError for FK violation was not raised")
-    except pymysql.err.IntegrityError:
+    except pymysql.err.IntegrityError as e:
+        logger.warning("FK constraint enforced as expected: %s", e)
         conn.rollback()
     finally:
         conn.close()
@@ -109,7 +113,8 @@ def test_crawl_jobs_fk_enforced():
             )
         conn.commit()
         pytest.fail("Expected IntegrityError for FK violation was not raised")
-    except pymysql.err.IntegrityError:
+    except pymysql.err.IntegrityError as e:
+        logger.warning("FK constraint enforced as expected: %s", e)
         conn.rollback()
     finally:
         conn.close()

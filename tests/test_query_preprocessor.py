@@ -52,14 +52,26 @@ def test_strip_preamble_what_is():
 
 
 def test_strip_preamble_find_me():
+    """
+    Input:  "find me network logs"
+    Output: "network logs"
+    """
     assert strip_preamble("find me network logs") == "network logs"
 
 
 def test_strip_preamble_how_do_i():
+    """
+    Input:  "how do I configure nginx"
+    Output: "configure nginx"
+    """
     assert strip_preamble("how do I configure nginx") == "configure nginx"
 
 
 def test_strip_preamble_tell_me_about():
+    """
+    Input:  "tell me about backups"
+    Output: "backups"
+    """
     assert strip_preamble("tell me about backups") == "backups"
 
 
@@ -85,32 +97,56 @@ def test_strip_preamble_does_not_empty_string():
 # ── normalize ─────────────────────────────────────────────────────────────────
 
 def test_normalize_lowercases():
+    """
+    Input:  "NGINX Config"
+    Output: "nginx config"
+    """
     assert normalize("NGINX Config") == "nginx config"
 
 
 def test_normalize_collapses_whitespace():
+    """
+    Input:  "  Hello,  World!  " (extra spaces and punctuation)
+    Output: "hello world"
+    """
     assert normalize("  Hello,  World!  ") == "hello world"
 
 
 def test_normalize_strips_punctuation():
+    """
+    Input:  "nginx.conf (server block)"
+    Output: string with no dots or parentheses
+    """
     result = normalize("nginx.conf (server block)")
     assert "." not in result
     assert "(" not in result
 
 
 def test_normalize_preserves_hyphens_and_apostrophes():
+    """
+    Input:  "it's a self-signed cert"
+    Output: hyphens and apostrophes preserved in result
+    """
     result = normalize("it's a self-signed cert")
     assert "-" in result
     assert "'" in result
 
 
 def test_normalize_single_space():
+    """
+    Input:  "a   b   c" (multiple spaces between words)
+    Output: "a b c"
+    """
     assert normalize("a   b   c") == "a b c"
 
 
 # ── strip_stopwords ───────────────────────────────────────────────────────────
 
 def test_strip_stopwords_removes_the():
+    """
+    Input:  "the server is down"
+    Output: "the" removed; "server" retained
+    """
     result = strip_stopwords("the server is down")
     assert "the" not in result.split()
     assert "server" in result
@@ -127,6 +163,10 @@ def test_strip_stopwords_never_empties():
 
 
 def test_strip_stopwords_plain_terms_unchanged():
+    """
+    Input:  "server config backup" (no stopwords)
+    Output: all three terms present in result
+    """
     result = strip_stopwords("server config backup")
     assert "server" in result
     assert "config" in result
@@ -159,11 +199,19 @@ def test_expand_synonyms_no_duplicates():
 
 
 def test_expand_synonyms_empty_map_returns_unchanged():
+    """
+    Input:  "server config" with empty synonym map
+    Output: "server config" unchanged
+    """
     result = expand_synonyms("server config", synonym_map={})
     assert result == "server config"
 
 
 def test_expand_synonyms_no_matching_term_unchanged():
+    """
+    Input:  "kubernetes pod" — no entries in synonym map
+    Output: result starts with original query unchanged
+    """
     result = expand_synonyms("kubernetes pod", synonym_map=_SYNONYM_MAP)
     assert result.startswith("kubernetes pod")
 

@@ -12,10 +12,14 @@ Description:
     so they do not break the normal test run when the container is down.
 """
 # Imports
+import logging
+
 import pytest
 import requests
 
 # Globals
+logger = logging.getLogger(__name__)
+
 _KIWIX_BASE = "http://localhost:8082"
 _ZIM_PATH = "/content/wikipedia_en_100_nopic_2026-04"
 
@@ -30,6 +34,7 @@ def _kiwix_up():
         r = requests.get(_KIWIX_BASE, timeout=3)
         return r.status_code == 200
     except Exception:
+        logger.warning("Kiwix server not reachable at %s", _KIWIX_BASE)
         return False
 
 

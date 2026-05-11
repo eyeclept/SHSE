@@ -10,6 +10,7 @@ Description:
     the stack is not running. The admin-check unit tests run without Docker.
 """
 # Imports
+import logging
 import os
 from unittest.mock import MagicMock, patch
 
@@ -19,6 +20,8 @@ from flask import Flask
 from flask_app import db, login_manager
 
 # Globals
+logger = logging.getLogger(__name__)
+
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _TEMPLATE_DIR = os.path.join(_PROJECT_ROOT, "flask_app", "templates")
 _STATIC_DIR = os.path.join(_PROJECT_ROOT, "flask_app", "static")
@@ -31,6 +34,7 @@ def _nginx_up():
         _requests.get(_HTTPS_BASE, verify=False, timeout=2)
         return True
     except Exception:
+        logger.warning("Nginx not reachable at %s", _HTTPS_BASE)
         return False
 
 
