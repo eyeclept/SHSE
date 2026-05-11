@@ -44,7 +44,7 @@ _RE_SECTION_HDR = re.compile(
 )
 _RE_SINGLE_HDR  = re.compile(r'^<b>([^<,]+),\s*<abr>([^<]+)</abr>')
 _RE_PRON        = re.compile(r'<c c="darkslategray">([^<]+)</c>')
-_RE_ETYM        = re.compile(r'<c c="gray">(\[.*\])</c>', re.DOTALL)
+_RE_ETYM        = re.compile(r'<c c="gray">(.+?)</c>', re.DOTALL)
 _RE_INDIGO      = re.compile(r'<b><c c="indigo">([^<]*)</c></b>')
 _RE_EX          = re.compile(r'<ex>.*?</ex>', re.DOTALL)
 _RE_TAG         = re.compile(r'<[^>]+>')
@@ -276,9 +276,11 @@ def parse_oed_entry(raw: str) -> dict:
             continue
 
         # ── Etymology ──────────────────────────────────────────────────
+        # Gray colour marks etymology blocks. Content starts with "[".
+        # Closing "]" is sometimes absent (OED data inconsistency).
         if not cur_section["etymology"] and 'c c="gray"' in line:
             m2 = _RE_ETYM.search(line)
-            if m2:
+            if m2 and m2.group(1).lstrip().startswith("["):
                 cur_section["etymology"] = _clean(m2.group(1))
             continue
 

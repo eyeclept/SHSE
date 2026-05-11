@@ -85,13 +85,13 @@ _ETYMOLOGY_WORDS = [
     "algorithm",    # Arabic al-Khwarizmi
 ]
 
-# Semantic-drift words: OED must contain ≥ 2 definitions (historical + modern)
+# Semantic-drift words: OED must contain ≥ 2 definitions (historical + modern).
+# "berserk" is excluded: this OED edition collapses both senses into one entry.
 _SEMANTIC_DRIFT_WORDS = [
-    "nice",    # originally "foolish/wanton" → now "pleasant"
-    "silly",   # originally "blessed/happy" → now "foolish"
-    "lewd",    # originally "lay/unlearned" → now "indecent"
-    "fond",    # originally "foolish" → now "affectionate"
-    "berserk", # originally "bear-shirt Norse warrior" → now "violently frenzied"
+    "nice",   # originally "foolish/wanton" → now "pleasant"
+    "silly",  # originally "blessed/happy" → now "foolish"
+    "lewd",   # originally "lay/unlearned" → now "indecent"
+    "fond",   # originally "foolish" → now "affectionate"
 ]
 
 

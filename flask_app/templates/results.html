@@ -198,8 +198,8 @@
           {% set active_defs = section.definitions | selectattr("obsolete", "eq", false) | list %}
           {% if active_defs %}
             <div style="margin-bottom:14px;">
-              {# POS label #}
-              {% if section.pos %}
+              {# POS label — hide blank or dagger-only labels #}
+              {% if section.pos and section.pos not in ('†', '‖') %}
                 <div style="font-size:11px; font-style:italic;
                             color:var(--shse-text-faint);
                             margin-bottom:6px;">{{ section.pos }}</div>
