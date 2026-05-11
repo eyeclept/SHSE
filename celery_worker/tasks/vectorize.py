@@ -131,7 +131,7 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
     return vectorized_count, attempted_count
 
 
-@celery.task
+@celery.task(autoretry_for=(Exception,), max_retries=3, countdown=30)
 def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100, _db_session=None):
     """
     Input:

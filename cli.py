@@ -178,9 +178,14 @@ def cmd_crawl(args):
     with app.app_context():
         target = _lookup_target(db.session, args.nickname)
         from celery_worker.tasks.crawl import crawl_target
-        result = crawl_target.delay(target.id)
-        print(f"dispatched crawl for '{args.nickname}' (target {target.id})")
-        print(f"task id: {result.id}")
+        try:
+            result = crawl_target.delay(target.id)
+            print(f"dispatched crawl for '{args.nickname}' (target {target.id})")
+            print(f"task id: {result.id}")
+        except Exception as exc:
+            logger.warning("Task dispatch failed — Redis unreachable: %s", exc, exc_info=True)
+            print("error: task queue unavailable — is Redis running?", file=sys.stderr)
+            sys.exit(1)
 
 
 def cmd_crawl_all(_args):
@@ -192,9 +197,14 @@ def cmd_crawl_all(_args):
     """
     _load_env()
     from celery_worker.tasks.crawl import crawl_all
-    result = crawl_all.delay()
-    print(f"dispatched crawl-all")
-    print(f"task id: {result.id}")
+    try:
+        result = crawl_all.delay()
+        print(f"dispatched crawl-all")
+        print(f"task id: {result.id}")
+    except Exception as exc:
+        logger.warning("Task dispatch failed — Redis unreachable: %s", exc, exc_info=True)
+        print("error: task queue unavailable — is Redis running?", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_reindex(args):
@@ -210,9 +220,14 @@ def cmd_reindex(args):
     with app.app_context():
         target = _lookup_target(db.session, args.nickname)
         from celery_worker.tasks.index import reindex_target
-        result = reindex_target.delay(target.id)
-        print(f"dispatched reindex for '{args.nickname}' (target {target.id})")
-        print(f"task id: {result.id}")
+        try:
+            result = reindex_target.delay(target.id)
+            print(f"dispatched reindex for '{args.nickname}' (target {target.id})")
+            print(f"task id: {result.id}")
+        except Exception as exc:
+            logger.warning("Task dispatch failed — Redis unreachable: %s", exc, exc_info=True)
+            print("error: task queue unavailable — is Redis running?", file=sys.stderr)
+            sys.exit(1)
 
 
 def cmd_reindex_all(args):
@@ -230,9 +245,14 @@ def cmd_reindex_all(args):
             print("aborted")
             return
     from celery_worker.tasks.index import reindex_all
-    result = reindex_all.delay()
-    print(f"dispatched reindex-all")
-    print(f"task id: {result.id}")
+    try:
+        result = reindex_all.delay()
+        print(f"dispatched reindex-all")
+        print(f"task id: {result.id}")
+    except Exception as exc:
+        logger.warning("Task dispatch failed — Redis unreachable: %s", exc, exc_info=True)
+        print("error: task queue unavailable — is Redis running?", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_vectorize(_args):
@@ -245,9 +265,14 @@ def cmd_vectorize(_args):
     """
     _load_env()
     from celery_worker.tasks.vectorize import vectorize_pending
-    result = vectorize_pending.delay()
-    print(f"dispatched vectorize-pending")
-    print(f"task id: {result.id}")
+    try:
+        result = vectorize_pending.delay()
+        print(f"dispatched vectorize-pending")
+        print(f"task id: {result.id}")
+    except Exception as exc:
+        logger.warning("Task dispatch failed — Redis unreachable: %s", exc, exc_info=True)
+        print("error: task queue unavailable — is Redis running?", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_create_index(_args):

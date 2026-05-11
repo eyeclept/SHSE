@@ -403,7 +403,7 @@ def _push_api_content_impl(target, os_client=None, _docs=None):
     delete_stale(nickname, run_start, client=os_client)
 
 
-@celery.task
+@celery.task(autoretry_for=(Exception,), max_retries=3, countdown=30)
 def crawl_target(target_id, _db_session=None, _nutch_session=None, _os_client=None):
     """
     Input:

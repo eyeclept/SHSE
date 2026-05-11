@@ -43,7 +43,9 @@ celery = Celery(
 celery.conf.update(
     beat_scheduler="redbeat.RedBeatScheduler",
     redbeat_redis_url=_REDIS_URL,
-    redbeat_lock_timeout=60,   # seconds; prevents stale lock if Beat crashes
+    redbeat_lock_timeout=60,          # seconds; prevents stale lock if Beat crashes
+    broker_connection_retry_on_startup=True,
+    broker_connection_max_retries=None,   # retry indefinitely until broker is ready
 )
 
 

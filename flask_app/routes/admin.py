@@ -502,8 +502,12 @@ def crawl_target(target_id):
         Dispatches crawl_target Celery task.
     """
     from celery_worker.tasks.crawl import crawl_target as celery_crawl
-    celery_crawl.delay(target_id)
-    flash(f"Crawl dispatched for target {target_id}.", "success")
+    try:
+        celery_crawl.delay(target_id)
+        flash(f"Crawl dispatched for target {target_id}.", "success")
+    except Exception:
+        logger.warning("Task dispatch failed — Redis unreachable", exc_info=True)
+        flash("Task queue unavailable — Redis is not reachable", "error")
     return redirect(url_for("admin.jobs"))
 
 
@@ -517,8 +521,12 @@ def reindex_target(target_id):
         Dispatches reindex_target Celery task.
     """
     from celery_worker.tasks.index import reindex_target as celery_reindex
-    celery_reindex.delay(target_id)
-    flash(f"Reindex dispatched for target {target_id}.", "success")
+    try:
+        celery_reindex.delay(target_id)
+        flash(f"Reindex dispatched for target {target_id}.", "success")
+    except Exception:
+        logger.warning("Task dispatch failed — Redis unreachable", exc_info=True)
+        flash("Task queue unavailable — Redis is not reachable", "error")
     return redirect(url_for("admin.jobs"))
 
 
@@ -530,8 +538,12 @@ def crawl_all():
     Output: redirect to jobs page
     """
     from celery_worker.tasks.crawl import crawl_all as celery_crawl_all
-    celery_crawl_all.delay()
-    flash("Crawl-all dispatched.", "success")
+    try:
+        celery_crawl_all.delay()
+        flash("Crawl-all dispatched.", "success")
+    except Exception:
+        logger.warning("Task dispatch failed — Redis unreachable", exc_info=True)
+        flash("Task queue unavailable — Redis is not reachable", "error")
     return redirect(url_for("admin.jobs"))
 
 
@@ -543,8 +555,12 @@ def reindex_all():
     Output: redirect to jobs page
     """
     from celery_worker.tasks.index import reindex_all as celery_reindex_all
-    celery_reindex_all.delay()
-    flash("Reindex-all dispatched.", "success")
+    try:
+        celery_reindex_all.delay()
+        flash("Reindex-all dispatched.", "success")
+    except Exception:
+        logger.warning("Task dispatch failed — Redis unreachable", exc_info=True)
+        flash("Task queue unavailable — Redis is not reachable", "error")
     return redirect(url_for("admin.jobs"))
 
 
@@ -556,8 +572,12 @@ def vectorize_pending():
     Output: redirect to jobs page
     """
     from celery_worker.tasks.vectorize import vectorize_pending as celery_vec
-    celery_vec.delay()
-    flash("Vectorize dispatched.", "success")
+    try:
+        celery_vec.delay()
+        flash("Vectorize dispatched.", "success")
+    except Exception:
+        logger.warning("Task dispatch failed — Redis unreachable", exc_info=True)
+        flash("Task queue unavailable — Redis is not reachable", "error")
     return redirect(url_for("admin.jobs"))
 
 
@@ -864,8 +884,12 @@ def reindex_all_from_index():
         Wipes the full OpenSearch index and re-crawls all targets.
     """
     from celery_worker.tasks.index import reindex_all as celery_reindex_all
-    celery_reindex_all.delay()
-    flash("Full reindex dispatched.", "success")
+    try:
+        celery_reindex_all.delay()
+        flash("Full reindex dispatched.", "success")
+    except Exception:
+        logger.warning("Task dispatch failed — Redis unreachable", exc_info=True)
+        flash("Task queue unavailable — Redis is not reachable", "error")
     return redirect(url_for("admin.index_ops"))
 
 
@@ -877,8 +901,12 @@ def vectorize_all():
     Output: redirect to index_ops page
     """
     from celery_worker.tasks.vectorize import vectorize_pending as celery_vec
-    celery_vec.delay()
-    flash("Vectorize-all dispatched.", "success")
+    try:
+        celery_vec.delay()
+        flash("Vectorize-all dispatched.", "success")
+    except Exception:
+        logger.warning("Task dispatch failed — Redis unreachable", exc_info=True)
+        flash("Task queue unavailable — Redis is not reachable", "error")
     return redirect(url_for("admin.index_ops"))
 
 

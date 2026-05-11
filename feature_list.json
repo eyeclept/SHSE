@@ -784,10 +784,35 @@
       "tests_written": { "passes": true }
     }
   },
+  "epic_16_google_dorking": {
+    "description": "Google-style dork operators: site:, inurl:, intitle:, filetype:, \"phrase\", -exclude",
+    "items": {
+      "dork_parser_impl": { "passes": true },
+      "bm25_body_with_dorks_impl": { "passes": true },
+      "search_route_wired": { "passes": true },
+      "api_route_wired": { "passes": true },
+      "test_dork_parser": { "passes": true },
+      "test_dork_search": { "passes": true },
+      "docs_dorking_md": { "passes": true }
+    }
+  },
   "bugfixes": {
     "description": "Discrete bug fixes not tied to a feature epic",
     "items": {
       "bf1_crawl_silent_success_on_unreachable_target": { "passes": true }
+    }
+  },
+  "epic_26_graceful_startup": {
+    "description": "Graceful startup and service resilience — stack converges without service_healthy depends_on",
+    "items": {
+      "resilience_audit_written": { "passes": true },
+      "flask_db_lazy_connect_verified": { "passes": true },
+      "flask_opensearch_fallback_verified": { "passes": true },
+      "admin_task_dispatch_redis_error_handled": { "passes": true },
+      "celery_broker_retry_on_startup": { "passes": true },
+      "celery_task_autoretry_for": { "passes": true },
+      "depends_on_relaxed_to_service_started": { "passes": true },
+      "test_resilience_passes": { "passes": true }
     }
   }
 }
