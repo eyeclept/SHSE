@@ -9,7 +9,7 @@ Description:
          and deferred vectorization.
       2. Generative model (e.g. llama3, mistral) — called at query time
          for AI summary generation (RAG).
-    Uses a single OpenAI-compatible HTTP endpoint (LLM_API_BASE).
+    Uses a single standard LLM API HTTP endpoint (LLM_API_BASE).
     Falls back gracefully when the LLM API is unreachable.
 """
 # Imports

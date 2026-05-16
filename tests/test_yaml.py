@@ -583,5 +583,33 @@ def test_persist_targets_llm_settings_update_on_second_upload(db_session):
     assert row.value == "modelB"
 
 
+def test_parse_llm_settings_malformed_yaml_returns_empty():
+    """
+    Input:  Deliberately broken YAML string (tab where space required)
+    Output: empty dict — parse_llm_settings catches YAMLError and returns {}
+    Details:
+        parse_llm_settings must never raise on malformed input; callers rely
+        on the empty-dict fallback to proceed with env-var defaults.
+    """
+    from flask_app.config_parser import parse_llm_settings
+    bad_yaml = "settings:\n\tllm:\n\t\tgen_model: foo\n"
+    result = parse_llm_settings(bad_yaml)
+    assert result == {}, f"Expected empty dict, got: {result}"
+
+
+def test_parse_config_malformed_yaml_raises_value_error():
+    """
+    Input:  Deliberately broken YAML string
+    Output: ValueError raised — parse_config propagates malformed input as ValueError
+    Details:
+        parse_config must raise ValueError (not bare YAMLError) so callers can
+        catch a stable exception type without importing yaml directly.
+    """
+    from flask_app.config_parser import parse_config
+    bad_yaml = "targets:\n\tbroken: yes\n"
+    with pytest.raises(ValueError, match="invalid YAML"):
+        parse_config(bad_yaml)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

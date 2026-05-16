@@ -25,11 +25,13 @@ Description:
     Embedding model: nomic-embed-text (768 dimensions)
 """
 # Imports
+import logging
 import os
 import tiktoken
 from opensearchpy import OpenSearch, RequestsHttpConnection
 
 # Globals
+logger = logging.getLogger(__name__)
 INDEX_NAME = "shse_pages"
 EMBEDDING_DIM = 768
 _enc = tiktoken.get_encoding("cl100k_base")
@@ -202,7 +204,7 @@ def index_document(url, port, title, crawled_at, service_nickname, content_type,
                                body={"doc": {"crawled_at": crawled_at}})
                 continue
         except NotFoundError:
-            pass
+            logger.debug("doc not yet indexed — creating new: %s", doc_id)
 
         if embeddings is not None and i < len(embeddings):
             embedding = embeddings[i]

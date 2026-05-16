@@ -5,7 +5,7 @@ Email: eyeclept@pm.me
 
 Description:
     Offline translation answer card service. Detects translation queries
-    and calls the local Ollama instance via the OpenAI-compatible
+    and calls the local Ollama instance via the standard LLM API
     /chat/completions endpoint. The model returns only the translated text;
     no surrounding explanation is included. A 15-second timeout is enforced.
     If Ollama is unreachable or the model exceeds the timeout, the card is

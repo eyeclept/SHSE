@@ -48,7 +48,7 @@ class Config:
     NUTCH_HOST = os.environ.get("NUTCH_HOST", "localhost")
     NUTCH_PORT = int(os.environ.get("NUTCH_PORT", 8080))
 
-    # LLM API (OpenAI-compatible endpoint; in the lab stack this is LiteLLM)
+    # LLM API (standard /v1 chat+embedding endpoint; in the lab stack this is LiteLLM)
     LLM_API_BASE = os.environ.get("LLM_API_BASE", "http://localhost:11434/v1")
     LLM_EMBED_MODEL = os.environ.get("LLM_EMBED_MODEL", "nomic-embed-text")
     LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "granite4.1:8b")

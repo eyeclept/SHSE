@@ -14,11 +14,14 @@ Description:
 """
 # Imports
 import copy
+import logging
 
 import yaml
 from celery.schedules import crontab
 
 # Globals
+logger = logging.getLogger(__name__)
+
 _DAYS_OF_WEEK = {
     "monday": 1, "tuesday": 2, "wednesday": 3, "thursday": 4,
     "friday": 5, "saturday": 6, "sunday": 0,
@@ -51,9 +54,13 @@ def parse_llm_settings(yaml_str):
     Output: dict with keys embed_model, gen_model, summary_template (all optional)
     Details:
         Extracts the settings.llm block from the YAML document.
-        Returns an empty dict if the block is absent.
+        Returns an empty dict if the block is absent or malformed.
     """
-    doc = yaml.safe_load(yaml_str) or {}
+    try:
+        doc = yaml.safe_load(yaml_str) or {}
+    except yaml.YAMLError as e:
+        logger.exception("malformed YAML in parse_llm_settings: %s", e)
+        return {}
     return doc.get("settings", {}).get("llm", {})
 
 
@@ -68,8 +75,13 @@ def parse_config(yaml_str):
         defaults into each target so that every target dict contains all fields.
         Does not validate field presence; callers are responsible for checking
         required fields per target type.
+        Raises ValueError for malformed YAML input.
     """
-    doc = yaml.safe_load(yaml_str)
+    try:
+        doc = yaml.safe_load(yaml_str)
+    except yaml.YAMLError as e:
+        logger.exception("malformed YAML in parse_config: %s", e)
+        raise ValueError("invalid YAML") from e
     defaults = doc.get("defaults", {})
     raw_targets = doc.get("targets", [])
 

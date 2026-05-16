@@ -115,3 +115,7 @@ def test_search_returns_empty_when_opensearch_unreachable(client):
         resp = client.get("/search?q=test")
 
     assert resp.status_code == 200, f"expected 200, got {resp.status_code}"
+    # Fallback: the page must render the empty-results state, not zero stats silently
+    assert b"No results" in resp.data or b"no results" in resp.data.lower(), (
+        "Expected empty-results message in response when OpenSearch is unreachable"
+    )

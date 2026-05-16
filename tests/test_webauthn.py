@@ -566,5 +566,45 @@ def test_webauthn_remove_credential_deletes_row(twofa_app):
     assert "/login/webauthn" not in response2.headers.get("Location", "")
 
 
+def test_duplicate_credential_id_is_rejected(twofa_app):
+    """
+    Input:  Two WebAuthnCredential rows with the same credential_id bytes
+    Output: IntegrityError (or OperationalError) raised on flush — unique constraint enforced
+    Details:
+        credential_id has unique=True on the DB column. Attempting to insert
+        a second row with the same bytes must raise a DB integrity error.
+        This exercises the constraint at the DB level, not just the application layer.
+    """
+    import sqlalchemy.exc
+    from flask_app.models.user import User
+    from flask_app.models.webauthn_credential import WebAuthnCredential
+
+    with twofa_app.app_context():
+        user = User(username="wkdupuser", role="user")
+        user.set_password("pass")
+        db.session.add(user)
+        db.session.flush()
+
+        cred1 = WebAuthnCredential(
+            credential_id=b"\xde\xad\xbe\xef",
+            user_id=user.id,
+            public_key=b"\x01\x02",
+            sign_count=0,
+        )
+        db.session.add(cred1)
+        db.session.flush()
+
+        cred2 = WebAuthnCredential(
+            credential_id=b"\xde\xad\xbe\xef",
+            user_id=user.id,
+            public_key=b"\x03\x04",
+            sign_count=0,
+        )
+        db.session.add(cred2)
+        with pytest.raises((sqlalchemy.exc.IntegrityError, sqlalchemy.exc.OperationalError)):
+            db.session.flush()
+        db.session.rollback()
+
+
 if __name__ == "__main__":
     pass

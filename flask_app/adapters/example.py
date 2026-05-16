@@ -17,8 +17,11 @@ Usage in crawler config YAML:
       url: http://my-service.lab.internal
       adapter: example          # → flask_app/adapters/example.py
 """
+# Imports
 
+# Globals
 
+# Functions
 def fetch(target):
     """
     Input:  target - CrawlerTarget ORM object

@@ -13,11 +13,11 @@ Description:
 import logging
 import os
 
+import bcrypt
 import pymysql
 import pytest
 import requests
 from dotenv import load_dotenv
-from werkzeug.security import generate_password_hash
 
 # Globals
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
@@ -82,9 +82,10 @@ def test_admin_creds():
     try:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM users WHERE username = %s", (_TEST_ADMIN,))
+            pw_hash = bcrypt.hashpw(_TEST_ADMIN_PW.encode(), bcrypt.gensalt()).decode()
             cur.execute(
                 "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
-                (_TEST_ADMIN, generate_password_hash(_TEST_ADMIN_PW), "admin"),
+                (_TEST_ADMIN, pw_hash, "admin"),
             )
         yield {"username": _TEST_ADMIN, "password": _TEST_ADMIN_PW}
     finally:

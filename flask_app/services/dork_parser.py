@@ -14,9 +14,11 @@ Supported operators:
     "exact phrase"  — exact phrase match
     -term           — exclude docs containing 'term'
 """
+# Imports
 import logging
 import re
 
+# Globals
 logger = logging.getLogger(__name__)
 
 # Matches (in order): operator:value | "quoted phrase" | -exclude | plain_token
@@ -68,8 +70,15 @@ def parse_dorks(raw_q: str) -> dict:
     }
 
 
+# Functions
 def has_dorks(parsed: dict) -> bool:
-    """Return True if any dork operators were detected."""
+    """
+    Input:  parsed - dict returned by parse_dorks
+    Output: bool — True if any dork operators were found in the query
+    Details:
+        Returns True when at least one filter key is non-None, or there are
+        phrase or exclude terms. Plain-term-only queries return False.
+    """
     return (
         any(v is not None for v in parsed["filters"].values())
         or bool(parsed["must_phrases"])
