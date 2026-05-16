@@ -215,6 +215,25 @@ def _check_services():
         logger.warning("MariaDB probe failed", exc_info=True)
         results["mariadb"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
 
+    # SSO (OIDC discovery URL probe)
+    sso_enabled = Config.SSO_ENABLED
+    if not sso_enabled:
+        results["sso"] = {"status": "disabled", "latency_ms": None, "message": "SSO_ENABLED=false"}
+    else:
+        discovery_url = getattr(Config, "SSO_PROVIDER_URL", "").rstrip("/") + "/.well-known/openid-configuration"
+        try:
+            t0 = time.monotonic()
+            resp = _requests.get(discovery_url, timeout=_PROBE_TIMEOUT)
+            ms = int((time.monotonic() - t0) * 1000)
+            results["sso"] = {
+                "status": "up" if resp.ok else "degraded",
+                "latency_ms": ms,
+                "message": None if resp.ok else f"HTTP {resp.status_code}",
+            }
+        except Exception as exc:
+            logger.warning("SSO discovery probe failed", exc_info=True)
+            results["sso"] = {"status": "down", "latency_ms": None, "message": str(exc)[:80]}
+
     return results
 
 

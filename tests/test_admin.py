@@ -29,11 +29,13 @@ def app():
     Input: None
     Output: Flask test app with all blueprints and SQLite
     """
-    from flask_app.models.user import User                         # noqa: F401
-    from flask_app.models.search_history import SearchHistory      # noqa: F401
-    from flask_app.models.crawler_target import CrawlerTarget      # noqa: F401
-    from flask_app.models.crawl_job import CrawlJob                # noqa: F401
-    from flask_app.models.system_setting import SystemSetting      # noqa: F401
+    from flask_app.models.user import User                                    # noqa: F401
+    from flask_app.models.search_history import SearchHistory                 # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget                 # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob                           # noqa: F401
+    from flask_app.models.system_setting import SystemSetting                 # noqa: F401
+    from flask_app.models.password_reset_token import PasswordResetToken      # noqa: F401
+    from flask_app.models.webauthn_credential import WebAuthnCredential       # noqa: F401
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
     from flask_app.routes.admin import admin_bp

@@ -30,6 +30,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256))
     role = db.Column(db.Enum("admin", "user"), nullable=False, default="user")
     sso_identity = db.Column(db.String(256))
+    totp_secret = db.Column(db.String(64), nullable=True)
+    totp_enabled = db.Column(db.Boolean, nullable=False, default=False)
 
     search_history = db.relationship("SearchHistory", backref="user", lazy=True)
 

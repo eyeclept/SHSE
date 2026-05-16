@@ -683,25 +683,25 @@
     "description": "Date and time answer card: current date/time via NTP, day-of-week lookup, days-until, leap year; AI context injection",
     "items": {
       "datetime_service": {
-        "passes": false
+        "passes": true
       },
       "ntp_support": {
-        "passes": false
+        "passes": true
       },
       "query_detection": {
-        "passes": false
+        "passes": true
       },
       "route_wiring": {
-        "passes": false
+        "passes": true
       },
       "ai_context_injection": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
-        "passes": false
+        "passes": true
       },
       "docs_datetime_cards_md": {
-        "passes": false
+        "passes": true
       }
     }
   },
@@ -709,34 +709,34 @@
     "description": "Weather answer card with HA, InfluxDB, Open-Meteo, and NWS/NOAA adapters; priority fallback chain; AI context injection",
     "items": {
       "adapter_framework": {
-        "passes": false
+        "passes": true
       },
       "ha_adapter": {
-        "passes": false
+        "passes": true
       },
       "influxdb_adapter": {
-        "passes": false
+        "passes": true
       },
       "open_meteo_adapter": {
-        "passes": false
+        "passes": true
       },
       "nws_adapter": {
-        "passes": false
+        "passes": true
       },
       "query_detection": {
-        "passes": false
+        "passes": true
       },
       "route_wiring": {
-        "passes": false
+        "passes": true
       },
       "ai_context_injection": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
-        "passes": false
+        "passes": true
       },
       "docs_weather_cards_md": {
-        "passes": false
+        "passes": true
       }
     }
   },
@@ -744,25 +744,25 @@
     "description": "Calculator inline answer card; AST-safe expression evaluator; detects math queries; displays result above BM25 results",
     "items": {
       "calculator_service": {
-        "passes": false
+        "passes": true
       },
       "ast_whitelist_eval": {
-        "passes": false
+        "passes": true
       },
       "query_detection": {
-        "passes": false
+        "passes": true
       },
       "route_wiring": {
-        "passes": false
+        "passes": true
       },
       "ai_context_injection": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
-        "passes": false
+        "passes": true
       },
       "docs_calculator_md": {
-        "passes": false
+        "passes": true
       }
     }
   },
@@ -770,28 +770,57 @@
     "description": "Unit converter inline answer card; built-in factor table; temperature special-casing; detects '<n> <unit> to <unit>' queries",
     "items": {
       "converter_service": {
-        "passes": false
+        "passes": true
       },
       "unit_factor_table": {
-        "passes": false
+        "passes": true
       },
       "temperature_formulas": {
-        "passes": false
+        "passes": true
       },
       "query_detection": {
-        "passes": false
+        "passes": true
       },
       "route_wiring": {
-        "passes": false
+        "passes": true
       },
       "ai_context_injection": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
-        "passes": false
+        "passes": true
       },
       "docs_unit_converter_md": {
-        "passes": false
+        "passes": true
+      }
+    }
+  },
+  "epic_17f_offline_translation": {
+    "description": "Offline translation via Ollama (aya-expanse:8b); answer card above BM25 results; ai_context injection",
+    "items": {
+      "translate_model_config": {
+        "passes": true
+      },
+      "translate_service": {
+        "passes": true
+      },
+      "query_detection": {
+        "passes": true
+      },
+      "route_integration": {
+        "passes": true
+      },
+      "translation_card_template": {
+        "passes": true
+      },
+      "tests_written": {
+        "passes": true
+      },
+      "error_handling_verified": {
+        "passes": true
+      },
+      "docs_translate_md": {
+        "passes": true
       }
     }
   },
@@ -850,58 +879,108 @@
     }
   },
   "epic_19a_sso_ui": {
-    "description": "SSO login button on login/register pages; SSO health row in admin health grid",
+    "description": "SSO login button on login/register pages (self-hosted OIDC: Authentik, Keycloak); SSO health row in admin health grid",
     "items": {
       "login_page_button": {
-        "passes": false
+        "passes": true
       },
       "register_page_button": {
-        "passes": false
+        "passes": true
       },
       "admin_health_row": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
-        "passes": false
+        "passes": true
       }
     }
   },
   "epic_19b_email_recovery": {
-    "description": "Forgot-password email flow: SMTP config, reset token model, forgot/reset routes, login page link",
+    "description": "Forgot-password email flow via self-hosted SMTP (Postfix, Mailcow, etc.): SMTP config, reset token model, forgot/reset routes, login page link",
     "items": {
       "smtp_config": {
-        "passes": false
+        "passes": true
       },
       "reset_token_model": {
-        "passes": false
+        "passes": true
       },
       "forgot_password_route": {
-        "passes": false
+        "passes": true
       },
       "reset_password_route": {
-        "passes": false
+        "passes": true
       },
       "login_page_link": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
-        "passes": false
+        "passes": true
       }
     }
   },
   "epic_19c_totp": {
-    "description": "TOTP 2FA: model migration, enroll in settings, login challenge, disable",
+    "description": "TOTP + YubiKey 2FA: TOTP model migration, enroll, login challenge, disable; WebAuthn/FIDO2 credential model, registration, authentication, key management",
     "items": {
       "totp_model_migration": {
-        "passes": false
+        "passes": true
       },
       "enroll_ui": {
-        "passes": false
+        "passes": true
       },
       "login_challenge": {
-        "passes": false
+        "passes": true
       },
       "disable_totp": {
+        "passes": true
+      },
+      "totp_tests_written": {
+        "passes": true
+      },
+      "webauthn_model_migration": {
+        "passes": true
+      },
+      "webauthn_registration_endpoint": {
+        "passes": true
+      },
+      "webauthn_authentication_flow": {
+        "passes": true
+      },
+      "webauthn_key_management_ui": {
+        "passes": true
+      },
+      "webauthn_tests_written": {
+        "passes": true
+      }
+    }
+  },
+  "epic_20_security_review": {
+    "description": "Systematic security audit: auth hardening, injection, secrets, dependency CVEs, container/network, access control, audit trail, OWASP Top 10",
+    "items": {
+      "auth_hardening_audit": {
+        "passes": false
+      },
+      "input_validation_audit": {
+        "passes": false
+      },
+      "secrets_management_audit": {
+        "passes": false
+      },
+      "dependency_vulnerability_scan": {
+        "passes": false
+      },
+      "container_network_audit": {
+        "passes": false
+      },
+      "access_control_audit": {
+        "passes": false
+      },
+      "audit_trail_audit": {
+        "passes": false
+      },
+      "owasp_top10_checklist": {
+        "passes": false
+      },
+      "docs_security_review_md": {
         "passes": false
       },
       "tests_written": {

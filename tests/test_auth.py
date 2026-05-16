@@ -34,9 +34,11 @@ def sqlite_app():
         Imports all models before create_all() so their tables are registered.
     """
     # import all models so their tables appear in db.metadata
-    from flask_app.models.search_history import SearchHistory  # noqa: F401
-    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
-    from flask_app.models.crawl_job import CrawlJob            # noqa: F401
+    from flask_app.models.search_history import SearchHistory          # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget          # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob                    # noqa: F401
+    from flask_app.models.password_reset_token import PasswordResetToken  # noqa: F401
+    from flask_app.models.webauthn_credential import WebAuthnCredential   # noqa: F401
 
     # import blueprints (needed for url_for and route resolution in route tests)
     from flask_app.routes.auth import auth_bp
@@ -136,9 +138,11 @@ def sso_app():
         Registers 'oidc' with explicit endpoints (no server_metadata_url fetch).
         Shares the module-level oauth instance; re-registers on each test run.
     """
-    from flask_app.models.search_history import SearchHistory  # noqa: F401
-    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
-    from flask_app.models.crawl_job import CrawlJob            # noqa: F401
+    from flask_app.models.search_history import SearchHistory          # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget          # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob                    # noqa: F401
+    from flask_app.models.password_reset_token import PasswordResetToken  # noqa: F401
+    from flask_app.models.webauthn_credential import WebAuthnCredential   # noqa: F401
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
     from flask_app.routes.admin import admin_bp
@@ -513,6 +517,45 @@ def test_password_change(sqlite_app):
             db.select(User).filter_by(username="pwuser")
         ).scalar_one_or_none()
         assert user.check_password("newpassword1")
+
+
+def test_sso_button_absent_when_disabled(sqlite_app):
+    """
+    Input: sqlite_app fixture
+    Output: None
+    Details:
+        GET /login without SSO_ENABLED must not render the SSO button.
+        GET /register without SSO_ENABLED must not render the SSO button.
+    """
+    sqlite_app.config["SSO_ENABLED"] = False
+    client = sqlite_app.test_client()
+
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert b"Continue with SSO" not in response.data
+
+    response = client.get("/register")
+    assert response.status_code == 200
+    assert b"Continue with SSO" not in response.data
+
+
+def test_sso_button_present_when_enabled(sso_app):
+    """
+    Input: sso_app fixture (SSO_ENABLED=True)
+    Output: None
+    Details:
+        GET /login with SSO_ENABLED=True must render the SSO login button.
+        GET /register with SSO_ENABLED=True must render the SSO login button.
+    """
+    client = sso_app.test_client()
+
+    response = client.get("/login")
+    assert response.status_code == 200
+    assert b"Continue with SSO" in response.data
+
+    response = client.get("/register")
+    assert response.status_code == 200
+    assert b"Continue with SSO" in response.data
 
 
 if __name__ == "__main__":

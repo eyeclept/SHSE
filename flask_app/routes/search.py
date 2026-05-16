@@ -18,7 +18,7 @@ from flask_app.services.search import bm25_body_with_dorks
 from flask_app.services.query_preprocessor import (
     strip_preamble, normalize, strip_stopwords, expand_synonyms,
 )
-from flask_app.services.stardict import build_definition_card
+from flask_app.services.inline import build_inline_card
 
 # Globals
 search_bp = Blueprint("search", __name__)
@@ -129,7 +129,7 @@ def results():
     page_count = 1
     show_bm25_warning = False
 
-    answer_card, ai_context = build_definition_card(q) if q else (None, None)
+    answer_card, ai_context = build_inline_card(q) if q else (None, None)
 
     if q:
         try:
@@ -332,11 +332,26 @@ def settings():
     except Exception:
         logger.warning("settings: could not read system_setting", exc_info=True)
 
+    # 2FA status for settings page
+    totp_enabled = getattr(current_user, "totp_enabled", False) if current_user.is_authenticated else False
+    webauthn_credentials = []
+    if current_user.is_authenticated:
+        try:
+            from flask_app.models.webauthn_credential import WebAuthnCredential
+            from flask_app import db
+            webauthn_credentials = db.session.execute(
+                db.select(WebAuthnCredential).filter_by(user_id=current_user.id)
+            ).scalars().all()
+        except Exception:
+            logger.warning("settings: could not query webauthn_credentials", exc_info=True)
+
     return render_template(
         "settings.html",
         current_theme=session.get("theme", "light"),
         ai_summary_globally_enabled=ai_summary_globally_enabled,
         ai_summary_user_enabled=session.get("ai_summary_enabled", True),
+        totp_enabled=totp_enabled,
+        webauthn_credentials=webauthn_credentials,
     )
 
 

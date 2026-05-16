@@ -159,6 +159,94 @@
     </div>
   </section>
 
+  {# ── Two-factor authentication ───────────────────────────────────── #}
+  <section style="margin-bottom:28px;">
+    <h2 style="margin:0 0 12px; font-size:13px; font-weight:600;
+               color:var(--shse-text-muted); text-transform:uppercase; letter-spacing:0.06em;">
+      Two-factor authentication
+    </h2>
+    <div class="shse-card" style="padding:0;">
+
+      {# TOTP #}
+      <div style="display:flex; align-items:center; gap:20px; padding:16px 18px;
+                  border-bottom:1px solid var(--shse-border);">
+        <div style="flex:1;">
+          <div style="font-size:14px; font-weight:500;">Authenticator app (TOTP)</div>
+          <div style="font-size:12px; color:var(--shse-text-muted); margin-top:3px;">
+            {% if totp_enabled %}Enabled — using Aegis, Bitwarden, or compatible app.
+            {% else %}Not enabled.{% endif %}
+          </div>
+        </div>
+        {% if totp_enabled %}
+          <details style="display:inline;">
+            <summary class="shse-btn" style="cursor:pointer; list-style:none;">Disable</summary>
+            <form method="post" action="{{ url_for('auth.totp_disable') }}"
+                  style="margin-top:10px; padding:12px; background:var(--shse-surface);
+                         border-radius:8px; border:1px solid var(--shse-border);">
+              <label style="display:block; margin-bottom:10px; font-size:13px;">
+                <span style="display:block; font-size:12px; font-weight:500;
+                             color:var(--shse-text-muted); margin-bottom:5px;">
+                  Confirm with current password
+                </span>
+                <input type="password" name="current_password" class="shse-input"
+                       autocomplete="current-password"
+                       style="width:100%; max-width:260px; box-sizing:border-box;">
+              </label>
+              <button type="submit" class="shse-btn shse-btn-danger">Disable 2FA</button>
+            </form>
+          </details>
+        {% else %}
+          <a href="{{ url_for('auth.totp_setup') }}" class="shse-btn">Set up</a>
+        {% endif %}
+      </div>
+
+      {# WebAuthn / Security keys #}
+      <div style="padding:16px 18px;">
+        <div style="display:flex; align-items:center; gap:20px; margin-bottom:{% if webauthn_credentials %}12{% else %}0{% endif %}px;">
+          <div style="flex:1;">
+            <div style="font-size:14px; font-weight:500;">Security keys (FIDO2 / YubiKey)</div>
+            <div style="font-size:12px; color:var(--shse-text-muted); margin-top:3px;">
+              {% if webauthn_credentials %}{{ webauthn_credentials | length }} key(s) registered.
+              {% else %}No security keys registered.{% endif %}
+            </div>
+          </div>
+          <button id="wk-register-btn" class="shse-btn">Add key</button>
+        </div>
+
+        {% for cred in webauthn_credentials %}
+          <div style="display:flex; align-items:center; gap:12px; padding:10px 0;
+                      border-top:1px solid var(--shse-border);">
+            <div style="flex:1; font-size:13px;">
+              <strong>{{ cred.name }}</strong>
+              <span style="color:var(--shse-text-muted); font-size:12px; margin-left:8px;">
+                Registered {{ cred.registered_at.strftime('%Y-%m-%d') if cred.registered_at else '' }}
+              </span>
+            </div>
+            <details style="display:inline;">
+              <summary class="shse-btn" style="cursor:pointer; list-style:none; font-size:12px;">Remove</summary>
+              <form method="post"
+                    action="{{ url_for('auth.webauthn_remove', credential_id=cred.id) }}"
+                    style="margin-top:8px; padding:12px; background:var(--shse-surface);
+                           border-radius:8px; border:1px solid var(--shse-border);">
+                <label style="display:block; margin-bottom:10px; font-size:13px;">
+                  <span style="display:block; font-size:12px; font-weight:500;
+                               color:var(--shse-text-muted); margin-bottom:5px;">
+                    Confirm with current password
+                  </span>
+                  <input type="password" name="current_password" class="shse-input"
+                         autocomplete="current-password"
+                         style="width:100%; max-width:260px; box-sizing:border-box;">
+                </label>
+                <button type="submit" class="shse-btn shse-btn-danger">Remove "{{ cred.name }}"</button>
+              </form>
+            </details>
+          </div>
+        {% endfor %}
+      </div>
+
+    </div>
+  </section>
+
   {# ── Danger zone ─────────────────────────────────────────────────── #}
   <section>
     <h2 style="margin:0 0 12px; font-size:13px; font-weight:600;
@@ -181,4 +269,68 @@
     </div>
   </section>
 </main>
+
+<script>
+(function () {
+  var btn = document.getElementById("wk-register-btn");
+  if (!btn) return;
+
+  function b64urlDecode(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    return Uint8Array.from(atob(s), function(c) { return c.charCodeAt(0); });
+  }
+
+  function b64urlEncode(buf) {
+    var bytes = new Uint8Array(buf);
+    var binary = "";
+    bytes.forEach(function(b) { binary += String.fromCharCode(b); });
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  }
+
+  btn.addEventListener("click", function () {
+    var keyName = prompt("Name this security key (e.g. YubiKey 5):", "Security Key");
+    if (!keyName) return;
+
+    fetch("{{ url_for('auth.webauthn_register') }}")
+      .then(function(r) { return r.json(); })
+      .then(function(opts) {
+        var pkOpts = {
+          challenge: b64urlDecode(opts.challenge),
+          rp: opts.rp,
+          user: { id: b64urlDecode(opts.user.id), name: opts.user.name, displayName: opts.user.displayName },
+          pubKeyCredParams: opts.pubKeyCredParams,
+          timeout: opts.timeout,
+          attestation: opts.attestation,
+        };
+        return navigator.credentials.create({ publicKey: pkOpts });
+      })
+      .then(function(cred) {
+        var body = {
+          id: cred.id,
+          rawId: b64urlEncode(cred.rawId),
+          type: cred.type,
+          name: keyName,
+          response: {
+            attestationObject: b64urlEncode(cred.response.attestationObject),
+            clientDataJSON: b64urlEncode(cred.response.clientDataJSON),
+          },
+        };
+        return fetch("{{ url_for('auth.webauthn_register') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) { window.location.reload(); }
+        else { alert("Registration failed: " + (data.error || "unknown error")); }
+      })
+      .catch(function(err) {
+        alert("Registration cancelled or failed: " + err.message);
+      });
+  });
+}());
+</script>
 {% endblock %}

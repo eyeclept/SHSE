@@ -53,6 +53,7 @@ class Config:
     LLM_EMBED_MODEL = os.environ.get("LLM_EMBED_MODEL", "nomic-embed-text")
     LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "granite4.1:8b")
     LLM_REWRITE_MODEL = os.environ.get("LLM_REWRITE_MODEL", "granite4.1:3b")
+    LLM_TRANSLATE_MODEL = os.environ.get("LLM_TRANSLATE_MODEL", "aya-expanse:8b")
     QUERY_REWRITE_ENABLED = os.environ.get("QUERY_REWRITE_ENABLED", "false").lower() in ("true", "1")
 
     # StarDict dictionaries (mounted at /app/dicts inside Docker)
@@ -68,6 +69,20 @@ class Config:
     SSO_CLIENT_SECRET = os.environ.get("SSO_CLIENT_SECRET", "")
     SSO_ADMIN_GROUP = os.environ.get("SSO_ADMIN_GROUP", "admin")
     AUTH_LOCAL_ENABLED = os.environ.get("AUTH_LOCAL_ENABLED", "true").lower() == "true"
+
+    # WebAuthn (FIDO2 / YubiKey)
+    WEBAUTHN_RP_ID = os.environ.get("WEBAUTHN_RP_ID", "localhost")
+    WEBAUTHN_RP_NAME = os.environ.get("WEBAUTHN_RP_NAME", "SHSE")
+    WEBAUTHN_ORIGIN = os.environ.get("WEBAUTHN_ORIGIN", "http://localhost:5000")
+
+    # SMTP (disabled when SMTP_HOST is blank)
+    SMTP_HOST = os.environ.get("SMTP_HOST", "")
+    SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
+    SMTP_USER = os.environ.get("SMTP_USER", "")
+    SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+    SMTP_FROM = os.environ.get("SMTP_FROM", "noreply@example.com")
+    SMTP_TLS = os.environ.get("SMTP_TLS", "true").lower() == "true"
+    APP_URL = os.environ.get("APP_URL", "http://localhost:5000")
 
 
 if __name__ == "__main__":

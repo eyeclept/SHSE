@@ -176,6 +176,83 @@
       </div>
     {% endif %}
 
+    {# ── Datetime card ── #}
+    {% if answer_card and answer_card.type == "datetime" %}
+      <div class="shse-card" style="padding:16px 20px; margin-bottom:20px;
+                                    border-color:var(--shse-accent);"
+           data-ai-context="{{ (ai_context or '')[:300] | e }}">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+                    color:var(--shse-text-faint); margin-bottom:8px;">{{ answer_card.label }}</div>
+        <div style="font-size:26px; font-weight:600; color:var(--shse-text);">{{ answer_card.body }}</div>
+        <div style="margin-top:10px; font-size:11px; color:var(--shse-text-faint); text-align:right;">
+          {{ answer_card.source }}
+        </div>
+      </div>
+    {% endif %}
+
+    {# ── Calculator card ── #}
+    {% if answer_card and answer_card.type == "calculator" %}
+      <div class="shse-card" style="padding:16px 20px; margin-bottom:20px;
+                                    border-color:var(--shse-accent);"
+           data-ai-context="{{ (ai_context or '')[:300] | e }}">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+                    color:var(--shse-text-faint); margin-bottom:8px;">Calculator</div>
+        <div style="font-family:monospace; font-size:22px; font-weight:600;
+                    color:var(--shse-text); letter-spacing:.02em;">{{ answer_card.body }}</div>
+        <div style="margin-top:10px; font-size:11px; color:var(--shse-text-faint); text-align:right;">
+          {{ answer_card.source }}
+        </div>
+      </div>
+    {% endif %}
+
+    {# ── Translation card ── #}
+    {% if answer_card and answer_card.type == "translation" %}
+      <div class="shse-card" style="padding:16px 20px; margin-bottom:20px;
+                                    border-color:var(--shse-accent);"
+           data-ai-context="{{ (ai_context or '')[:300] | e }}">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
+          <span style="font-size:16px; color:var(--shse-text-muted);">{{ answer_card.word }}</span>
+          <span style="color:var(--shse-text-faint);">→</span>
+          <span style="font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+                       color:var(--shse-text-faint);">{{ answer_card.target_lang }}</span>
+        </div>
+        <div style="font-size:26px; font-weight:600; color:var(--shse-text);">{{ answer_card.body }}</div>
+        <div style="margin-top:10px; font-size:11px; color:var(--shse-text-faint); text-align:right;">
+          {{ answer_card.source }}
+        </div>
+      </div>
+    {% endif %}
+
+    {# ── Weather card ── #}
+    {% if answer_card and answer_card.type == "weather" %}
+      <div class="shse-card" style="padding:16px 20px; margin-bottom:20px;
+                                    border-color:var(--shse-accent);"
+           data-ai-context="{{ (ai_context or '')[:300] | e }}">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+                    color:var(--shse-text-faint); margin-bottom:8px;">Current Weather</div>
+        <div style="font-size:20px; font-weight:600; color:var(--shse-text);">{{ answer_card.body }}</div>
+        <div style="margin-top:10px; font-size:11px; color:var(--shse-text-faint); text-align:right;">
+          {{ answer_card.source }}
+        </div>
+      </div>
+    {% endif %}
+
+    {# ── Unit converter card ── #}
+    {% if answer_card and answer_card.type == "unit_converter" %}
+      <div class="shse-card" style="padding:16px 20px; margin-bottom:20px;
+                                    border-color:var(--shse-accent);"
+           data-ai-context="{{ (ai_context or '')[:300] | e }}">
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+                    color:var(--shse-text-faint); margin-bottom:8px;">Unit Converter</div>
+        <div style="font-family:monospace; font-size:22px; font-weight:600;
+                    color:var(--shse-text);">{{ answer_card.body }}</div>
+        <div style="margin-top:10px; font-size:11px; color:var(--shse-text-faint); text-align:right;">
+          {{ answer_card.source }}
+        </div>
+      </div>
+    {% endif %}
+
+    {# ── Dictionary (OED) card ── #}
     {% if answer_card and answer_card.parsed %}
       {% set parsed = answer_card.parsed %}
       <div class="shse-card" style="padding:18px 20px; margin-bottom:20px;

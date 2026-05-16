@@ -20,6 +20,21 @@
         {% endif %}
       </p>
 
+      {% if sso_enabled %}
+        <a href="{{ url_for('auth.sso_login') }}" class="shse-btn"
+           style="width:100%; justify-content:center; padding:11px;
+                  text-decoration:none; margin-bottom:14px;">
+          {{ icon.shield(14) }} Continue with SSO {{ icon.ext(12) }}
+        </a>
+        <div style="display:flex; align-items:center; gap:10px;
+                    color:var(--shse-text-faint); font-size:11px;
+                    text-transform:uppercase; letter-spacing:0.06em;
+                    margin:14px 0;">
+          <hr style="flex:1; border:none; border-top:1px solid var(--shse-border);">or
+          <hr style="flex:1; border:none; border-top:1px solid var(--shse-border);">
+        </div>
+      {% endif %}
+
       <form method="post" action="{{ url_for('auth.register') }}" novalidate>
         {% if error %}
           <div role="alert" style="padding:10px 12px; margin-bottom:14px;

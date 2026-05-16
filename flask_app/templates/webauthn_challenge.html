@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+
+{% block title %}Security key{% endblock %}
+
+{% block content %}
+<main id="shse-main" role="main" style="min-height:100vh; display:grid; place-items:center; padding:40px;">
+  <div style="width:min(400px, 96vw);">
+    <div style="text-align:center; margin-bottom:24px;">{{ icon.logo(48) }}</div>
+
+    <div class="shse-card" style="padding:28px; text-align:center;">
+      <h1 class="shse-serif" style="margin:0 0 10px; font-size:24px; font-weight:400;">
+        Use your security key
+      </h1>
+      <p style="margin:0 0 22px; font-size:14px; color:var(--shse-text-muted);">
+        Insert your security key and tap it, or follow your browser's prompt.
+      </p>
+
+      <div id="wk-error" role="alert"
+           style="display:none; padding:10px 12px; margin-bottom:14px;
+                  border-radius:8px; background:var(--shse-danger-soft);
+                  color:var(--shse-danger); font-size:13px;"></div>
+
+      <button id="wk-btn" class="shse-btn shse-btn-primary"
+              style="width:100%; justify-content:center; padding:12px;">
+        {{ icon.shield(14) }} Authenticate with security key
+      </button>
+    </div>
+
+    <p style="text-align:center; font-size:12px; color:var(--shse-text-faint); margin-top:18px;">
+      <a href="{{ url_for('auth.login') }}">Cancel and sign in differently</a>
+    </p>
+  </div>
+</main>
+
+<script>
+(function () {
+  var challenge = "{{ challenge }}";
+  var credIds = {{ cred_ids | tojson }};
+
+  function b64urlDecode(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    return Uint8Array.from(atob(s), function(c) { return c.charCodeAt(0); });
+  }
+
+  function b64urlEncode(buf) {
+    var bytes = new Uint8Array(buf);
+    var binary = "";
+    bytes.forEach(function(b) { binary += String.fromCharCode(b); });
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  }
+
+  document.getElementById("wk-btn").addEventListener("click", function () {
+    var allowCreds = credIds.map(function(id) {
+      return { type: "public-key", id: b64urlDecode(id) };
+    });
+
+    navigator.credentials.get({
+      publicKey: {
+        challenge: b64urlDecode(challenge),
+        allowCredentials: allowCreds,
+        userVerification: "preferred",
+        timeout: 60000,
+      }
+    }).then(function(assertion) {
+      var body = {
+        id: assertion.id,
+        rawId: b64urlEncode(assertion.rawId),
+        type: assertion.type,
+        response: {
+          authenticatorData: b64urlEncode(assertion.response.authenticatorData),
+          clientDataJSON: b64urlEncode(assertion.response.clientDataJSON),
+          signature: b64urlEncode(assertion.response.signature),
+          userHandle: assertion.response.userHandle ? b64urlEncode(assertion.response.userHandle) : null,
+        },
+      };
+      return fetch("{{ url_for('auth.webauthn_challenge') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }).then(function(resp) {
+      return resp.json();
+    }).then(function(data) {
+      if (data.ok) {
+        window.location.href = "/";
+      } else {
+        var el = document.getElementById("wk-error");
+        el.textContent = data.error || "Authentication failed.";
+        el.style.display = "block";
+      }
+    }).catch(function(err) {
+      var el = document.getElementById("wk-error");
+      el.textContent = err.message || "Authentication cancelled or failed.";
+      el.style.display = "block";
+    });
+  });
+}());
+</script>
+{% endblock %}
