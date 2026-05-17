@@ -109,6 +109,79 @@ graph TD
 
 ---
 
+## Minimum Memory Requirements
+
+SHSE figures are **measured minimums** from `docker stats` on an idle stack with no load. Third-party service requirements (OpenSearch, MariaDB, Redis, Nutch, Ollama) change over time — check each project's documentation for current figures before planning hardware.
+
+---
+
+### 1. SHSE Application
+
+The containers that make up SHSE itself. These figures are stable across versions.
+
+| Container | Min RAM | Notes |
+|---|---|---|
+| Flask (web UI + API) | ~180 MiB | |
+| Celery Worker | ~1.0 GiB | Includes sentence-transformers for CPU embedding fallback; see note |
+| Celery Beat (scheduler) | ~128 MiB | |
+| Nginx (reverse proxy) | ~14 MiB | |
+| **SHSE minimum** | **~1.3 GiB** | |
+
+> The Celery Worker sits at ~1 GiB because it loads the sentence-transformers embedding model, which keeps semantic search working if the LLM API goes down. In pure BM25-only deployments (no `[llm] api_base` set in `config.ini`) the model is never loaded and the worker idles significantly lower.
+
+---
+
+### 2. Required and Optional Services
+
+> **These figures reflect current versions at time of writing. Requirements for third-party services change with each release.** Check the upstream project documentation before provisioning hardware:
+> - OpenSearch: [opensearch.org/docs](https://opensearch.org/docs/latest/) — [GitHub](https://github.com/opensearch-project/OpenSearch)
+> - Apache Nutch: [nutch.apache.org](https://nutch.apache.org/) — [GitHub](https://github.com/apache/nutch)
+> - MariaDB: [mariadb.org/documentation](https://mariadb.org/documentation/) — [GitHub](https://github.com/MariaDB/server)
+> - Redis: [redis.io/docs](https://redis.io/docs/) — [GitHub](https://github.com/redis/redis)
+> - Ollama: [ollama.com](https://ollama.com) — [GitHub](https://github.com/ollama/ollama)
+
+| Service | Min RAM | Notes |
+|---|---|---|
+| OpenSearch | ~1.6 GiB | JVM heap set to 1 GiB (`-Xms1g -Xmx1g`); raise for large indexes, lower for constrained hosts |
+| Nutch | ~153 MiB | JVM-based; REST server mode |
+| MariaDB | ~26 MiB | Grows with database size |
+| Redis | ~10 MiB | Grows with job queue depth |
+| **Required services minimum** | **~1.8 GiB** | |
+| | | |
+| **Ollama — optional LLM host** | | |
+| Daemon process | ~206 MiB RAM | Host process; no models loaded |
+| + nomic-embed-text | +~270 MiB VRAM | Embedding; kept loaded between requests |
+| + granite4.1:3b (query rewriter) | +~2.0 GiB VRAM | Unloads after ~5 min idle |
+| + granite4.1:8b (AI summaries) | +~5.0 GiB VRAM | Unloads after ~5 min idle |
+| + aya-expanse:8b (translation) | +~4.7 GiB VRAM | Unloads after ~5 min idle |
+
+> Ollama does not load all models simultaneously. The peak VRAM is the embedding model (~270 MiB, kept warm) plus whichever generative model is active (~5 GiB). Models are configurable — swap any of the above for lighter or heavier variants as your hardware allows.
+
+> **CPU-only:** Ollama can run without a GPU. Move the VRAM figures above into RAM instead. `nomic-embed-text` is fast on CPU; generation models are 10–50× slower and memory-intensive.
+
+---
+
+### 3. Combined Minimums
+
+| Configuration | Min RAM | Min VRAM |
+|---|---|---|
+| BM25 only (no LLM) | **~3.1 GiB** | None |
+| Embedding + semantic search | **~3.5 GiB** | ~300 MiB |
+| Embedding + AI summaries *(recommended)* | **~3.5 GiB** | ~5.5 GiB |
+| Full AI (summaries + rewrite + translation) | **~3.5 GiB** | ~5.5 GiB peak |
+| Full AI, CPU-only (no GPU) | **~9 GiB** | None |
+
+Peak VRAM is the embedding model plus one generative model at a time; Ollama unloads idle models after ~5 minutes.
+
+**Quick reference:**
+- **4 GiB RAM** minimum — BM25 search, no AI
+- **6 GiB RAM** minimum — full stack with GPU
+- **10 GiB RAM** minimum — full stack, CPU-only LLM
+- **6 GiB VRAM** minimum — embedding + AI summaries (RTX 3060 12 GB class)
+- **12 GiB VRAM** recommended — all default models with headroom
+
+---
+
 ## Getting Started
 
 ### Prerequisites
