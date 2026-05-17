@@ -66,3 +66,8 @@ key.pem
 
 # --- Syncthing Errors ---
 *sync-conflict*
+
+# --- VM-specific compose files (contain private IPs, not for public repo) ---
+docker-compose.app.yml
+docker-compose.services.yml
+docker-compose.kiwix.yml

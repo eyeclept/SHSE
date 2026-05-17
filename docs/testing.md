@@ -75,8 +75,7 @@ All Playwright tests skip automatically when `http://localhost:5000` is not reac
 ### Search query note
 
 Playwright scenarios use `"human anatomy"` and `"cell biology"` as test queries.
-These return results from the default Kiwix Wikipedia crawl target
-(`http://172.27.72.16:8082/content/wikipedia_en_100_nopic_2026-04/index`, depth 7).
+These return results from whatever crawl targets are currently indexed.
 If the index is empty, result-dependent tests skip with a clear message.
 
 ### Seeded test accounts

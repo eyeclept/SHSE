@@ -256,11 +256,15 @@ def get_vector_hits(q, os_client=None, llm_session=None):
 
     embedding = get_embedding(q, session=llm_session)
     if embedding is None:
-        logger.warning("get_vector_hits: LLM API unavailable, trying CPU embedding fallback")
-        embedding = get_cpu_embedding(q)
+        from flask_app.config import Config
+        if Config.CPU_EMBED_FALLBACK:
+            logger.warning("get_vector_hits: LLM API unavailable, trying CPU embedding fallback")
+            embedding = get_cpu_embedding(q)
+        else:
+            logger.warning("get_vector_hits: LLM API unavailable, CPU fallback disabled (cpu_fallback=false)")
 
     if embedding is None:
-        logger.warning("get_vector_hits: CPU embedding also unavailable, semantic rail empty")
+        logger.warning("get_vector_hits: no embedding available, semantic rail empty")
         return _dummy_vector_search(q, client), False
 
     try:

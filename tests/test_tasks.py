@@ -237,43 +237,49 @@ def test_crawl_all_dispatches_one_per_target(db_session):
     assert dispatched_ids == expected_ids
 
 
-def test_reindex_target_deletes_then_crawls(db_session, service_target):
+def test_reindex_target_crawls_without_pre_wipe(db_session, service_target):
     """
     Input: None
     Output: None
     Details:
-        reindex_target deletes existing OpenSearch docs then triggers a crawl.
-        Verified by: delete_by_nickname is called at the opensearch module level
-        and a CrawlJob is written with status success.
+        reindex_target must NOT pre-wipe the index before crawling.
+        It runs a fresh crawl and relies on delete_stale() to remove only
+        genuinely-gone pages (those not visited in the current run).
+        Verified by: delete_by_nickname is NOT called; a CrawlJob is written
+        with status success; delete_stale IS called (stale cleanup still runs).
     """
     from flask_app.models.crawl_job import CrawlJob
     from celery_worker.tasks.index import reindex_target
 
     os_client = MagicMock()
 
-    with patch("celery_worker.tasks.index.delete_by_nickname") as del_mock, \
-         patch("celery_worker.tasks.crawl._discover_urls", return_value=["http://test.local/"]), \
+    with patch("celery_worker.tasks.crawl._discover_urls", return_value=["http://test.local/"]), \
          patch("celery_worker.tasks.crawl._fetch_page_text", return_value="sample page text"), \
          patch("celery_worker.tasks.crawl.index_document"), \
-         patch("celery_worker.tasks.crawl.delete_stale"):
+         patch("celery_worker.tasks.crawl.delete_stale") as stale_mock, \
+         patch("flask_app.services.opensearch.delete_by_nickname") as del_mock:
         reindex_target(
             service_target.id,
             _db_session=db_session,
             _os_client=os_client,
         )
 
-    del_mock.assert_called_once()
+    del_mock.assert_not_called()
+    stale_mock.assert_called_once()
     job = db_session.query(CrawlJob).filter_by(target_id=service_target.id).first()
     assert job is not None
     assert job.status == "success"
 
 
-def test_reindex_all_wipes_then_crawls_all(db_session):
+def test_reindex_all_dispatches_without_pre_wipe(db_session):
     """
     Input: None
     Output: None
     Details:
-        reindex_all calls wipe_index then dispatches crawl_target.delay per target.
+        reindex_all must NOT wipe the index before dispatching crawls.
+        It dispatches crawl_target.delay() for every target and each crawl
+        handles its own stale cleanup. The full-reset path is the separate
+        "Drop and recreate" admin operation.
     """
     from flask_app.models.crawler_target import CrawlerTarget
     from celery_worker.tasks.index import reindex_all
@@ -287,12 +293,10 @@ def test_reindex_all_wipes_then_crawls_all(db_session):
     mock_result = MagicMock()
     mock_result.id = "task-xyz"
 
-    with patch("celery_worker.tasks.index.wipe_index") as wipe_mock, \
-         patch("celery_worker.tasks.index.crawl_target") as task_mock:
+    with patch("celery_worker.tasks.index.crawl_target") as task_mock:
         task_mock.delay.return_value = mock_result
         reindex_all(_db_session=db_session)
 
-    wipe_mock.assert_called_once()
     assert task_mock.delay.call_count == 2
 
 

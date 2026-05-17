@@ -124,6 +124,7 @@ def search():
     result_rows = []
     total = 0
     took_ms = 0
+    search_error = None
     sources = []
     page_count = 1
     vector_hits = []
@@ -159,8 +160,9 @@ def search():
             buckets = resp.get("aggregations", {}).get("by_service", {}).get("buckets", [])
             sources = [{"name": b["key"], "n": b["doc_count"]} for b in buckets]
 
-        except Exception:
-            logger.warning("BM25 search failed on API endpoint", exc_info=True)
+        except Exception as _exc:
+            logger.exception("BM25 search failed on API endpoint: %s", _exc)
+            search_error = str(_exc)
 
         # Semantic search + AI summary (use effective search query for embedding)
         vector_hits, ai_summary, show_bm25_warning, _chips = semantic_results(search_q)
@@ -179,6 +181,7 @@ def search():
         "sources": sources,
         "vector_hits": vector_hits,
         "ai_summary": ai_summary,
+        "search_error": search_error,
     })
 
 
@@ -247,6 +250,12 @@ def semantic_summary():
         Returns empty string when AI summary is disabled globally (admin)
         or by the user in their session preference.
     """
+    # LLM availability gate — fast cached check, returns immediately if LLM is down.
+    # is_llm_available() only returns a bool — no internal details exposed.
+    from flask_app.services.llm import is_llm_available
+    if not is_llm_available():
+        return ""
+
     # Admin gate
     try:
         from flask_app import db

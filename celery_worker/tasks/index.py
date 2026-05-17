@@ -4,14 +4,20 @@ Date:   2026
 Email: eyeclept@pm.me
 
 Description:
-    Reindex Celery tasks. Delete existing OpenSearch docs for a target or
-    for the entire index, then re-crawl to rebuild from scratch.
+    Reindex Celery tasks. Trigger a fresh crawl for one target or all targets.
+    Stale document removal is handled by delete_stale() at the end of each crawl
+    run — it removes only pages whose crawled_at timestamp predates the run start,
+    meaning pages the current crawl did not visit. Pre-wiping before re-crawling
+    is intentionally avoided: any page the crawler misses on a given run would be
+    permanently lost if the index were cleared first.
+
+    The "Drop and recreate index" operation in the admin UI (wipe_index +
+    create_index) is the explicit full-reset path when a clean slate is needed.
 """
 # Imports
 from celery.utils.log import get_task_logger
 from celery_worker.app import celery
 from celery_worker.tasks.crawl import _crawl_target_impl, crawl_target
-from flask_app.services.opensearch import delete_by_nickname, wipe_index
 
 # Globals
 logger = get_task_logger(__name__)
@@ -38,19 +44,16 @@ def reindex_target(target_id, _db_session=None, _os_client=None,
         _db_session   - injectable SQLAlchemy session (tests only)
         _os_client    - injectable OpenSearch client (tests only)
         _nutch_session - injectable requests.Session for Nutch (tests only)
-    Output: int — CrawlJob id from the subsequent crawl_target call
+    Output: int — CrawlJob id created by the crawl run
     Details:
-        Deletes all OpenSearch documents for the target's service_nickname,
-        then triggers a fresh crawl via crawl_target.
+        Triggers a fresh crawl for the target. Pages that no longer exist are
+        removed by delete_stale() at the end of the crawl (pages not visited in
+        this run whose crawled_at predates run_start). Pages the crawler reaches
+        are re-indexed with updated content and a refreshed crawled_at timestamp.
+        The index is NOT pre-wiped — doing so would permanently lose any page the
+        crawler happens to miss on this particular run.
     """
-    from flask_app.models.crawler_target import CrawlerTarget
-
     def _impl(db_session):
-        target = db_session.get(CrawlerTarget, target_id)
-        if target is None:
-            raise ValueError(f"CrawlerTarget {target_id} not found")
-        nickname = target.nickname or target.network or str(target.id)
-        delete_by_nickname(nickname, client=_os_client)
         return _crawl_target_impl(target_id, db_session, _nutch_session, _os_client)
 
     if _db_session is not None:
@@ -68,13 +71,14 @@ def reindex_all(_db_session=None, _os_client=None):
         _os_client  - injectable OpenSearch client (tests only)
     Output: list[str] — Celery AsyncResult IDs of dispatched crawl_target tasks
     Details:
-        Wipes the entire OpenSearch index, then dispatches crawl_target.delay()
-        for every CrawlerTarget row.
+        Dispatches crawl_target.delay() for every CrawlerTarget row. Each crawl
+        runs independently and removes its own stale documents via delete_stale().
+        The index is NOT pre-wiped — use the admin "Drop and recreate" operation
+        when a full clean slate is required.
     """
     from flask_app.models.crawler_target import CrawlerTarget
 
     def _impl(db_session):
-        wipe_index(client=_os_client)
         targets = db_session.query(CrawlerTarget).all()
         results = []
         for target in targets:

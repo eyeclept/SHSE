@@ -126,6 +126,9 @@ def results():
         page = 1
 
     from flask_app.config import Config
+    from flask_app.services.llm import is_llm_available
+    llm_available = is_llm_available() if bool(Config.LLM_API_BASE) else False
+
     if raw:
         # Bypass all optimizations; search exactly what the user typed
         search_q = q
@@ -145,6 +148,7 @@ def results():
     result_rows = []
     total = 0
     took_ms = 0
+    search_error = None
     sources = []
     page_count = 1
     show_bm25_warning = False
@@ -194,8 +198,9 @@ def results():
             if current_user.is_authenticated:
                 _save_history(q)
 
-        except Exception:
-            logger.warning("BM25 search failed", exc_info=True)
+        except Exception as _exc:
+            logger.exception("BM25 search failed: %s", _exc)
+            search_error = str(_exc)
 
         # Semantic search runs asynchronously via HTMX (/api/semantic).
         # show_bm25_warning is only shown here if we can quickly determine
@@ -222,6 +227,8 @@ def results():
         sources=sources,
         ai_summary=None,
         show_bm25_warning=show_bm25_warning,
+        llm_available=llm_available,
+        search_error=search_error,
         filter_services=filter_services or [],
         sort=sort,
         answer_card=answer_card,

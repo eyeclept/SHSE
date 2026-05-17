@@ -1,0 +1,12 @@
+# CPU embedding fallback — optional dependency.
+#
+# Installs sentence-transformers + PyTorch (~6 GB disk, ~1 GB RAM).
+# Required when you want semantic search to keep working if the LLM API goes down.
+#
+# Steps:
+#   1. pip install -r requirements-cpu-fallback.txt
+#   2. Set cpu_fallback = true in config.ini [llm]
+#
+# Without this, SHSE falls back to BM25-only search when the LLM API is unreachable.
+
+sentence-transformers>=3.0.0

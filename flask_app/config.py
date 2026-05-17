@@ -89,6 +89,7 @@ class Config:
     LLM_REWRITE_MODEL  = _c("llm", "rewrite_model",  "granite4.1:3b")
     LLM_TRANSLATE_MODEL= _c("llm", "translate_model","aya-expanse:8b")
     QUERY_REWRITE_ENABLED = _c("llm", "query_rewrite", "false").lower() in ("true", "1")
+    CPU_EMBED_FALLBACK    = _c("llm", "cpu_fallback",  "false").lower() in ("true", "1")
 
     # ── StarDict ───────────────────────────────────────────────────────────
     STARDICT_DICT_PATH = _c("stardict", "dict_path", "/app/dicts")

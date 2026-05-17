@@ -16,6 +16,7 @@ Description:
 import logging
 import os
 import threading
+import time
 
 import requests
 
@@ -30,6 +31,11 @@ _CPU_EMBED_MODEL = "nomic-ai/nomic-embed-text-v1"
 _TIMEOUT = 30
 _cpu_model = None
 _cpu_model_lock = threading.Lock()
+
+# LLM availability cache — probed at most once per _LLM_AVAIL_TTL seconds per process.
+_LLM_AVAIL_TTL = 30
+_llm_avail_cache: dict = {"available": None, "checked_at": 0.0}
+_llm_avail_lock = threading.Lock()
 
 _DEFAULT_SUMMARY_TEMPLATE = (
     "You are a search assistant for a private homelab index. Answer using "
@@ -76,6 +82,37 @@ def _get_llm_settings(db_session=None):
         }
 
 
+def is_llm_available(session=None):
+    """
+    Input:  session - optional requests.Session for injection in tests
+    Output: bool — True if LLM API responded successfully within the last
+            _LLM_AVAIL_TTL seconds; False if unreachable or not configured.
+    Details:
+        Result is cached per-process for _LLM_AVAIL_TTL seconds so that
+        every search request does not probe the LLM API. Thread-safe via lock.
+        Only exposes a boolean — no hostnames, credentials, or internal paths
+        are returned, making it safe to pass to non-admin templates.
+    """
+    if not _LLM_API_BASE:
+        return False
+    with _llm_avail_lock:
+        now = time.monotonic()
+        if now - _llm_avail_cache["checked_at"] < _LLM_AVAIL_TTL:
+            return bool(_llm_avail_cache["available"])
+        try:
+            r = (session or requests).get(
+                f"{_LLM_API_BASE}/models", timeout=2
+            )
+            available = r.ok
+        except Exception:
+            available = False
+        _llm_avail_cache["available"] = available
+        _llm_avail_cache["checked_at"] = now
+        if not available:
+            logger.warning("is_llm_available: LLM API unreachable at %s", _LLM_API_BASE)
+        return available
+
+
 def get_embedding(text, session=None):
     """
     Input:
@@ -107,15 +144,19 @@ def get_embedding(text, session=None):
 def get_cpu_embedding(text):
     """
     Input:  text — str, the text to embed
-    Output: list[float] embedding vector, or None on any failure
+    Output: list[float] embedding vector, or None when disabled or on failure
     Details:
         CPU-based fallback for get_embedding() when the LLM API is unreachable.
-        Lazy-loads nomic-ai/nomic-embed-text-v1 via sentence-transformers on first
-        call (one-time download ~274 MB; cached in ~/.cache/huggingface/hub).
-        Produces 768-dimensional embeddings compatible with the stored index vectors
-        so vector_search() results remain semantically correct.
+        Only active when CPU_EMBED_FALLBACK=true in config.ini [llm]. Requires
+        sentence-transformers to be installed (see requirements-cpu-fallback.txt).
+        Lazy-loads nomic-ai/nomic-embed-text-v1 on first call (~274 MB download,
+        cached in ~/.cache/huggingface/hub).
         Thread-safe: uses a double-checked lock so only one thread loads the model.
     """
+    from flask_app.config import Config
+    if not Config.CPU_EMBED_FALLBACK:
+        return None
+
     global _cpu_model
     if _cpu_model is None:
         with _cpu_model_lock:
@@ -125,6 +166,12 @@ def get_cpu_embedding(text):
                     _cpu_model = SentenceTransformer(
                         _CPU_EMBED_MODEL, trust_remote_code=True
                     )
+                except ImportError:
+                    logger.warning(
+                        "get_cpu_embedding: sentence-transformers not installed. "
+                        "Install requirements-cpu-fallback.txt or set cpu_fallback=false in config.ini"
+                    )
+                    return None
                 except Exception:
                     logger.warning(
                         "get_cpu_embedding: failed to load %s", _CPU_EMBED_MODEL, exc_info=True

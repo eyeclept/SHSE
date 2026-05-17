@@ -1237,6 +1237,23 @@
       }
     }
   },
+  "epic_29_silent_exception_audit": {
+    "description": "Audit every except block in flask_app/routes/ and flask_app/services/ for silent swallowing; upgrade unexpected errors to logger.exception(); surface error to caller via response field or flash; add regression tests",
+    "items": {
+      "grep_and_classify_except_blocks": {
+        "passes": false
+      },
+      "error_reaches_caller": {
+        "passes": false
+      },
+      "error_handling_compliance_verified": {
+        "passes": false
+      },
+      "regression_tests_written": {
+        "passes": false
+      }
+    }
+  },
   "epic_9e_systemd": {
     "description": "systemd service for boot-time stack management via docker compose",
     "items": {

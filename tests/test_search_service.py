@@ -184,7 +184,7 @@ def test_get_vector_hits_returns_dummy_and_false_when_embedding_down():
 def test_get_vector_hits_uses_cpu_fallback_when_api_down():
     """
     Input:  get_embedding returns None (LLM API down);
-            get_cpu_embedding returns a valid vector
+            CPU_EMBED_FALLBACK enabled; get_cpu_embedding returns a valid vector
     Output: (hits, True) — CPU embedding used; real vector results returned
     """
     mock_hits = [_make_hit("c1", score=0.85)]
@@ -192,7 +192,8 @@ def test_get_vector_hits_uses_cpu_fallback_when_api_down():
 
     with patch("flask_app.services.llm.get_embedding", return_value=None), \
          patch("flask_app.services.llm.get_cpu_embedding", return_value=mock_emb), \
-         patch("flask_app.services.opensearch.vector_search", return_value=mock_hits):
+         patch("flask_app.services.opensearch.vector_search", return_value=mock_hits), \
+         patch("flask_app.config.Config.CPU_EMBED_FALLBACK", True):
         from flask_app.services.search import get_vector_hits
         hits, available = get_vector_hits("server config", os_client=MagicMock())
 
@@ -201,6 +202,20 @@ def test_get_vector_hits_uses_cpu_fallback_when_api_down():
     assert hits[0]["score"] == 0.85
     for key in ("snippet", "context", "title", "service", "url"):
         assert key in hits[0]
+
+
+def test_get_vector_hits_skips_cpu_fallback_when_disabled():
+    """
+    Input:  get_embedding returns None; CPU_EMBED_FALLBACK=false (default)
+    Output: ([], False) — semantic rail empty, CPU fallback not attempted
+    """
+    with patch("flask_app.services.llm.get_embedding", return_value=None), \
+         patch("flask_app.config.Config.CPU_EMBED_FALLBACK", False):
+        from flask_app.services.search import get_vector_hits
+        hits, available = get_vector_hits("server config", os_client=MagicMock())
+
+    assert available is False
+    assert hits == []
 
 
 def test_dummy_vector_search_returns_empty():
