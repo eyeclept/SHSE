@@ -36,6 +36,7 @@
 
       <form method="post"
             action="{{ url_for('admin.edit_target', target_id=editing.id) if editing else url_for('admin.add_target') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px 20px;">
 
@@ -246,6 +247,7 @@
             <div style="display:flex; gap:6px; justify-content:flex-end;">
               {% if nutch_up %}
               <form method="post" action="{{ url_for('admin.crawl_target', target_id=t.id) }}" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
                 <button type="submit" class="shse-btn shse-btn-ghost"
                         style="padding:4px 8px; font-size:12px;" title="Crawl now">
                   {{ icon.refresh(12) }} Crawl
@@ -258,6 +260,7 @@
               </a>
               <form method="post" action="{{ url_for('admin.delete_target', target_id=t.id) }}"
                     style="margin:0;" onsubmit="return confirm('Delete this target?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
                 <button type="submit" class="shse-btn"
                         style="padding:4px 8px; font-size:12px;
                                color:var(--shse-danger); border-color:var(--shse-danger-soft);">

@@ -49,6 +49,7 @@ def app():
     })
     db.init_app(flask_app)
     login_manager.init_app(flask_app)
+    login_manager.login_view = "auth.login"
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(search_bp)
     flask_app.register_blueprint(admin_bp, url_prefix="/admin")

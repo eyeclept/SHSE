@@ -19,6 +19,7 @@
   </header>
 
   <form method="post" action="{{ url_for('search.settings') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
 
     {# ── Appearance ──────────────────────────────────────────────────── #}
     <section style="margin-bottom:28px;">
@@ -127,6 +128,7 @@
         <form method="post" action="{{ url_for('search.settings_password') }}"
               style="padding:0 18px 18px; display:flex; flex-direction:column; gap:12px;
                      border-top:1px solid var(--shse-border);">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
           <label style="display:block; margin-top:12px;">
             <span style="display:block; font-size:12px; font-weight:500;
                          color:var(--shse-text-muted); margin-bottom:5px;">Current password</span>
@@ -183,6 +185,7 @@
             <form method="post" action="{{ url_for('auth.totp_disable') }}"
                   style="margin-top:10px; padding:12px; background:var(--shse-surface);
                          border-radius:8px; border:1px solid var(--shse-border);">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
               <label style="display:block; margin-bottom:10px; font-size:13px;">
                 <span style="display:block; font-size:12px; font-weight:500;
                              color:var(--shse-text-muted); margin-bottom:5px;">
@@ -228,6 +231,7 @@
                     action="{{ url_for('auth.webauthn_remove', credential_id=cred.id) }}"
                     style="margin-top:8px; padding:12px; background:var(--shse-surface);
                            border-radius:8px; border:1px solid var(--shse-border);">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
                 <label style="display:block; margin-bottom:10px; font-size:13px;">
                   <span style="display:block; font-size:12px; font-weight:500;
                                color:var(--shse-text-muted); margin-bottom:5px;">
@@ -263,6 +267,7 @@
         </div>
         <form method="post" action="{{ url_for('search.history_clear') }}"
               onsubmit="return confirm('Delete all your saved searches? This cannot be undone.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
           <button type="submit" class="shse-btn shse-btn-danger">Clear history</button>
         </form>
       </div>

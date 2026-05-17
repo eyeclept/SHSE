@@ -640,13 +640,13 @@
     "description": "Nginx smoke tests: HTTP\u2192HTTPS redirect, HTTPS proxy to Flask, /admin/* auth_request enforcement",
     "items": {
       "live_http_redirect": {
-        "passes": false
+        "passes": true
       },
       "live_https_proxy": {
-        "passes": false
+        "passes": true
       },
       "live_admin_auth": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
         "passes": true
@@ -957,34 +957,34 @@
     "description": "Systematic security audit: auth hardening, injection, secrets, dependency CVEs, container/network, access control, audit trail, OWASP Top 10",
     "items": {
       "auth_hardening_audit": {
-        "passes": false
+        "passes": true
       },
       "input_validation_audit": {
-        "passes": false
+        "passes": true
       },
       "secrets_management_audit": {
-        "passes": false
+        "passes": true
       },
       "dependency_vulnerability_scan": {
-        "passes": false
+        "passes": true
       },
       "container_network_audit": {
-        "passes": false
+        "passes": true
       },
       "access_control_audit": {
-        "passes": false
+        "passes": true
       },
       "audit_trail_audit": {
-        "passes": false
+        "passes": true
       },
       "owasp_top10_checklist": {
-        "passes": false
+        "passes": true
       },
       "docs_security_review_md": {
-        "passes": false
+        "passes": true
       },
       "tests_written": {
-        "passes": false
+        "passes": true
       }
     }
   },
@@ -1230,6 +1230,99 @@
         "passes": true
       },
       "playwright_sso_button": {
+        "passes": true
+      },
+      "full_test_suite_passes": {
+        "passes": true
+      }
+    }
+  },
+  "epic_9e_systemd": {
+    "description": "systemd service for boot-time stack management via docker compose",
+    "items": {
+      "service_file_created": {
+        "passes": true
+      },
+      "install_instructions_written": {
+        "passes": true
+      },
+      "service_installed_and_enabled": {
+        "passes": false
+      }
+    }
+  },
+  "epic_config_ini": {
+    "description": "Split config into config.ini (non-secrets, git-tracked) and .env (secrets only); config.py uses configparser with env var override; REDIS_PASSWORD wired through all Redis clients and broker URL",
+    "items": {
+      "config_ini_created": {
+        "passes": true
+      },
+      "config_py_configparser": {
+        "passes": true
+      },
+      "redis_password_wired": {
+        "passes": true
+      },
+      "celery_broker_url_from_components": {
+        "passes": true
+      },
+      "env_example_secrets_only": {
+        "passes": true
+      },
+      "env_secrets_only": {
+        "passes": true
+      },
+      "migrations_0010_0012_applied": {
+        "passes": true
+      },
+      "nginx_10d_live_tests": {
+        "passes": true
+      },
+      "full_test_suite_passes": {
+        "passes": true
+      }
+    }
+  },
+  "epic_20b_security_remediation": {
+    "description": "Implements all High/Medium findings from docs/security_review.md: rate limiting, CSRF, cookie flags, session expiry, min password, XSS fix, Redis/MariaDB localhost binding, Nginx TLS protocols, @login_required, login logging, admin role/crawl logging, dep upgrades",
+    "items": {
+      "sec001_rate_limiting": {
+        "passes": true
+      },
+      "sec002_cookie_flags": {
+        "passes": true
+      },
+      "sec003_csrf_protection": {
+        "passes": true
+      },
+      "sec004_session_expiry": {
+        "passes": true
+      },
+      "sec005_min_password_register": {
+        "passes": true
+      },
+      "sec007_snippet_html_escape": {
+        "passes": true
+      },
+      "sec008_redis_mariadb_localhost": {
+        "passes": true
+      },
+      "sec009_nginx_tls_protocols": {
+        "passes": true
+      },
+      "sec010_login_required": {
+        "passes": true
+      },
+      "sec011_012_login_logging": {
+        "passes": true
+      },
+      "sec013_role_change_logging": {
+        "passes": true
+      },
+      "sec014_crawl_op_logging": {
+        "passes": true
+      },
+      "sec017_dependency_upgrades": {
         "passes": true
       },
       "full_test_suite_passes": {

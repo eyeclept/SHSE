@@ -34,6 +34,7 @@
     {% if history %}
     <form method="post" action="{{ url_for('search.history_clear') }}"
           onsubmit="return confirm('Delete all your saved searches?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
       <button type="submit" class="shse-btn">{{ icon.trash(14) }} Clear all</button>
     </form>
     {% endif %}

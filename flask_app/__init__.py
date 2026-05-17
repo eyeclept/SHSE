@@ -9,12 +9,16 @@ Description:
 # Imports
 import logging
 import os
+from datetime import timedelta
 from logging.handlers import RotatingFileHandler
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_migrate import Migrate
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
 from authlib.integrations.flask_client import OAuth
 
 # Globals
@@ -22,6 +26,8 @@ db = SQLAlchemy()
 login_manager = LoginManager()
 migrate = Migrate()
 oauth = OAuth()
+limiter = Limiter(key_func=get_remote_address)
+csrf = CSRFProtect()
 
 
 @login_manager.user_loader
@@ -47,6 +53,12 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object("flask_app.config.Config")
 
+    # Session security hardening (SEC-002, SEC-004)
+    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
+    app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+    app.config.setdefault("SESSION_COOKIE_SECURE", not app.testing)
+    app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(hours=24))
+
     log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
     os.makedirs(log_dir, exist_ok=True)
     _fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
@@ -60,7 +72,10 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
+    login_manager.login_view = "auth.login"
     oauth.init_app(app)
+    limiter.init_app(app)
+    csrf.init_app(app)
 
     if app.config.get("SSO_ENABLED"):
         oauth.register(

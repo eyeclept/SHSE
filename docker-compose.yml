@@ -59,7 +59,7 @@ services:
       MYSQL_USER: ${MARIADB_USER:-shse_user}
       MYSQL_PASSWORD: ${MARIADB_PASSWORD}
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - ./data/mariadb:/var/lib/mysql
     healthcheck:
@@ -85,8 +85,10 @@ services:
     image: redis:7-alpine
     container_name: redis
     restart: unless-stopped
+    command: >
+      sh -c "redis-server ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}"
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -108,7 +110,6 @@ services:
       - NUTCH_HOST=nutch
       - NUTCH_PORT=8081
       - LLM_API_BASE=http://host.docker.internal:11434/v1
-      - CELERY_BROKER_URL=redis://redis:6379/0
       - STARDICT_DICT_PATH=/app/dicts
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -142,7 +143,6 @@ services:
       - MARIADB_HOST=mariadb
       - REDIS_HOST=redis
       - OPENSEARCH_HOST=opensearch
-      - CELERY_BROKER_URL=redis://redis:6379/0
       - NUTCH_HOST=nutch
       - NUTCH_PORT=8081
       - LLM_API_BASE=http://host.docker.internal:11434/v1
@@ -167,7 +167,6 @@ services:
       - MARIADB_HOST=mariadb
       - REDIS_HOST=redis
       - OPENSEARCH_HOST=opensearch
-      - CELERY_BROKER_URL=redis://redis:6379/0
       - NUTCH_HOST=nutch
       - NUTCH_PORT=8081
       - LLM_API_BASE=http://host.docker.internal:11434/v1

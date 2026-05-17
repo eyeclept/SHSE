@@ -54,6 +54,7 @@ def api_app():
     app.config["SSO_ENABLED"] = False
     db.init_app(app)
     login_manager.init_app(app)
+    login_manager.login_view = "auth.login"
     app.register_blueprint(api_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(search_bp)

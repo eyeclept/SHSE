@@ -12,7 +12,8 @@ import logging
 import math
 
 from flask import Blueprint, render_template, request, session
-from flask_login import current_user
+from flask_login import current_user, login_required
+from markupsafe import escape, Markup
 from flask_app.services.opensearch import get_client
 from flask_app.services.search import bm25_body_with_dorks
 from flask_app.services.query_preprocessor import (
@@ -26,6 +27,25 @@ logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 10
 _INDEX_NAME = "shse_pages"
+_HL_OPEN = '<strong class="shse-hit">'
+_HL_CLOSE = "</strong>"
+
+
+def _safe_highlight_frag(frag):
+    """
+    Input: frag — str highlight fragment from OpenSearch (may contain _HL_OPEN/_HL_CLOSE tags)
+    Output: Markup — HTML-safe fragment with server-injected highlight tags preserved
+    Details:
+        Escapes all user-controlled text while keeping the server-set highlight
+        tags intact so the template can render them with | safe. Split on the
+        known open tag, escape each segment, restore the tag boundaries.
+    """
+    parts = frag.split(_HL_OPEN)
+    out = [escape(parts[0])]
+    for part in parts[1:]:
+        inner, _, after = part.partition(_HL_CLOSE)
+        out.append(Markup(_HL_OPEN) + escape(inner) + Markup(_HL_CLOSE) + escape(after))
+    return Markup("").join(out)
 
 
 # Functions
@@ -136,7 +156,7 @@ def results():
             client = get_client()
             body = bm25_body_with_dorks(
                 search_q, page=page, page_size=_PAGE_SIZE,
-                highlight_tags=('<strong class="shse-hit">', "</strong>"),
+                highlight_tags=(_HL_OPEN, _HL_CLOSE),
                 filter_services=filter_services,
                 sort=sort,
             )
@@ -150,7 +170,10 @@ def results():
                 hl = h.get("highlight", {})
                 title_frags = hl.get("title", [])
                 text_frags = hl.get("text", [src.get("text", "")[:200]])
-                snippet = " … ".join(title_frags + text_frags) if title_frags else " … ".join(text_frags)
+                raw_frags = title_frags + text_frags if title_frags else text_frags
+                snippet = Markup(" … ").join(
+                    _safe_highlight_frag(f) for f in raw_frags
+                )
                 result_rows.append({
                     "id": h["_id"],
                     "title": src.get("title") or src.get("url", ""),
@@ -224,6 +247,7 @@ def _save_history(query):
 
 
 @search_bp.route("/history")
+@login_required
 def history():
     """
     Input: q (optional filter)
@@ -232,13 +256,8 @@ def history():
         Returns search history for the current logged-in user, newest first.
         Unauthenticated users are redirected to login.
     """
-    from flask_login import login_required
-    from flask import redirect, url_for
     from flask_app import db
     from flask_app.models.search_history import SearchHistory
-
-    if not current_user.is_authenticated:
-        return redirect(url_for("auth.login"))
 
     q_filter = request.args.get("q", "").strip()
     query = (
@@ -256,6 +275,7 @@ def history():
 
 
 @search_bp.route("/history/clear", methods=["POST"])
+@login_required
 def history_clear():
     """
     Input: None
@@ -263,16 +283,12 @@ def history_clear():
     Details:
         Deletes all search history rows for the current user.
     """
-    from flask import redirect
+    from flask import flash, redirect, url_for
     from flask_app import db
     from flask_app.models.search_history import SearchHistory
 
-    if not current_user.is_authenticated:
-        from flask import url_for
-        return redirect(url_for("auth.login"))
     db.session.query(SearchHistory).filter_by(user_id=current_user.id).delete()
     db.session.commit()
-    from flask import flash, url_for
     flash("Search history cleared.", "success")
     return redirect(url_for("search.history"))
 
@@ -362,6 +378,7 @@ def settings_clear_history():
 
 
 @search_bp.route("/settings/password", methods=["POST"])
+@login_required
 def settings_password():
     """
     Input: current_password, new_password, confirm_password (form POST)
@@ -371,9 +388,6 @@ def settings_password():
     """
     from flask import flash, redirect, url_for, make_response
     from flask_app import db
-
-    if not current_user.is_authenticated:
-        return redirect(url_for("auth.login"))
 
     current_pw = request.form.get("current_password", "")
     new_pw = request.form.get("new_password", "")

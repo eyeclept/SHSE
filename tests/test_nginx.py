@@ -79,10 +79,13 @@ def test_nginx_conf_has_proxy_pass_to_flask():
 
 @pytest.fixture
 def api_app():
-    from flask_app.models.user import User                     # noqa: F401
-    from flask_app.models.search_history import SearchHistory  # noqa: F401
-    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
-    from flask_app.models.crawl_job import CrawlJob            # noqa: F401
+    from flask_app.models.user import User                                    # noqa: F401
+    from flask_app.models.search_history import SearchHistory                 # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget                 # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob                           # noqa: F401
+    from flask_app.models.password_reset_token import PasswordResetToken      # noqa: F401
+    from flask_app.models.webauthn_credential import WebAuthnCredential       # noqa: F401
+    from flask_app.models.system_setting import SystemSetting                 # noqa: F401
     from flask_app.routes.api import api_bp
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
@@ -99,6 +102,7 @@ def api_app():
     })
     db.init_app(flask_app)
     login_manager.init_app(flask_app)
+    login_manager.login_view = "auth.login"
     flask_app.register_blueprint(api_bp)
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(search_bp)
@@ -121,10 +125,10 @@ def test_admin_check_200_for_admin(api_app, api_client):
     from flask_app.models.user import User
     with api_app.app_context():
         u = User(username="nginxadmin", role="admin")
-        u.set_password("pass")
+        u.set_password("pass1234")
         db.session.add(u)
         db.session.commit()
-    api_client.post("/login", data={"username": "nginxadmin", "password": "pass"})
+    api_client.post("/login", data={"username": "nginxadmin", "password": "pass1234"})
     r = api_client.get("/api/admin-check")
     assert r.status_code == 200
 
@@ -137,10 +141,10 @@ def test_admin_check_403_for_user(api_app, api_client):
     from flask_app.models.user import User
     with api_app.app_context():
         u = User(username="nginxuser", role="user")
-        u.set_password("pass")
+        u.set_password("pass1234")
         db.session.add(u)
         db.session.commit()
-    api_client.post("/login", data={"username": "nginxuser", "password": "pass"})
+    api_client.post("/login", data={"username": "nginxuser", "password": "pass1234"})
     r = api_client.get("/api/admin-check")
     assert r.status_code == 403
 

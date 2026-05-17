@@ -15,7 +15,14 @@ from logging.handlers import RotatingFileHandler
 from celery import Celery
 
 # Globals
-_REDIS_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+def _build_redis_url():
+    host     = os.environ.get("REDIS_HOST", "localhost")
+    port     = os.environ.get("REDIS_PORT", "6379")
+    password = os.environ.get("REDIS_PASSWORD", "")
+    auth     = f":{password}@" if password else ""
+    return os.environ.get("CELERY_BROKER_URL", f"redis://{auth}{host}:{port}/0")
+
+_REDIS_URL = _build_redis_url()
 
 _log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
 os.makedirs(_log_dir, exist_ok=True)

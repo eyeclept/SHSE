@@ -26,6 +26,7 @@
       {% endif %}
 
       <form method="post" action="{{ url_for('auth.totp_challenge') }}" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
         <label style="display:block; margin-bottom:18px;">
           <span style="display:block; font-size:12px; font-weight:500;
                        color:var(--shse-text-muted); margin-bottom:6px;">6-digit code</span>

@@ -65,6 +65,7 @@
     <div style="height:1px; background:var(--shse-border); margin:4px 0;"></div>
 
     <form method="post" action="{{ url_for('auth.toggle_theme') }}" style="margin:0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
       <button type="submit" role="menuitem" class="shse-menu-item"
               style="display:flex; align-items:center; gap:10px; width:100%;
                      padding:8px 10px; background:transparent; border:none;
@@ -79,6 +80,7 @@
 
     {% if u %}
     <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
       <button type="submit" role="menuitem" class="shse-menu-item"
               style="display:flex; align-items:center; gap:10px; width:100%;
                      padding:8px 10px; background:transparent; border:none;

@@ -176,6 +176,7 @@ def _check_services():
         r = _redis.Redis(
             host=Config.REDIS_HOST,
             port=Config.REDIS_PORT,
+            password=Config.REDIS_PASSWORD or None,
             socket_connect_timeout=_PROBE_TIMEOUT,
         )
         r.ping()
@@ -454,6 +455,8 @@ def add_target():
     t = _form_to_target(request.form)
     db.session.add(t)
     db.session.commit()
+    logger.info("add_target: target_id=%s nickname=%s added by user_id=%s",
+                t.id, t.nickname, current_user.id)
     flash(f"Target '{t.nickname or t.network}' added.", "success")
     return redirect(url_for("admin.targets"))
 
@@ -504,6 +507,8 @@ def delete_target(target_id):
 
     t = db.session.get(CrawlerTarget, target_id)
     if t:
+        logger.info("delete_target: target_id=%s nickname=%s deleted by user_id=%s",
+                    t.id, t.nickname, current_user.id)
         db.session.query(CrawlJob).filter_by(target_id=t.id).update({"target_id": None})
         db.session.delete(t)
         db.session.commit()
@@ -523,6 +528,7 @@ def crawl_target(target_id):
     from celery_worker.tasks.crawl import crawl_target as celery_crawl
     try:
         celery_crawl.delay(target_id)
+        logger.info("crawl_target: target_id=%s dispatched by user_id=%s", target_id, current_user.id)
         flash(f"Crawl dispatched for target {target_id}.", "success")
     except Exception:
         logger.warning("Task dispatch failed — Redis unreachable", exc_info=True)
@@ -993,6 +999,7 @@ def promote_user(user_id):
         abort(404)
     u.role = "admin"
     db.session.commit()
+    logger.info("promote_user: user_id=%s promoted to admin by user_id=%s", u.id, current_user.id)
     flash(f"'{u.username}' promoted to admin.", "success")
     return redirect(url_for("admin.users"))
 
@@ -1017,6 +1024,7 @@ def demote_user(user_id):
         return redirect(url_for("admin.users"))
     u.role = "user"
     db.session.commit()
+    logger.info("demote_user: user_id=%s demoted to user by user_id=%s", u.id, current_user.id)
     flash(f"'{u.username}' demoted to user.", "success")
     return redirect(url_for("admin.users"))
 

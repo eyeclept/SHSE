@@ -42,6 +42,7 @@
   </div>
 
   <form method="post" action="{{ url_for('auth.totp_setup') }}" style="margin-top:24px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
     <label style="display:block; margin-bottom:14px;">
       <span style="display:block; font-size:12px; font-weight:500;
                    color:var(--shse-text-muted); margin-bottom:6px;">

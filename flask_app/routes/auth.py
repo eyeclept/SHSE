@@ -11,8 +11,8 @@ Description:
 import logging
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
-from flask_login import login_user, logout_user
-from flask_app import db, oauth
+from flask_login import current_user, login_required, login_user, logout_user
+from flask_app import csrf, db, limiter, oauth
 from flask_app.models.user import User
 
 # Globals
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Functions
 @auth_bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
 def login():
     """
     Input: username, password (form POST)
@@ -55,6 +56,8 @@ def login():
                 return redirect(url_for("auth.webauthn_challenge"))
 
             login_user(user)
+            logger.info("login: success user_id=%s username=%s ip=%s",
+                        user.id, user.username, request.remote_addr)
             if default_pw_warning:
                 from flask import flash
                 flash(
@@ -63,6 +66,8 @@ def login():
                 )
                 return redirect(url_for("search.settings"))
             return redirect(url_for("search.home"))
+        logger.warning("login: failed attempt username=%s ip=%s",
+                       username, request.remote_addr)
         return render_template(
             "login.html",
             error="Invalid credentials",
@@ -104,6 +109,9 @@ def register():
         if not username or not password:
             return render_template("register.html", error="Username and password required",
                                    sso_enabled=sso_enabled), 400
+        if len(password) < 8:
+            return render_template("register.html", error="Password must be at least 8 characters",
+                                   sso_enabled=sso_enabled), 400
         existing = db.session.execute(
             db.select(User).filter_by(username=username)
         ).scalar_one_or_none()
@@ -138,6 +146,8 @@ def setup():
         password = request.form.get("password", "")
         if not username or not password:
             return render_template("setup.html", error="Username and password required"), 400
+        if len(password) < 8:
+            return render_template("setup.html", error="Password must be at least 8 characters"), 400
         user = User(username=username, role="admin")
         user.set_password(password)
         db.session.add(user)
@@ -320,6 +330,7 @@ def totp_challenge():
 
 
 @auth_bp.route("/login/webauthn", methods=["GET", "POST"])
+@csrf.exempt
 def webauthn_challenge():
     """
     Input: assertion JSON (form POST body), pre_2fa_user_id (session)
@@ -327,7 +338,7 @@ def webauthn_challenge():
     Details:
         Called after password verification when the user has a registered WebAuthn
         credential and TOTP is not enabled. Generates a challenge on GET, verifies
-        the assertion on POST.
+        the assertion on POST. CSRF exempt because POST body is JSON, not form data.
     """
     import json
     from flask import session
@@ -401,6 +412,7 @@ def webauthn_challenge():
 
 
 @auth_bp.route("/settings/2fa/setup", methods=["GET", "POST"])
+@login_required
 def totp_setup():
     """
     Input: code (form POST confirming enrollment)
@@ -411,11 +423,7 @@ def totp_setup():
         persists the secret + totp_enabled=True.
     """
     from flask import session
-    from flask_login import current_user, login_required
     import pyotp
-
-    if not current_user.is_authenticated:
-        return redirect(url_for("auth.login"))
 
     if request.method == "GET":
         secret = pyotp.random_base32()
@@ -445,6 +453,7 @@ def totp_setup():
 
 
 @auth_bp.route("/settings/2fa/disable", methods=["POST"])
+@login_required
 def totp_disable():
     """
     Input: current_password (form POST)
@@ -452,10 +461,6 @@ def totp_disable():
     Details:
         Requires password confirmation before clearing TOTP state.
     """
-    from flask_login import current_user
-
-    if not current_user.is_authenticated:
-        return redirect(url_for("auth.login"))
 
     current_password = request.form.get("current_password", "")
     if not current_user.check_password(current_password):
@@ -473,6 +478,8 @@ def totp_disable():
 
 
 @auth_bp.route("/settings/2fa/webauthn/register", methods=["GET", "POST"])
+@login_required
+@csrf.exempt
 def webauthn_register():
     """
     Input: registration credential JSON (POST body)
@@ -480,13 +487,10 @@ def webauthn_register():
     Details:
         Requires authentication. GET generates a WebAuthn registration challenge.
         POST verifies the authenticator response and stores the credential.
+        CSRF exempt because POST body is JSON, not form data.
     """
     import json, os, base64
     from flask import session
-    from flask_login import current_user
-
-    if not current_user.is_authenticated:
-        return redirect(url_for("auth.login"))
 
     if request.method == "GET":
         from webauthn import generate_registration_options
@@ -564,6 +568,7 @@ def webauthn_register():
 
 
 @auth_bp.route("/settings/2fa/webauthn/<int:credential_id>/remove", methods=["POST"])
+@login_required
 def webauthn_remove(credential_id):
     """
     Input: credential_id (URL path), current_password (form POST)
@@ -571,11 +576,7 @@ def webauthn_remove(credential_id):
     Details:
         Requires password confirmation. Deletes the WebAuthnCredential row.
     """
-    from flask_login import current_user
     from flask_app.models.webauthn_credential import WebAuthnCredential
-
-    if not current_user.is_authenticated:
-        return redirect(url_for("auth.login"))
 
     current_password = request.form.get("current_password", "")
     if not current_user.check_password(current_password):

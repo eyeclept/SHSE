@@ -36,6 +36,7 @@
       {% endif %}
 
       <form method="post" action="{{ url_for('auth.register') }}" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
         {% if error %}
           <div role="alert" style="padding:10px 12px; margin-bottom:14px;
                                    border-radius:8px; background:var(--shse-danger-soft);

@@ -67,6 +67,7 @@
             {% if u.role != 'admin' %}
               <form method="post" action="{{ url_for('admin.promote_user', user_id=u.id) }}"
                     style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
                 <button type="submit" class="shse-btn shse-btn-sm shse-btn-primary"
                         title="Promote {{ u.username }} to admin">
                   {{ icon.chev_u(12) }} Promote
@@ -77,6 +78,7 @@
                 <form method="post" action="{{ url_for('admin.demote_user', user_id=u.id) }}"
                       style="display:inline;"
                       onsubmit="return confirm('Demote {{ u.username }} to user?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
                   <button type="submit" class="shse-btn shse-btn-sm"
                           title="Demote {{ u.username }} to user">
                     {{ icon.chev_d(12) }} Demote

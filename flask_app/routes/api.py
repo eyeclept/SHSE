@@ -31,10 +31,15 @@ _SEMANTIC_CACHE_TTL = 3600  # 1 hour
 
 
 def _redis():
-    """Return a Redis client using the app's configured host/port."""
+    """Return a Redis client using the app's configured host/port/password."""
     import redis
     from flask_app.config import Config
-    return redis.Redis(host=Config.REDIS_HOST, port=Config.REDIS_PORT, db=1)
+    return redis.Redis(
+        host=Config.REDIS_HOST,
+        port=Config.REDIS_PORT,
+        password=Config.REDIS_PASSWORD or None,
+        db=1,
+    )
 
 
 def _cache_key(component, q):

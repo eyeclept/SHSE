@@ -52,6 +52,7 @@ def twofa_app():
 
     db.init_app(test_app)
     login_manager.init_app(test_app)
+    login_manager.login_view = "auth.login"
 
     test_app.register_blueprint(auth_bp)
     test_app.register_blueprint(search_bp)

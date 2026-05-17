@@ -25,6 +25,7 @@
     <h2 style="margin:0 0 16px; font-size:15px; font-weight:600;">LLM API</h2>
     <form method="post" action="{{ url_for('admin.crawler_config') }}">
       <input type="hidden" name="action" value="settings">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
 
       {# AI Summary toggle #}
       <div style="display:flex; align-items:center; gap:14px; margin-bottom:18px;
@@ -123,6 +124,7 @@
       <form method="post" action="{{ url_for('admin.crawler_config') }}"
             enctype="multipart/form-data">
         <input type="hidden" name="action" value="yaml_import">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
 
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
           <span style="font-size:13px; font-weight:500;">YAML</span>

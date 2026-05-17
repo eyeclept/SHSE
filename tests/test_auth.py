@@ -51,6 +51,7 @@ def sqlite_app():
     test_app.config["SECRET_KEY"] = "test-secret"
     db.init_app(test_app)
     login_manager.init_app(test_app)
+    login_manager.login_view = "auth.login"
     test_app.register_blueprint(auth_bp)
     test_app.register_blueprint(search_bp)
     test_app.register_blueprint(admin_bp, url_prefix="/admin")
@@ -155,6 +156,7 @@ def sso_app():
 
     db.init_app(test_app)
     login_manager.init_app(test_app)
+    login_manager.login_view = "auth.login"
     oauth.init_app(test_app)
     # Register with explicit endpoints so no HTTP fetch occurs at registration time
     oauth.register(
@@ -384,7 +386,7 @@ def test_register(sqlite_app):
 
     # valid registration — expect redirect and user row in DB
     response = client.post(
-        "/register", data={"username": "newuser", "password": "newpass"}
+        "/register", data={"username": "newuser", "password": "newpass123"}
     )
     assert response.status_code == 302
 
@@ -394,11 +396,17 @@ def test_register(sqlite_app):
         ).scalar_one_or_none()
         assert user is not None
         assert user.role == "user"
-        assert user.check_password("newpass")
+        assert user.check_password("newpass123")
 
     # duplicate username — expect 400
     response = client.post(
-        "/register", data={"username": "newuser", "password": "other"}
+        "/register", data={"username": "newuser", "password": "otherpass99"}
+    )
+    assert response.status_code == 400
+
+    # short password — expect 400 (SEC-005: min 8 chars)
+    response = client.post(
+        "/register", data={"username": "shortpw", "password": "short"}
     )
     assert response.status_code == 400
 
