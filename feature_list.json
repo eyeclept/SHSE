@@ -1036,6 +1036,12 @@
     "items": {
       "bf1_crawl_silent_success_on_unreachable_target": {
         "passes": true
+      },
+      "bf2_admin_jobs_tabs_500_error": {
+        "passes": false
+      },
+      "bf3_crawl_phantom_deleted_second_entry": {
+        "passes": false
       }
     }
   },

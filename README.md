@@ -336,6 +336,10 @@ python cli.py jobs
 
 # Admin password recovery (server-side; no current password required)
 python cli.py reset-admin-password admin
+
+# Bootstrap SHSE on a pre-existing MariaDB (creates database + user, then verify)
+python cli.py setup-db
+python cli.py setup-db --admin-user dba --admin-password secret
 ```
 
 ---

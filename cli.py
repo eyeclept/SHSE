@@ -416,6 +416,91 @@ def _reset_admin_password_impl(db_session, username, new_password):
     print(f"password updated for admin user '{username}'")
 
 
+def cmd_setup_db(args):
+    """
+    Input: args.admin_user, args.admin_password (prompted if absent)
+    Output: None
+    Details:
+        Bootstraps SHSE's database and application user on a pre-existing MariaDB
+        instance. Reads target database name, host, port, and app user credentials
+        from Config (config.ini + .env); connects as the specified admin user to
+        run CREATE DATABASE / CREATE USER / GRANT via SQLAlchemy's engine and
+        parameterized text() calls; then verifies the app user can connect.
+
+        Safe to re-run: CREATE DATABASE IF NOT EXISTS and CREATE USER IF NOT EXISTS
+        are idempotent. GRANT is also idempotent on MariaDB.
+
+        Use this when connecting SHSE to a pre-existing MariaDB shared with other
+        services. The admin user only needs CREATE, CREATE USER, and GRANT privileges.
+        After this command, run 'flask db upgrade' to apply SHSE's schema migrations.
+    """
+    _load_env()
+    from flask_app.config import Config
+    from sqlalchemy import create_engine, text
+
+    host = Config.MARIADB_HOST
+    port = Config.MARIADB_PORT
+    app_password = Config.MARIADB_PASSWORD
+    db_name  = Config.MARIADB_DB
+    app_user = Config.MARIADB_USER
+
+    admin_user = args.admin_user
+    admin_password = args.admin_password
+    if not admin_password:
+        import getpass
+        admin_password = getpass.getpass(f"Password for {admin_user}@{host}: ")
+
+    # --- Phase 1: admin connection — no database selected ---
+    engine = create_engine(
+        f"mysql+pymysql://{admin_user}:{admin_password}@{host}:{port}/",
+        isolation_level="AUTOCOMMIT",
+        echo=False,
+    )
+    try:
+        with engine.connect() as conn:
+            # Use SQLAlchemy's dialect identifier preparer to quote identifiers safely.
+            # Passwords are bound parameters — SQLAlchemy handles value escaping.
+            q = engine.dialect.identifier_preparer.quote
+
+            conn.execute(text(
+                f"CREATE DATABASE IF NOT EXISTS {q(db_name)} "
+                "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            ))
+            print(f"database '{db_name}': ready")
+
+            conn.execute(
+                text(f"CREATE USER IF NOT EXISTS {q(app_user)}@'%' IDENTIFIED BY :pw"),
+                {"pw": app_password},
+            )
+            print(f"user '{app_user}': ready")
+
+            conn.execute(text(f"GRANT ALL PRIVILEGES ON {q(db_name)}.* TO {q(app_user)}@'%'"))
+            conn.execute(text("FLUSH PRIVILEGES"))
+            print(f"grants on '{db_name}': applied")
+    except Exception as exc:
+        logger.exception("setup-db: admin phase failed")
+        print(f"Error: {exc}")
+        sys.exit(1)
+    finally:
+        engine.dispose()
+
+    # --- Phase 2: verify app user can connect ---
+    verify_engine = create_engine(
+        f"mysql+pymysql://{app_user}:{app_password}@{host}:{port}/{db_name}",
+        echo=False,
+    )
+    try:
+        with verify_engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        print(f"connection verified as '{app_user}' — run 'flask db upgrade' to apply migrations")
+    except Exception as exc:
+        logger.warning("setup-db: app-user verification failed: %s", exc)
+        print(f"Warning: could not verify app user connection: {exc}")
+        print("Database and user were created. Check MARIADB_PASSWORD in .env and retry.")
+    finally:
+        verify_engine.dispose()
+
+
 def cmd_reset_admin_password(args):
     """
     Input: args.username — admin username to reset
@@ -527,6 +612,24 @@ def _build_parser():
                          help="change an admin user's password (server-side recovery)")
     rap.add_argument("username", metavar="USERNAME", help="admin username to reset")
 
+    sdb = sub.add_parser(
+        "setup-db",
+        help="bootstrap SHSE database and user on a pre-existing MariaDB instance",
+        description=(
+            "Creates the SHSE database and application user on a pre-existing MariaDB. "
+            "Reads target database name, host, and credentials from config.ini/.env. "
+            "Idempotent — safe to re-run. After completion, run 'flask db upgrade'."
+        ),
+    )
+    sdb.add_argument(
+        "--admin-user", default="root", metavar="USER",
+        help="MariaDB admin user with CREATE/GRANT privileges (default: root)",
+    )
+    sdb.add_argument(
+        "--admin-password", default=None, metavar="PASSWORD",
+        help="admin password (prompted interactively if omitted)",
+    )
+
     return p
 
 
@@ -544,6 +647,7 @@ _DISPATCH = {
     "jobs":                  cmd_jobs,
     "search":                cmd_search,
     "reset-admin-password":  cmd_reset_admin_password,
+    "setup-db":              cmd_setup_db,
 }
 
 
