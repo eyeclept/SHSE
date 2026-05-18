@@ -1,0 +1,23 @@
+[Unit]
+Description=SHSE Kiwix (offline content server)
+Documentation=https://github.com/youruser/shse
+Requires=docker.service
+After=docker.service network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Adjust WorkingDirectory to wherever docker-compose.kiwix.yml lives on this VM
+WorkingDirectory=/opt/shse
+ExecStart=/usr/bin/docker compose -f docker-compose.kiwix.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f docker-compose.kiwix.yml down
+ExecReload=/usr/bin/docker compose -f docker-compose.kiwix.yml restart
+TimeoutStartSec=120
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
