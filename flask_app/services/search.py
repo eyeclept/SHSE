@@ -270,7 +270,7 @@ def get_vector_hits(q, os_client=None, llm_session=None):
     try:
         raw_hits = vector_search(embedding, k=_VECTOR_K, client=client)
     except Exception:
-        logger.warning("get_vector_hits: vector_search failed", exc_info=True)
+        logger.exception("get_vector_hits: vector_search failed")
         return _dummy_vector_search(q, client), False
 
     hits = []
@@ -321,7 +321,7 @@ def _build_ai_summary(vector_hits, q, llm_session=None, os_client=None, preproce
             src = hit.get("_source", {})
             bm25_contexts[hit["_id"]] = src.get("text", "")[:500]
     except Exception:
-        logger.warning("_build_ai_summary: BM25 augmentation failed", exc_info=True)
+        logger.exception("_build_ai_summary: BM25 augmentation failed")
         bm25_contexts = {}
 
     # Merge: BM25 hits first (keyword-precise for factual queries), then vector hits
@@ -418,14 +418,14 @@ def hybrid_search(query, k=10, client=None, llm_session=None):
         try:
             bm25_hits = bm25_future.result()
         except Exception:
-            logger.warning("BM25 search failed in hybrid_search", exc_info=True)
+            logger.exception("BM25 search failed in hybrid_search")
             bm25_hits = []
 
         embedding, vec_hits_result = None, []
         try:
             embedding, vec_hits_result = vec_future.result()
         except Exception:
-            logger.warning("Vector search failed in hybrid_search", exc_info=True)
+            logger.exception("Vector search failed in hybrid_search")
 
         if embedding is not None:
             vec_hits = vec_hits_result

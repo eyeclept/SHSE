@@ -51,16 +51,16 @@ def _cache_get(component, q):
     try:
         val = _redis().get(_cache_key(component, q))
         return val.decode() if val else None
-    except Exception as e:
-        logger.warning("Redis cache read failed: %s", e)
+    except Exception:
+        logger.warning("Redis cache read failed", exc_info=True)
         return None
 
 
 def _cache_set(component, q, html):
     try:
         _redis().setex(_cache_key(component, q), _SEMANTIC_CACHE_TTL, html)
-    except Exception as e:
-        logger.warning("Redis cache write failed: %s", e)
+    except Exception:
+        logger.warning("Redis cache write failed", exc_info=True)
 
 
 # Functions

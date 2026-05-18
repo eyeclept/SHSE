@@ -32,10 +32,12 @@ def api_app():
         Uses SQLite in-memory. Includes auth_bp and login_manager so
         current_user is available in the admin-check route.
     """
-    from flask_app.models.user import User                     # noqa: F401
-    from flask_app.models.search_history import SearchHistory  # noqa: F401
-    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
-    from flask_app.models.crawl_job import CrawlJob            # noqa: F401
+    from flask_app.models.user import User                                    # noqa: F401
+    from flask_app.models.search_history import SearchHistory                 # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget                 # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob                           # noqa: F401
+    from flask_app.models.webauthn_credential import WebAuthnCredential       # noqa: F401
+    from flask_app.models.password_reset_token import PasswordResetToken      # noqa: F401
     from flask_app.routes.api import api_bp
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
@@ -383,3 +385,51 @@ def test_admin_check_returns_403_for_anonymous(client):
     """
     r = client.get("/api/admin-check")
     assert r.status_code == 403
+
+
+def test_cache_get_redis_failure_logs_warning():
+    """
+    Input:  Redis raises when _cache_get is called
+    Output: logger.warning called with exc_info; function returns None
+    Details:
+        Regression for Epic 29 — Redis cache failures must log with exc_info so
+        the traceback is captured even though they're expected service failures.
+    """
+    import redis as redis_mod
+    from unittest.mock import patch, MagicMock
+
+    mock_redis = MagicMock()
+    mock_redis.get.side_effect = redis_mod.RedisError("connection refused")
+
+    with patch("flask_app.routes.api._redis", return_value=mock_redis), \
+         patch("flask_app.routes.api.logger") as mock_logger:
+        from flask_app.routes.api import _cache_get
+        result = _cache_get("vector", "test query")
+
+    assert result is None
+    mock_logger.warning.assert_called_once()
+    call_kwargs = mock_logger.warning.call_args[1]
+    assert call_kwargs.get("exc_info") is True
+
+
+def test_cache_set_redis_failure_logs_warning():
+    """
+    Input:  Redis raises when _cache_set is called
+    Output: logger.warning called with exc_info; no exception propagated
+    Details:
+        Regression for Epic 29.
+    """
+    import redis as redis_mod
+    from unittest.mock import patch, MagicMock
+
+    mock_redis = MagicMock()
+    mock_redis.setex.side_effect = redis_mod.RedisError("connection refused")
+
+    with patch("flask_app.routes.api._redis", return_value=mock_redis), \
+         patch("flask_app.routes.api.logger") as mock_logger:
+        from flask_app.routes.api import _cache_set
+        _cache_set("vector", "test query", "<html>cached</html>")
+
+    mock_logger.warning.assert_called_once()
+    call_kwargs = mock_logger.warning.call_args[1]
+    assert call_kwargs.get("exc_info") is True

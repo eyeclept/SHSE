@@ -1247,16 +1247,16 @@
     "description": "Audit every except block in flask_app/routes/ and flask_app/services/ for silent swallowing; upgrade unexpected errors to logger.exception(); surface error to caller via response field or flash; add regression tests",
     "items": {
       "grep_and_classify_except_blocks": {
-        "passes": false
+        "passes": true
       },
       "error_reaches_caller": {
-        "passes": false
+        "passes": true
       },
       "error_handling_compliance_verified": {
-        "passes": false
+        "passes": true
       },
       "regression_tests_written": {
-        "passes": false
+        "passes": true
       }
     }
   },

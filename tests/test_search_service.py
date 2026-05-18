@@ -267,3 +267,93 @@ def test_bm25_body_sort_date_desc():
     assert "sort" in body
     assert body["sort"][0] == {"crawled_at": "desc"}
     assert body["sort"][1] == "_score"
+
+
+def test_get_vector_hits_opensearch_exception_logs_exception():
+    """
+    Input:  vector_search raises an unexpected exception (e.g. 400 from OpenSearch)
+    Output: logger.exception called; function returns ([], False) without propagating
+    Details:
+        Regression for Epic 29 — unexpected OpenSearch errors must use logger.exception
+        not logger.warning so the full traceback is captured at ERROR level.
+    """
+    mock_emb = [0.1] * 768
+
+    with patch("flask_app.services.llm.get_embedding", return_value=mock_emb), \
+         patch("flask_app.services.opensearch.vector_search",
+               side_effect=Exception("400 field mapping error")), \
+         patch("flask_app.services.search.logger") as mock_logger:
+        from flask_app.services.search import get_vector_hits
+        hits, available = get_vector_hits("query", os_client=MagicMock())
+
+    assert available is False
+    assert hits == []
+    mock_logger.exception.assert_called_once()
+    args = mock_logger.exception.call_args[0]
+    assert "get_vector_hits" in args[0]
+
+
+def test_hybrid_bm25_exception_logs_exception():
+    """
+    Input:  bm25_search raises an unexpected exception inside hybrid_search
+    Output: logger.exception called; result is still a list (degraded, not crashed)
+    Details:
+        Regression for Epic 29.
+    """
+    mock_emb = [0.1] * 768
+
+    with patch("flask_app.services.opensearch.bm25_search",
+               side_effect=Exception("OS 400 bad_request")), \
+         patch("flask_app.services.opensearch.vector_search", return_value=[]), \
+         patch("flask_app.services.llm.get_embedding", return_value=mock_emb), \
+         patch("flask_app.services.search.logger") as mock_logger:
+        from flask_app.services.search import hybrid_search
+        results = hybrid_search("query", k=5, client=MagicMock())
+
+    assert isinstance(results, list)
+    mock_logger.exception.assert_called()
+    logged_msgs = [call[0][0] for call in mock_logger.exception.call_args_list]
+    assert any("BM25" in m for m in logged_msgs)
+
+
+def test_hybrid_vector_exception_logs_exception():
+    """
+    Input:  vector_search raises an unexpected exception inside hybrid_search
+    Output: logger.exception called; BM25 results still returned
+    Details:
+        Regression for Epic 29.
+    """
+    bm25_hits = [_make_hit("A")]
+    mock_emb = [0.1] * 768
+
+    with patch("flask_app.services.opensearch.bm25_search", return_value=bm25_hits), \
+         patch("flask_app.services.opensearch.vector_search",
+               side_effect=Exception("knn field not found")), \
+         patch("flask_app.services.llm.get_embedding", return_value=mock_emb), \
+         patch("flask_app.services.search.logger") as mock_logger:
+        from flask_app.services.search import hybrid_search
+        results = hybrid_search("query", k=5, client=MagicMock())
+
+    assert isinstance(results, list)
+    mock_logger.exception.assert_called()
+    logged_msgs = [call[0][0] for call in mock_logger.exception.call_args_list]
+    assert any("Vector" in m or "vector" in m for m in logged_msgs)
+
+
+def test_build_ai_summary_bm25_failure_logs_exception():
+    """
+    Input:  bm25_search raises inside _build_ai_summary
+    Output: logger.exception called; function returns None (no context → no summary)
+    Details:
+        Regression for Epic 29.
+    """
+    with patch("flask_app.services.opensearch.bm25_search",
+               side_effect=Exception("OS request_error")), \
+         patch("flask_app.services.opensearch.get_client", return_value=MagicMock()), \
+         patch("flask_app.services.search.logger") as mock_logger:
+        from flask_app.services.search import _build_ai_summary
+        result = _build_ai_summary([], "what is dns")
+
+    mock_logger.exception.assert_called_once()
+    args = mock_logger.exception.call_args[0]
+    assert "BM25" in args[0] or "bm25" in args[0].lower()
