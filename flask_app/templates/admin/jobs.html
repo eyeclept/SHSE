@@ -31,6 +31,16 @@
   {% include "admin/_subnav.html" %}
 {% endblock %}
 
+{% block head_extra %}
+<style>
+@keyframes shse-progress-sweep {
+  0%   { transform: scaleX(0.15) translateX(-200%); }
+  50%  { transform: scaleX(0.5)  translateX(80%); }
+  100% { transform: scaleX(0.15) translateX(500%); }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <main id="shse-main" role="main" style="max-width:1180px; margin:0 auto; padding:28px 28px 80px;">
   <header style="display:flex; align-items:flex-end; gap:16px; margin-bottom:18px;">
@@ -75,8 +85,8 @@
       action_label="Go to Targets", action_href=url_for('admin.targets'),
       icon_name="play") }}
   {% else %}
-  <div class="shse-card" style="overflow:hidden;">
-    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+  <div class="shse-card" style="overflow-x:auto;">
+    <table style="width:100%; border-collapse:collapse; font-size:13px; white-space:nowrap;">
       <thead>
         <tr style="background:var(--shse-surface-2);
                    color:var(--shse-text-muted); text-align:left;">
@@ -124,20 +134,56 @@
 </div>
 
 <script>
+var _logColors = {
+  success: 'var(--shse-success)',
+  failure: 'var(--shse-danger)',
+  started: 'var(--shse-text-muted)',
+  queued:  'var(--shse-text-muted)',
+};
+
 function showJobLogs(jobId) {
   var modal = document.getElementById('logs-modal');
   var body  = document.getElementById('logs-body');
   modal.style.display = 'flex';
-  body.textContent = 'Loading…';
+  body.innerHTML = '<span style="color:var(--shse-text-faint)">Loading…</span>';
   fetch('/api/jobs/' + jobId + '/logs')
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      var text = '';
-      if (d.message)   text += d.message + '\n\n';
-      if (d.traceback) text += d.traceback;
-      body.textContent = text || '(no details recorded)';
+      body.innerHTML = '';
+      var msgColor = _logColors[d.status] || 'var(--shse-text-muted)';
+
+      if (d.message) {
+        var msg = document.createElement('div');
+        msg.textContent = d.message;
+        msg.style.color = msgColor;
+        msg.style.marginBottom = d.traceback ? '12px' : '0';
+        body.appendChild(msg);
+      }
+
+      if (d.traceback) {
+        var sep = document.createElement('div');
+        sep.textContent = '── traceback ──────────────────────────────────────────';
+        sep.style.color = 'var(--shse-text-faint)';
+        sep.style.marginBottom = '6px';
+        sep.style.fontSize = '10px';
+        body.appendChild(sep);
+
+        var tb = document.createElement('div');
+        tb.textContent = d.traceback;
+        tb.style.color = 'var(--shse-danger)';
+        body.appendChild(tb);
+      }
+
+      if (!d.message && !d.traceback) {
+        var empty = document.createElement('span');
+        empty.textContent = '(no details recorded)';
+        empty.style.color = 'var(--shse-text-faint)';
+        body.appendChild(empty);
+      }
     })
-    .catch(function() { body.textContent = 'Failed to load logs.'; });
+    .catch(function() {
+      body.innerHTML = '<span style="color:var(--shse-danger)">Failed to load logs.</span>';
+    });
 }
 document.getElementById('logs-modal').addEventListener('click', function(e) {
   if (e.target === this) this.style.display = 'none';

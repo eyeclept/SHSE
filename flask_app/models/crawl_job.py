@@ -28,6 +28,7 @@ class CrawlJob(db.Model):
     target_id = db.Column(db.Integer, db.ForeignKey("crawler_targets.id"))
     kind = db.Column(db.String(32), default="crawl")  # crawl | vectorize
     status = db.Column(db.String(64), default="queued")
+    progress = db.Column(db.Integer, default=0)
     started_at = db.Column(db.DateTime, default=datetime.utcnow)
     finished_at = db.Column(db.DateTime)
     message = db.Column(db.Text)

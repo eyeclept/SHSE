@@ -654,7 +654,7 @@ def _job_rows(status_filter="all"):
             "kind": job.kind or "crawl",
             "target": target_cache[job.target_id],
             "status": _STATUS_DB_TO_UI.get(job.status, job.status) or "unknown",
-            "progress": 100 if job.status in ("success", "failure") else 0,
+            "progress": job.progress if job.progress is not None else (100 if job.status in ("success", "failure") else 0),
             "started_at": str(job.started_at)[:16] if job.started_at else "—",
             "finished_at": str(job.finished_at)[:16] if job.finished_at else "—",
             "took": duration,
@@ -751,6 +751,47 @@ def jobs_table():
         filter=status_filter,
         counts=counts,
     )
+
+
+@admin_bp.route("/jobs/<int:job_id>/_row")
+@admin_required
+def job_row(job_id):
+    """
+    Input: job_id URL param, ?status= filter
+    Output: rendered _job_row.html fragment (single <tr>); HTMX per-row poll target
+    Details:
+        Returns a single table row for the given job. Running/queued rows
+        include hx-* attributes so the row self-polls until the job finishes.
+    """
+    from flask_app import db
+    from flask_app.models.crawl_job import CrawlJob
+    from flask_app.models.crawler_target import CrawlerTarget
+
+    job = db.session.get(CrawlJob, job_id)
+    if job is None:
+        return "", 404
+
+    t = None
+    if job.target_id is not None:
+        t = db.session.get(CrawlerTarget, job.target_id)
+    target_label = t.nickname if t else ("—" if job.target_id is None else "(deleted)")
+
+    duration = None
+    if job.started_at and job.finished_at:
+        duration = str(job.finished_at - job.started_at).split(".")[0]
+
+    j = {
+        "id": job.id,
+        "kind": job.kind or "crawl",
+        "target": target_label,
+        "status": _STATUS_DB_TO_UI.get(job.status, job.status) or "unknown",
+        "progress": job.progress if job.progress is not None else (100 if job.status in ("success", "failure") else 0),
+        "started_at": str(job.started_at)[:16] if job.started_at else "—",
+        "took": duration,
+        "message": job.message,
+    }
+    status_filter = request.args.get("status", "all")
+    return render_template("admin/_job_row.html", j=j, filter=status_filter)
 
 
 # ── Config ─────────────────────────────────────────────────────────────────

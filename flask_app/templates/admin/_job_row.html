@@ -1,0 +1,114 @@
+{#
+  Single job row fragment — used by both _jobs_rows.html (loop) and
+  GET /admin/jobs/<id>/_row (per-row HTMX poll).
+
+  Context: j (job dict), filter (current status filter string).
+  Running/queued rows carry hx-* attributes for 2-second self-polling;
+  attributes are omitted once the job reaches a terminal state so polling stops.
+#}
+{% import "_icons.html" as icon %}
+<tr id="job-row-{{ j.id }}"
+    {% if j.status in ('running', 'queued') %}
+    hx-get="{{ url_for('admin.job_row', job_id=j.id, status=filter) }}"
+    hx-trigger="every 2s"
+    hx-swap="outerHTML"
+    {% endif %}
+    style="border-top:1px solid var(--shse-border);">
+
+  {# ── Kind + status pill ─────────────────────────────────────── #}
+  <td style="padding:12px 14px; white-space:nowrap;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="color:var(--shse-text-faint); flex-shrink:0;">
+        {% if j.kind == 'crawl' %}{{ icon.refresh(13) }}
+        {% elif j.kind == 'reindex' %}{{ icon.list(13) }}
+        {% elif j.kind == 'vectorize' %}{{ icon.spark(13) }}
+        {% endif %}
+      </span>
+      <span style="font-weight:500; text-transform:capitalize;">{{ j.kind }}</span>
+      <span class="shse-pill {{
+        'shse-pill-warning' if j.status == 'running' else
+        'shse-pill-success' if j.status == 'done' else
+        'shse-pill-danger'  if j.status == 'failed' else
+        '' }}" style="font-size:10px;">
+        {{ j.status }}
+      </span>
+    </div>
+    {% if j.message and j.status == 'failed' %}
+    <details style="margin-top:5px;">
+      <summary style="font-size:11px; color:var(--shse-danger); cursor:pointer;
+                       list-style:none; display:inline-flex; align-items:center; gap:4px;">
+        {{ icon.alert(11) }} <span>Error details</span>
+      </summary>
+      <div style="margin-top:5px; padding:6px 8px; font-size:11px;
+                   color:var(--shse-danger); background:var(--shse-surface-2);
+                   border-radius:4px; font-family:monospace;
+                   white-space:pre-wrap; max-height:120px; overflow-y:auto;
+                   word-break:break-all;">{{ j.message }}</div>
+    </details>
+    {% endif %}
+  </td>
+
+  {# ── Target ─────────────────────────────────────────────────── #}
+  <td style="padding:12px 14px; color:var(--shse-text-muted);
+             max-width:180px; overflow:hidden;
+             text-overflow:ellipsis; white-space:nowrap;"
+      title="{{ j.target }}">{{ j.target }}</td>
+
+  {# ── Progress bar ────────────────────────────────────────────── #}
+  <td style="padding:12px 14px; min-width:120px;">
+    {% if j.status in ('running', 'queued') %}
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div style="flex:1; height:4px; background:var(--shse-surface-2);
+                    border-radius:2px; overflow:hidden; position:relative;">
+          {% if j.progress > 0 %}
+          <div style="width:{{ j.progress }}%; height:100%;
+                      background:var(--shse-accent); transition:width .4s;"></div>
+          {% else %}
+          <div style="position:absolute; inset:0; background:var(--shse-accent);
+                      animation:shse-progress-sweep 1.4s ease-in-out infinite;
+                      transform-origin:left center;"></div>
+          {% endif %}
+        </div>
+        <span class="shse-mono" style="font-size:11px; color:var(--shse-text-muted);
+              min-width:28px; text-align:right;">
+          {% if j.progress > 0 %}{{ j.progress }}%{% else %}…{% endif %}
+        </span>
+      </div>
+    {% elif j.status == 'done' %}
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div style="flex:1; height:4px; background:var(--shse-surface-2);
+                    border-radius:2px; overflow:hidden;">
+          <div style="width:100%; height:100%; background:var(--shse-success, #22c55e);"></div>
+        </div>
+        <span class="shse-mono" style="font-size:11px; color:var(--shse-text-muted);
+              min-width:28px; text-align:right;">100%</span>
+      </div>
+    {% else %}
+      <span style="color:var(--shse-text-faint);">—</span>
+    {% endif %}
+  </td>
+
+  {# ── Started ─────────────────────────────────────────────────── #}
+  <td style="padding:12px 14px; color:var(--shse-text-muted); white-space:nowrap;">{{ j.started_at }}</td>
+
+  {# ── Took ────────────────────────────────────────────────────── #}
+  <td class="shse-mono" style="padding:12px 14px; text-align:right;
+                                color:var(--shse-text-muted); white-space:nowrap;">{{ j.took or '—' }}</td>
+
+  {# ── Logs button — color reflects severity ──────────────────────── #}
+  <td style="padding:12px 14px; text-align:right; white-space:nowrap;">
+    {% if j.status == 'failed' %}
+      <button type="button" class="shse-btn shse-btn-ghost"
+              style="font-size:12px; color:var(--shse-danger);"
+              onclick="showJobLogs({{ j.id }})">
+        {{ icon.alert(12) }} Logs
+      </button>
+    {% elif j.message %}
+      <button type="button" class="shse-btn shse-btn-ghost"
+              style="font-size:12px; color:var(--shse-text-muted);"
+              onclick="showJobLogs({{ j.id }})">
+        {{ icon.info(12) }} Logs
+      </button>
+    {% endif %}
+  </td>
+</tr>

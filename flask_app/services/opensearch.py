@@ -335,7 +335,7 @@ def wipe_index(client=None):
         client = get_client()
 
     body = {"query": {"match_all": {}}}
-    return client.delete_by_query(index=INDEX_NAME, body=body)
+    return client.delete_by_query(index=INDEX_NAME, body=body, params={"conflicts": "proceed"})
 
 
 def delete_by_nickname(service_nickname, client=None):
@@ -358,7 +358,7 @@ def delete_by_nickname(service_nickname, client=None):
         }
     }
 
-    return client.delete_by_query(index=INDEX_NAME, body=body)
+    return client.delete_by_query(index=INDEX_NAME, body=body, params={"conflicts": "proceed"})
 
 
 def delete_stale(service_nickname, run_start, client=None):
@@ -388,7 +388,7 @@ def delete_stale(service_nickname, run_start, client=None):
         }
     }
 
-    return client.delete_by_query(index=INDEX_NAME, body=body)
+    return client.delete_by_query(index=INDEX_NAME, body=body, params={"conflicts": "proceed"})
 
 
 if __name__ == "__main__":

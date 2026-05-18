@@ -2,68 +2,22 @@
   <tbody> for the jobs table — extracted so HTMX can poll just the rows.
   Returned standalone from /admin/jobs/_table.
 
+  Polling strategy:
+    - tbody polls every 5 s to pick up newly created jobs.
+    - Each running/queued <tr> self-polls every 2 s via hx-get on the row
+      itself (/admin/jobs/<id>/_row); self-polling stops automatically once
+      the job reaches a terminal state (done/failed/cancelled) because the
+      returned <tr> no longer carries hx-* attributes.
+
   Context: jobs, filter (per admin/jobs.html).
 #}
 {% import "_icons.html" as icon %}
-{% import "_macros.html" as macros %}
 
 <tbody id="jobs-tbody"
        hx-get="{{ url_for('admin.jobs_table', status=filter) }}"
-       hx-trigger="every 2s"
+       hx-trigger="every 5s"
        hx-swap="outerHTML">
   {% for j in jobs %}
-  <tr style="border-top:1px solid var(--shse-border);">
-    <td style="padding:12px 14px;">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="color:var(--shse-text-faint);">
-          {% if j.kind == 'crawl' %}{{ icon.refresh(13) }}
-          {% elif j.kind == 'reindex' %}{{ icon.list(13) }}
-          {% elif j.kind == 'vectorize' %}{{ icon.spark(13) }}
-          {% endif %}
-        </span>
-        <span style="font-weight:500; text-transform:capitalize;">{{ j.kind }}</span>
-        <span class="shse-pill {{
-          'shse-pill-warning' if j.status == 'running' else
-          'shse-pill-success' if j.status == 'done' else
-          'shse-pill-danger'  if j.status == 'failed' else
-          '' }}" style="font-size:10px;">
-          {{ j.status }}
-        </span>
-      </div>
-      {% if j.message and j.status == 'failed' %}
-      <div style="font-size:11px; color:var(--shse-danger);
-                  margin-top:4px;">{{ j.message }}</div>
-      {% endif %}
-    </td>
-    <td style="padding:12px 14px; color:var(--shse-text-muted);">{{ j.target }}</td>
-    <td style="padding:12px 14px; min-width:160px;">
-      {% if j.status == 'running' %}
-        <div style="display:flex; align-items:center; gap:8px;">
-          <div style="flex:1; height:4px; background:var(--shse-surface-2);
-                      border-radius:2px; overflow:hidden;">
-            <div style="width:{{ j.progress }}%; height:100%;
-                        background:var(--shse-accent); transition:width .4s;"></div>
-          </div>
-          <span class="shse-mono" style="font-size:11px;
-                color:var(--shse-text-muted);">{{ j.progress }}%</span>
-        </div>
-      {% else %}
-        <span style="color:var(--shse-text-faint);">—</span>
-      {% endif %}
-    </td>
-    <td style="padding:12px 14px; color:var(--shse-text-muted);">{{ j.started_at }}</td>
-    <td class="shse-mono" style="padding:12px 14px; text-align:right;
-                                  color:var(--shse-text-muted);">{{ j.took or '—' }}</td>
-    <td style="padding:12px 14px; text-align:right; white-space:nowrap;">
-      {% if j.message or j.status == 'failure' %}
-        {% set _log_color = 'var(--shse-danger)' if j.status in ('failure', 'partial', 'deferred') else 'var(--shse-text-muted)' %}
-        <button type="button" class="shse-btn shse-btn-ghost"
-                style="font-size:12px; color:{{ _log_color }};"
-                onclick="showJobLogs({{ j.id }})">
-          {{ icon.alert(12) }} Logs
-        </button>
-      {% endif %}
-    </td>
-  </tr>
+    {% include "admin/_job_row.html" %}
   {% endfor %}
 </tbody>

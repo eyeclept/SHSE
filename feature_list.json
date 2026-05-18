@@ -1042,6 +1042,12 @@
       },
       "bf3_crawl_phantom_deleted_second_entry": {
         "passes": true
+      },
+      "bf4_reindex_button_text_says_no_recrawl": {
+        "passes": true
+      },
+      "bf5_delete_by_query_version_conflict_409": {
+        "passes": true
       }
     }
   },

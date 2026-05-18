@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
 
   <script defer src="https://unpkg.com/htmx.org@1.9.12"></script>
+  {% block head_extra %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% with messages = get_flashed_messages(with_categories=true) %}

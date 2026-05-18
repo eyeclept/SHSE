@@ -93,7 +93,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
       <h3 style="margin:0 0 4px; font-size:15px;">Reindex all targets</h3>
       <p style="margin:0 0 14px; font-size:13px; color:var(--shse-text-muted);">
-        Re-fetch from cache and rebuild the BM25 index. No re-crawl.
+        Re-crawl all targets and rebuild the index.
       </p>
       <button type="submit" class="shse-btn shse-btn-primary"
               {{ 'disabled' if not opensearch_up or running_jobs }}>

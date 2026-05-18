@@ -67,7 +67,7 @@ def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None
 
     try:
         if target.target_type in ("service", "network"):
-            _nutch_crawl(target, nutch_session, os_client)
+            _nutch_crawl(target, nutch_session, os_client, job=job, db_session=db_session)
         elif target.target_type == "oai-pmh":
             _harvest_oai_impl(target, os_client)
         elif target.target_type == "feed":
@@ -75,6 +75,7 @@ def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None
         elif target.target_type == "api-push":
             _push_api_content_impl(target, os_client)
         job.status = "success"
+        job.progress = 100
         job.finished_at = datetime.utcnow()
         job.message = None
         logger.info("CrawlJob %s success — target_id=%s", job.id, target_id)
@@ -101,12 +102,14 @@ def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None
     return job.id
 
 
-def _nutch_crawl(target, nutch_session=None, os_client=None):
+def _nutch_crawl(target, nutch_session=None, os_client=None, job=None, db_session=None):
     """
     Input:
         target        - CrawlerTarget ORM object (type service or network)
         nutch_session - unused; kept for signature compatibility with tests
         os_client     - optional OpenSearch client
+        job           - optional CrawlJob ORM row; updated with progress %
+        db_session    - optional SQLAlchemy session; required when job is set
     Output: None
     Details:
         BFS-crawls the target starting from the seed URL, discovers all
@@ -114,6 +117,8 @@ def _nutch_crawl(target, nutch_session=None, os_client=None):
         indexes it to OpenSearch. Nutch is not used for URL discovery;
         _discover_urls handles link extraction directly so no Nutch PARSE
         step is required.
+        Progress is written to job.progress (0-90%) as pages are indexed;
+        the final 100% is set by _crawl_target_impl on success.
     """
     nickname = target.nickname or target.network or str(target.id)
     tls_ok = bool(target.tls_verify)
@@ -141,23 +146,27 @@ def _nutch_crawl(target, nutch_session=None, os_client=None):
     logger.info("_nutch_crawl: discovered %d URL(s) from seed %s", len(urls), seed_url)
 
     documents_indexed = 0
-    for url in urls:
+    total_urls = len(urls)
+    for i, url in enumerate(urls):
         page_text = _fetch_page_text(url, tls_verify=tls_ok)
         if not page_text or page_text == url:
             logger.warning("_nutch_crawl: skipping %s — no text extracted", url)
-            continue
-        index_document(
-            url=url,
-            port=target.port or 80,
-            title=url,
-            crawled_at=datetime.utcnow().isoformat(),
-            service_nickname=nickname,
-            content_type="text/html",
-            text=page_text,
-            source_type="nutch",
-            client=os_client,
-        )
-        documents_indexed += 1
+        else:
+            index_document(
+                url=url,
+                port=target.port or 80,
+                title=url,
+                crawled_at=datetime.utcnow().isoformat(),
+                service_nickname=nickname,
+                content_type="text/html",
+                text=page_text,
+                source_type="nutch",
+                client=os_client,
+            )
+            documents_indexed += 1
+        if job is not None and db_session is not None:
+            job.progress = min(90, int((i + 1) / total_urls * 90))
+            db_session.commit()
 
     if documents_indexed == 0:
         raise RuntimeError(
