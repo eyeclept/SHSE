@@ -12,16 +12,30 @@ import logging
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
-from flask_app import csrf, db, limiter, oauth
+from flask_app import csrf, db, is_loopback, limiter, oauth  # noqa: F401 (is_loopback kept for future use)
 from flask_app.models.user import User
 
 # Globals
 auth_bp = Blueprint("auth", __name__)
 logger = logging.getLogger(__name__)
 
+
+def _login_rate_limit() -> str:
+    """
+    Input:  None
+    Output: rate limit string read from config.ini [ratelimit] login setting
+    Details:
+        Indirection lets operators tune the login rate limit without code changes.
+        Default "10 per minute" is appropriate for production; development/test
+        environments can raise this via config.ini to avoid hitting the limit
+        during automated test runs.
+    """
+    from flask_app.config import Config
+    return Config.LOGIN_RATE_LIMIT
+
 # Functions
 @auth_bp.route("/login", methods=["GET", "POST"])
-@limiter.limit("10 per minute")
+@limiter.limit(lambda: _login_rate_limit())
 def login():
     """
     Input: username, password (form POST)
@@ -608,6 +622,81 @@ def toggle_theme():
     session["theme"] = "dark" if session.get("theme") != "dark" else "light"
     referrer = request.referrer or url_for("search.home")
     return redirect(referrer)
+
+
+# ── API Token management (user-facing) ──────────────────────────────────────
+
+@auth_bp.route("/settings/tokens/generate", methods=["POST"])
+@login_required
+def generate_token():
+    """
+    Input: form field 'name' — human-readable label for the new token
+    Output: redirect to settings page; flashes raw token value once
+    Details:
+        Creates a new ApiToken owned by the current user.
+        The raw token is shown exactly once via a flash message and never stored.
+        Users must copy the token before leaving the page.
+    """
+    from flask import flash
+    from flask_app.models.api_token import ApiToken
+
+    name = request.form.get("name", "").strip()
+    if not name:
+        flash("Token name is required.", "error")
+        return redirect(url_for("search.settings"))
+
+    try:
+        token, raw = ApiToken.generate(name=name, user=current_user)
+        db.session.add(token)
+        db.session.commit()
+        flash(raw, "api_token_created")
+        logger.info(
+            "generate_token: token_id=%s name=%r user_id=%s",
+            token.id, name, current_user.id,
+        )
+    except Exception:
+        logger.exception("generate_token: failed for user_id=%s", current_user.id)
+        db.session.rollback()
+        flash("Failed to generate token. Please try again.", "error")
+
+    return redirect(url_for("search.settings"))
+
+
+@auth_bp.route("/settings/tokens/<int:token_id>/revoke", methods=["POST"])
+@login_required
+def revoke_token(token_id):
+    """
+    Input: token_id — URL path integer
+    Output: redirect to settings page; flashes success or error
+    Details:
+        Users may only revoke their own tokens.  A user_id ownership check
+        is performed before revoking; 403 is returned if the token belongs
+        to a different user.
+    """
+    from datetime import datetime
+    from flask import flash
+    from flask_app.models.api_token import ApiToken
+
+    token = db.session.get(ApiToken, token_id)
+    if token is None:
+        abort(404)
+    if token.user_id != current_user.id:
+        abort(403)
+
+    try:
+        token.revoked_at = datetime.utcnow()
+        db.session.commit()
+        logger.info(
+            "revoke_token: token_id=%s name=%r revoked by user_id=%s",
+            token.id, token.name, current_user.id,
+        )
+        flash(f"Token '{token.name}' revoked.", "success")
+    except Exception:
+        logger.exception("revoke_token: failed token_id=%s user_id=%s", token_id, current_user.id)
+        db.session.rollback()
+        flash("Failed to revoke token. Please try again.", "error")
+
+    return redirect(url_for("search.settings"))
 
 
 if __name__ == "__main__":

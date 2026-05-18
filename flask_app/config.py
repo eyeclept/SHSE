@@ -5,9 +5,9 @@ Email: eyeclept@pm.me
 
 Description:
     Flask configuration.
-    Non-secret values are read from config.ini (checked into git).
-    Secrets (passwords, keys, tokens) are read from environment variables only.
-    Docker services may override any config.ini value via their environment: blocks.
+    Non-secret values are read from config.ini (gitignored; copy from config.ini.example).
+    Secrets (passwords, keys, tokens) are read from environment variables only (.env).
+    Environment variables may still override any config.ini value if needed.
 """
 # Imports
 import configparser
@@ -24,8 +24,7 @@ def _c(section, key, fallback=""):
     Output: str — env var (if set) > config.ini value > fallback
     Details:
         Env var name is derived as SECTION_KEY (uppercase, hyphens → underscores).
-        Docker services use this convention to override specific keys per-container
-        (e.g. MARIADB_HOST=mariadb inside the compose network).
+        Env vars override config.ini; useful for CI or one-off overrides.
     """
     env_key = f"{section.upper()}_{key.upper().replace('-', '_')}"
     if env_key in os.environ:
@@ -56,7 +55,7 @@ class Config:
 
     # ── MariaDB ────────────────────────────────────────────────────────────
     MARIADB_HOST = _c("mariadb", "host", "localhost")
-    MARIADB_PORT = _c("mariadb", "port", "3306")
+    MARIADB_PORT = int(_c("mariadb", "port", "3306"))
     MARIADB_DB   = _c("mariadb", "db",   "shse")
     MARIADB_USER = _c("mariadb", "user", "shse_user")
     SQLALCHEMY_DATABASE_URI = (
@@ -119,6 +118,10 @@ class Config:
 
     # ── MCP Server ─────────────────────────────────────────────────────────
     MCP_HOST     = _c("mcp", "host",     "0.0.0.0")
+
+    # ── Rate limits ────────────────────────────────────────────────────────────
+    # Flask-Limiter format: "<count> per <unit>" e.g. "10 per minute"
+    LOGIN_RATE_LIMIT = _c("ratelimit", "login", "10 per minute")
     MCP_PORT     = int(_c("mcp", "port",     "8765"))
     MCP_RESULT_K = int(_c("mcp", "result_k", "10"))
 

@@ -251,6 +251,118 @@
     </div>
   </section>
 
+  {# ── API Tokens ──────────────────────────────────────────────────── #}
+  <section style="margin-bottom:28px;">
+    <h2 style="margin:0 0 12px; font-size:13px; font-weight:600;
+               color:var(--shse-text-muted); text-transform:uppercase; letter-spacing:0.06em;">
+      API Tokens
+    </h2>
+
+    {# Show newly generated raw token in a prominent warning box #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        {% if category == 'api_token_created' %}
+        <div id="token-reveal-box"
+             style="margin-bottom:16px; padding:16px 18px; border-radius:8px;
+                    background:var(--shse-warning-soft, #fff8e1);
+                    border:1px solid var(--shse-warning, #f59e0b); font-size:13px;">
+          <strong style="display:block; margin-bottom:6px; color:var(--shse-warning, #b45309);">
+            Copy your token now — it will not be shown again.
+          </strong>
+          <code id="raw-token-value"
+                style="display:block; word-break:break-all; font-size:13px; padding:8px;
+                       background:var(--shse-surface); border-radius:4px;
+                       border:1px solid var(--shse-border); margin-bottom:8px;">
+            {{ message }}
+          </code>
+          <button type="button" class="shse-btn" onclick="(function(){
+            var el = document.getElementById('raw-token-value');
+            navigator.clipboard.writeText(el.textContent.trim()).then(function(){
+              document.getElementById('copy-btn-label').textContent = 'Copied!';
+              setTimeout(function(){ document.getElementById('copy-btn-label').textContent = 'Copy'; }, 2000);
+            });
+          })();">
+            <span id="copy-btn-label">Copy</span>
+          </button>
+        </div>
+        {% endif %}
+      {% endfor %}
+    {% endwith %}
+
+    <div class="shse-card" style="padding:0; margin-bottom:16px;">
+      {% if current_user.api_tokens %}
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--shse-border);
+                     color:var(--shse-text-muted); font-size:11px; text-transform:uppercase;
+                     letter-spacing:.06em;">
+            <th style="padding:10px 16px; text-align:left; font-weight:500;">Name</th>
+            <th style="padding:10px 16px; text-align:left; font-weight:500;">Created</th>
+            <th style="padding:10px 16px; text-align:left; font-weight:500;">Last Used</th>
+            <th style="padding:10px 16px; text-align:left; font-weight:500;">Status</th>
+            <th style="padding:10px 16px; text-align:right; font-weight:500;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in current_user.api_tokens %}
+          <tr style="border-bottom:1px solid var(--shse-border);">
+            <td style="padding:12px 16px;">
+              <span class="shse-mono" style="font-size:12px;">{{ t.name }}</span>
+            </td>
+            <td style="padding:12px 16px; color:var(--shse-text-muted); font-size:12px;">
+              {{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '—' }}
+            </td>
+            <td style="padding:12px 16px; color:var(--shse-text-muted); font-size:12px;">
+              {{ t.last_used_at.strftime('%Y-%m-%d %H:%M') if t.last_used_at else 'Never' }}
+            </td>
+            <td style="padding:12px 16px;">
+              {% if t.revoked_at %}
+                <span style="font-size:11px; color:var(--shse-danger);">Revoked</span>
+              {% elif t.expires_at and t.expires_at < now %}
+                <span style="font-size:11px; color:var(--shse-text-muted);">Expired</span>
+              {% else %}
+                <span style="font-size:11px; color:var(--shse-accent);">Active</span>
+              {% endif %}
+            </td>
+            <td style="padding:12px 16px; text-align:right;">
+              {% if not t.revoked_at %}
+              <form method="post"
+                    action="{{ url_for('auth.revoke_token', token_id=t.id) }}"
+                    onsubmit="return confirm('Revoke token \'{{ t.name }}\'?');">
+                <input type="hidden" name="csrf_token"
+                       value="{{ csrf_token() if csrf_token is defined else '' }}">
+                <button type="submit" class="shse-btn shse-btn-danger"
+                        style="font-size:11px; padding:4px 10px;">Revoke</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="padding:20px 18px; color:var(--shse-text-muted); font-size:13px;">
+        You have no API tokens yet.
+      </div>
+      {% endif %}
+    </div>
+
+    {# Generate new token form #}
+    <form method="post" action="{{ url_for('auth.generate_token') }}"
+          style="display:flex; gap:10px; align-items:flex-end;">
+      <input type="hidden" name="csrf_token"
+             value="{{ csrf_token() if csrf_token is defined else '' }}">
+      <label style="flex:1;">
+        <span style="display:block; font-size:12px; font-weight:500;
+                     color:var(--shse-text-muted); margin-bottom:5px;">Token name</span>
+        <input type="text" name="name" class="shse-input" placeholder="e.g. CI pipeline"
+               required maxlength="128"
+               style="width:100%; box-sizing:border-box; max-width:300px;">
+      </label>
+      <button type="submit" class="shse-btn shse-btn-primary">Generate token</button>
+    </form>
+  </section>
+
   {# ── Danger zone ─────────────────────────────────────────────────── #}
   <section>
     <h2 style="margin:0 0 12px; font-size:13px; font-weight:600;

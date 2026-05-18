@@ -7,12 +7,13 @@ Description:
     Flask application factory. Initialises extensions and registers blueprints.
 """
 # Imports
+import hashlib
 import logging
 import os
 from datetime import timedelta
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask
+from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_migrate import Migrate
@@ -26,8 +27,38 @@ db = SQLAlchemy()
 login_manager = LoginManager()
 migrate = Migrate()
 oauth = OAuth()
-limiter = Limiter(key_func=get_remote_address)
 csrf = CSRFProtect()
+
+
+def _limiter_key():
+    """
+    Input:  None (reads Flask request context)
+    Output: string key used by Flask-Limiter for rate-limit bucketing
+    Details:
+        Token-authenticated requests are keyed by a truncated MD5 of the
+        Authorization header so that all requests sharing a token share a
+        bucket regardless of source IP (useful behind proxies or Tor).
+        All other requests fall back to the remote IP address.
+    """
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer shse_"):
+        return "token:" + hashlib.md5(auth.encode()).hexdigest()[:16]
+    return get_remote_address()
+
+
+def is_loopback() -> bool:
+    """
+    Input:  None (reads Flask request context)
+    Output: True when the request originates from the loopback interface
+    Details:
+        Used as exempt_when on rate-limited routes.  All external traffic
+        arrives via Nginx (which is not on loopback), so only internal
+        callers — test runners, CLI, container-to-container — are exempted.
+    """
+    return get_remote_address() in ("127.0.0.1", "::1")
+
+
+limiter = Limiter(key_func=_limiter_key)
 
 
 @login_manager.user_loader
@@ -40,6 +71,47 @@ def load_user(user_id):
     """
     from flask_app.models.user import User
     return db.session.get(User, int(user_id))
+
+
+@login_manager.request_loader
+def load_user_from_request(request):
+    """
+    Input: Flask request object
+    Output: User if valid Bearer token; None to fall back to session auth
+    Details:
+        Authenticates API requests via Bearer token without creating a session.
+        Checks api.enabled system setting; skips token auth if disabled.
+        Updates last_used_at on each successful auth.
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer shse_"):
+        return None
+    # Deferred imports to avoid circular dependency at module load
+    try:
+        from flask_app.models.api_token import ApiToken
+        from flask_app.models.system_setting import SystemSetting
+        enabled = db.session.get(SystemSetting, "api.enabled")
+        if enabled and enabled.value == "0":
+            return None
+        raw_token = auth[7:]   # strip "Bearer "
+        token = ApiToken.verify(raw_token)
+        if token is None:
+            return None
+        from datetime import datetime
+        token.last_used_at = datetime.utcnow()
+        db.session.commit()
+        import logging as _logging
+        _logging.getLogger(__name__).info(
+            "api token auth: user_id=%s token_id=%s path=%s",
+            token.user_id, token.id, request.path,
+        )
+        return token.user
+    except Exception:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "request_loader: token auth failed", exc_info=True
+        )
+        return None
 
 # Functions
 def create_app():
@@ -94,6 +166,7 @@ def create_app():
     from flask_app.models.crawler_target import CrawlerTarget      # noqa: F401
     from flask_app.models.crawl_job import CrawlJob                # noqa: F401
     from flask_app.models.system_setting import SystemSetting      # noqa: F401
+    from flask_app.models.api_token import ApiToken                # noqa: F401
 
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
@@ -104,6 +177,7 @@ def create_app():
     app.register_blueprint(search_bp)
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(api_bp)
+    csrf.exempt(api_bp)
 
     _init_logger = logging.getLogger(__name__)
 

@@ -58,8 +58,13 @@ def _login(page, base_url, username, password):
     """
     Input: page, base_url, username, password
     Output: None — navigates to /login, fills credentials, submits form
+    Details:
+        Waits for the username input to be visible before filling.
+        Under full-suite load the server may take longer to respond, so
+        a bare page.goto() followed immediately by page.fill() can race.
     """
     page.goto(f"{base_url}/login")
+    page.wait_for_selector("input[name='username']", state="visible", timeout=60000)
     page.fill("input[name='username']", username)
     page.fill("input[name='password']", password)
     page.click("button[type='submit']")

@@ -77,10 +77,11 @@ def get_client():
         Reads connection parameters from environment variables. Uses HTTPS
         and basic auth against the OpenSearch security plugin.
     """
-    host = os.environ.get("OPENSEARCH_HOST", "localhost")
-    port = int(os.environ.get("OPENSEARCH_PORT", 9200))
-    user = os.environ.get("OPENSEARCH_USER", "admin")
-    password = os.environ.get("OPENSEARCH_INITIAL_ADMIN_PASSWORD", "")
+    from flask_app.config import Config
+    host     = Config.OPENSEARCH_HOST
+    port     = Config.OPENSEARCH_PORT
+    user     = Config.OPENSEARCH_USER
+    password = Config.OPENSEARCH_PASSWORD
 
     return OpenSearch(
         hosts=[{"host": host, "port": port}],

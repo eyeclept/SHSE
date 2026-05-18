@@ -37,4 +37,8 @@
      aria-current="{{ 'page' if request.endpoint == 'admin.users' else '' }}">
     {{ icon.user(14) }} Users
   </a>
+  <a href="{{ url_for('admin.admin_tokens') }}" class="shse-tab"
+     aria-current="{{ 'page' if request.endpoint == 'admin.admin_tokens' else '' }}">
+    {{ icon.lock(14) }} Tokens
+  </a>
 </nav>

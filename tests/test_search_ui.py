@@ -29,10 +29,13 @@ def app():
     Input: None
     Output: Flask test app with all blueprints and SQLite
     """
-    from flask_app.models.user import User                     # noqa: F401
-    from flask_app.models.search_history import SearchHistory  # noqa: F401
-    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401
-    from flask_app.models.crawl_job import CrawlJob            # noqa: F401
+    from flask_app.models.user import User                                    # noqa: F401
+    from flask_app.models.search_history import SearchHistory                 # noqa: F401
+    from flask_app.models.crawler_target import CrawlerTarget                 # noqa: F401
+    from flask_app.models.crawl_job import CrawlJob                           # noqa: F401
+    from flask_app.models.webauthn_credential import WebAuthnCredential       # noqa: F401
+    from flask_app.models.password_reset_token import PasswordResetToken      # noqa: F401
+    from flask_app.models.api_token import ApiToken                           # noqa: F401
     from flask_app.routes.auth import auth_bp
     from flask_app.routes.search import search_bp
     from flask_app.routes.admin import admin_bp
@@ -160,7 +163,8 @@ def test_ai_summary_card_shown_when_llm_available(client):
     fake_hits = [{"score": 0.9, "service": "kiwix", "url": "http://k/A",
                   "title": "A", "snippet": "text", "context": "text content"}]
 
-    with patch("flask_app.services.search.get_vector_hits", return_value=(fake_hits, True)), \
+    with patch("flask_app.services.llm.is_llm_available", return_value=True), \
+         patch("flask_app.services.search.get_vector_hits", return_value=(fake_hits, True)), \
          patch("flask_app.services.search._build_ai_summary", return_value=fake_summary), \
          patch("flask_app.routes.api._cache_get", return_value=None), \
          patch("flask_app.routes.api._cache_set"):

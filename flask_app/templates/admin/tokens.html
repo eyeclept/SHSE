@@ -1,0 +1,117 @@
+{#
+  Admin · API Tokens
+
+  Route contract:
+    GET  /admin/tokens              → render token audit list
+    POST /admin/tokens/<id>/revoke  → set revoked_at on any token
+
+  Context:
+    tokens = list of ApiToken ORM rows (joined to User via .user relationship)
+#}
+{% extends "base.html" %}
+{% import "_icons.html" as icon %}
+
+{% block title %}Admin · API Tokens{% endblock %}
+
+{% block chrome %}
+  {% include "_topbar.html" %}
+  {% include "admin/_subnav.html" %}
+{% endblock %}
+
+{% block content %}
+<main id="shse-main" role="main" style="max-width:960px; margin:0 auto; padding:28px 28px 80px;">
+
+  <header style="margin-bottom:24px;">
+    <h1 class="shse-serif" style="margin:0; font-size:28px; font-weight:400; letter-spacing:-0.01em;">
+      API Tokens
+    </h1>
+    <p style="margin:4px 0 0; font-size:14px; color:var(--shse-text-muted);">
+      All issued API tokens. Revoke any token immediately if it is compromised.
+    </p>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div style="padding:12px 16px; margin-bottom:16px; border-radius:8px;
+                  background:{{ 'var(--shse-success-soft)' if category == 'success' else 'var(--shse-danger-soft)' }};
+                  color:{{ 'var(--shse-success)' if category == 'success' else 'var(--shse-danger)' }};
+                  font-size:13px;">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="shse-card" style="overflow:hidden;">
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <thead>
+        <tr style="border-bottom:1px solid var(--shse-border);
+                   color:var(--shse-text-muted); font-size:11px; text-transform:uppercase;
+                   letter-spacing:.06em;">
+          <th style="padding:10px 16px; text-align:left; font-weight:500;">ID</th>
+          <th style="padding:10px 16px; text-align:left; font-weight:500;">Name</th>
+          <th style="padding:10px 16px; text-align:left; font-weight:500;">User</th>
+          <th style="padding:10px 16px; text-align:left; font-weight:500;">Created</th>
+          <th style="padding:10px 16px; text-align:left; font-weight:500;">Last Used</th>
+          <th style="padding:10px 16px; text-align:left; font-weight:500;">Expires</th>
+          <th style="padding:10px 16px; text-align:left; font-weight:500;">Status</th>
+          <th style="padding:10px 16px; text-align:right; font-weight:500;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tokens %}
+        <tr style="border-bottom:1px solid var(--shse-border);">
+          <td style="padding:12px 16px; color:var(--shse-text-muted);">{{ t.id }}</td>
+          <td style="padding:12px 16px;">
+            <span class="shse-mono" style="font-size:12px;">{{ t.name }}</span>
+          </td>
+          <td style="padding:12px 16px;">
+            {{ icon.user(12) }}
+            <span style="margin-left:4px;">{{ t.user.username if t.user else '—' }}</span>
+          </td>
+          <td style="padding:12px 16px; color:var(--shse-text-muted); font-size:12px;">
+            {{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '—' }}
+          </td>
+          <td style="padding:12px 16px; color:var(--shse-text-muted); font-size:12px;">
+            {{ t.last_used_at.strftime('%Y-%m-%d %H:%M') if t.last_used_at else 'Never' }}
+          </td>
+          <td style="padding:12px 16px; color:var(--shse-text-muted); font-size:12px;">
+            {{ t.expires_at.strftime('%Y-%m-%d') if t.expires_at else 'Never' }}
+          </td>
+          <td style="padding:12px 16px;">
+            {% if t.revoked_at %}
+              <span class="shse-pill shse-pill-danger" style="font-size:11px;">Revoked</span>
+            {% elif t.expires_at and t.expires_at < now %}
+              <span class="shse-pill" style="font-size:11px; color:var(--shse-text-muted);">Expired</span>
+            {% else %}
+              <span class="shse-pill shse-pill-accent" style="font-size:11px;">Active</span>
+            {% endif %}
+          </td>
+          <td style="padding:12px 16px; text-align:right;">
+            {% if not t.revoked_at %}
+            <form method="post"
+                  action="{{ url_for('admin.admin_revoke_token', token_id=t.id) }}"
+                  onsubmit="return confirm('Revoke token \'{{ t.name }}\'? This cannot be undone.');">
+              <input type="hidden" name="csrf_token"
+                     value="{{ csrf_token() if csrf_token is defined else '' }}">
+              <button type="submit" class="shse-btn shse-btn-danger"
+                      style="font-size:11px; padding:4px 10px;">
+                Revoke
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" style="padding:24px 16px; text-align:center;
+                                  color:var(--shse-text-muted); font-size:13px;">
+            No API tokens have been issued yet.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</main>
+{% endblock %}

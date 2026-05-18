@@ -22,10 +22,11 @@ import requests
 
 # Globals
 logger = logging.getLogger(__name__)
-_LLM_API_BASE = os.environ.get("LLM_API_BASE", "http://localhost:11434/v1")
-_LLM_EMBED_MODEL = os.environ.get("LLM_EMBED_MODEL", "nomic-embed-text")
-_LLM_GEN_MODEL = os.environ.get("LLM_GEN_MODEL", "granite4.1:8b")
-_LLM_REWRITE_MODEL = os.environ.get("LLM_REWRITE_MODEL", "granite4.1:3b")
+from flask_app.config import Config as _Config  # noqa: E402
+_LLM_API_BASE    = _Config.LLM_API_BASE
+_LLM_EMBED_MODEL = _Config.LLM_EMBED_MODEL
+_LLM_GEN_MODEL   = _Config.LLM_GEN_MODEL
+_LLM_REWRITE_MODEL = _Config.LLM_REWRITE_MODEL
 _CPU_EMBED_MODEL = "nomic-ai/nomic-embed-text-v1"
 
 _TIMEOUT = 30

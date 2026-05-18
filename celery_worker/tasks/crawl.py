@@ -17,7 +17,7 @@ from datetime import datetime
 from celery.utils.log import get_task_logger
 from celery_worker.app import celery
 from flask_app.services.nutch import _discover_urls, _fetch_page_text
-from flask_app.services.opensearch import index_document, delete_stale
+from flask_app.services.opensearch import index_document, delete_stale, create_index
 
 # Globals
 _INDEX_NAME = "shse_pages"
@@ -64,6 +64,15 @@ def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None
     db_session.add(job)
     db_session.commit()
     logger.info("CrawlJob %s started — target_id=%s task_id=%s", job.id, target_id, job.task_id)
+
+    # Ensure the index exists with the explicit keyword/knn_vector mapping before
+    # any documents are written. Without this, OpenSearch auto-creates the index
+    # with dynamic mapping on the first write, mapping service_nickname as text
+    # instead of keyword, which breaks terms aggregations on every subsequent search.
+    try:
+        create_index(client=os_client)
+    except Exception:
+        logger.warning("CrawlJob %s: create_index failed — index may have wrong mapping", job.id, exc_info=True)
 
     try:
         if target.target_type in ("service", "network"):

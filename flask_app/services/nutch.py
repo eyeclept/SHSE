@@ -25,8 +25,9 @@ import requests
 logger = logging.getLogger(__name__)
 
 # Globals
-NUTCH_HOST = os.environ.get("NUTCH_HOST", "localhost")
-NUTCH_PORT = int(os.environ.get("NUTCH_PORT", 8081))
+from flask_app.config import Config  # noqa: E402
+NUTCH_HOST = Config.NUTCH_HOST
+NUTCH_PORT = Config.NUTCH_PORT
 
 _PIPELINE = ["INJECT", "GENERATE", "FETCH", "UPDATEDB"]
 _TERMINAL_STATES = {"FINISHED", "FAILED", "KILLED"}

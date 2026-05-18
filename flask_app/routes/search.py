@@ -195,12 +195,17 @@ def results():
             buckets = resp.get("aggregations", {}).get("by_service", {}).get("buckets", [])
             sources = [{"name": b["key"], "n": b["doc_count"]} for b in buckets]
 
-            if current_user.is_authenticated:
-                _save_history(q)
-
         except Exception as _exc:
             logger.exception("BM25 search failed: %s", _exc)
-            search_error = str(_exc)
+            if getattr(current_user, "role", "") == "admin":
+                search_error = str(_exc)
+            else:
+                search_error = "A search error occurred. Please try again or contact an administrator."
+
+        # History is saved after the try/except so a failing search backend
+        # does not prevent the query from being recorded.
+        if current_user.is_authenticated:
+            _save_history(q)
 
         # Semantic search runs asynchronously via HTMX (/api/semantic).
         # show_bm25_warning is only shown here if we can quickly determine

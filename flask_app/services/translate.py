@@ -134,7 +134,8 @@ def build_translate_card(q: str) -> tuple:
     if not translation:
         return None, None
 
-    model = os.environ.get("LLM_TRANSLATE_MODEL", "aya-expanse:8b")
+    from flask_app.config import Config
+    model = Config.LLM_TRANSLATE_MODEL
     answer_card = {
         "type":        "translation",
         "word":        query["text"],

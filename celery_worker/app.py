@@ -16,9 +16,10 @@ from celery import Celery
 
 # Globals
 def _build_redis_url():
-    host     = os.environ.get("REDIS_HOST", "localhost")
-    port     = os.environ.get("REDIS_PORT", "6379")
-    password = os.environ.get("REDIS_PASSWORD", "")
+    from flask_app.config import Config
+    host     = Config.REDIS_HOST
+    port     = Config.REDIS_PORT
+    password = Config.REDIS_PASSWORD
     auth     = f":{password}@" if password else ""
     return os.environ.get("CELERY_BROKER_URL", f"redis://{auth}{host}:{port}/0")
 

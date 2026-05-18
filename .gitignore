@@ -3,6 +3,7 @@ Assist
 *Claude*
 odd-test*
 *.zim
+config.ini
 # --- Python ---
 __pycache__/
 *.py[cod]

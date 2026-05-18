@@ -20,20 +20,23 @@ logger = logging.getLogger(__name__)
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
+from flask_app.config import Config  # noqa: E402 — must load .env first
+
 # Functions
 def _get_conn():
     """
     Input: None
     Output: pymysql connection
     Details:
-        Opens a connection to the MariaDB container using values from .env.
+        Opens a connection to MariaDB using settings from config.ini and
+        password from .env, consistent with how the application connects.
     """
     return pymysql.connect(
-        host=os.environ.get("MARIADB_HOST", "localhost"),
-        port=int(os.environ.get("MARIADB_PORT", 3306)),
-        user=os.environ.get("MARIADB_USER", "shse_user"),
-        password=os.environ.get("MARIADB_PASSWORD", ""),
-        database=os.environ.get("MARIADB_DB", "shse"),
+        host=Config.MARIADB_HOST,
+        port=Config.MARIADB_PORT,
+        user=Config.MARIADB_USER,
+        password=Config.MARIADB_PASSWORD,
+        database=Config.MARIADB_DB,
         autocommit=False,
     )
 
