@@ -29,6 +29,17 @@ logger = logging.getLogger(__name__)
 _INDEX_NAME = "shse_pages"
 _PROBE_TIMEOUT = 3   # seconds per health probe
 
+# Translate DB status values to the UI names expected by the jobs template.
+# DB:  queued | started | success | failure
+# UI:  queued | running | done    | failed
+_STATUS_DB_TO_UI = {
+    "queued":  "queued",
+    "started": "running",
+    "success": "done",
+    "failure": "failed",
+}
+_STATUS_UI_TO_DB = {v: k for k, v in _STATUS_DB_TO_UI.items()}
+
 
 # Functions
 def _upsert_setting(db_session, key, value):
@@ -309,8 +320,11 @@ def index():
     activity = []
     for job in recent_jobs:
         if job.target_id not in target_cache:
-            t = db.session.get(CrawlerTarget, job.target_id)
-            target_cache[job.target_id] = t.nickname if t else "(deleted)"
+            if job.target_id is None:
+                target_cache[None] = "—"
+            else:
+                t = db.session.get(CrawlerTarget, job.target_id)
+                target_cache[job.target_id] = t.nickname if t else "(deleted)"
         label = target_cache[job.target_id]
         activity.append({
             "kind": "crawl",
@@ -617,9 +631,11 @@ def _job_rows(status_filter="all"):
     from flask_app.models.crawl_job import CrawlJob
     from flask_app.models.crawler_target import CrawlerTarget
 
-    q = db.session.query(CrawlJob).order_by(CrawlJob.started_at.desc()).limit(100)
+    q = db.session.query(CrawlJob).order_by(CrawlJob.started_at.desc())
     if status_filter != "all":
-        q = q.filter(CrawlJob.status == status_filter)
+        db_status = _STATUS_UI_TO_DB.get(status_filter, status_filter)
+        q = q.filter(CrawlJob.status == db_status)
+    q = q.limit(100)
 
     target_cache = {}
     rows = []
@@ -637,7 +653,7 @@ def _job_rows(status_filter="all"):
             "id": job.id,
             "kind": job.kind or "crawl",
             "target": target_cache[job.target_id],
-            "status": job.status or "unknown",
+            "status": _STATUS_DB_TO_UI.get(job.status, job.status) or "unknown",
             "progress": 100 if job.status in ("success", "failure") else 0,
             "started_at": str(job.started_at)[:16] if job.started_at else "—",
             "finished_at": str(job.finished_at)[:16] if job.finished_at else "—",
@@ -658,8 +674,12 @@ def jobs():
     from flask_app.models.crawl_job import CrawlJob
 
     status_filter = request.args.get("status", "all")
-    counts = {s: db.session.query(CrawlJob).filter_by(status=s).count()
-              for s in ("started", "success", "failure")}
+    counts = {
+        "queued":  db.session.query(CrawlJob).filter_by(status="queued").count(),
+        "running": db.session.query(CrawlJob).filter_by(status="started").count(),
+        "done":    db.session.query(CrawlJob).filter_by(status="success").count(),
+        "failed":  db.session.query(CrawlJob).filter_by(status="failure").count(),
+    }
     counts["all"] = sum(counts.values())
     return render_template(
         "admin/jobs.html",
@@ -718,8 +738,12 @@ def jobs_table():
     from flask_app.models.crawl_job import CrawlJob
 
     status_filter = request.args.get("status", "all")
-    counts = {s: db.session.query(CrawlJob).filter_by(status=s).count()
-              for s in ("started", "success", "failure")}
+    counts = {
+        "queued":  db.session.query(CrawlJob).filter_by(status="queued").count(),
+        "running": db.session.query(CrawlJob).filter_by(status="started").count(),
+        "done":    db.session.query(CrawlJob).filter_by(status="success").count(),
+        "failed":  db.session.query(CrawlJob).filter_by(status="failure").count(),
+    }
     counts["all"] = sum(counts.values())
     return render_template(
         "admin/_jobs_rows.html",

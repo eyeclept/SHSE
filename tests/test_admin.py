@@ -225,6 +225,101 @@ def test_jobs_page_lists_crawl_jobs(app, admin_client):
     assert b"success" in r.data
 
 
+def test_jobs_filter_tabs_return_200(app, admin_client):
+    """
+    Input: GET /admin/jobs?status=<tab> for each UI tab name
+    Output: 200 for all tabs — regression for BF-2 (filter-after-limit 500)
+    Details:
+        Before the fix, filter() called after limit() raised
+        sqlalchemy.exc.InvalidRequestError → 500 on every non-"all" tab.
+    """
+    from flask_app.models.crawler_target import CrawlerTarget
+    from flask_app.models.crawl_job import CrawlJob
+    from datetime import datetime
+
+    with app.app_context():
+        t = CrawlerTarget(nickname="bf2-target", target_type="service", url="bf2.lab")
+        db.session.add(t)
+        db.session.commit()
+        for status in ("queued", "started", "success", "failure"):
+            db.session.add(CrawlJob(target_id=t.id, status=status,
+                                    started_at=datetime.utcnow()))
+        db.session.commit()
+
+    for tab in ("all", "queued", "running", "done", "failed"):
+        r = admin_client.get(f"/admin/jobs?status={tab}")
+        assert r.status_code == 200, f"Expected 200 for ?status={tab}, got {r.status_code}"
+
+
+def test_jobs_status_translated_to_ui_names(app, admin_client):
+    """
+    Input: GET /admin/jobs as admin with a "started" job
+    Output: response contains "running" (the UI name); does not contain raw "started"
+    Details:
+        DB status "started" must appear as "running" in the jobs table.
+    """
+    from flask_app.models.crawler_target import CrawlerTarget
+    from flask_app.models.crawl_job import CrawlJob
+    from datetime import datetime
+
+    with app.app_context():
+        t = CrawlerTarget(nickname="ui-status-target", target_type="service", url="ui.lab")
+        db.session.add(t)
+        db.session.commit()
+        db.session.add(CrawlJob(target_id=t.id, status="started",
+                                started_at=datetime.utcnow()))
+        db.session.commit()
+
+    r = admin_client.get("/admin/jobs")
+    assert r.status_code == 200
+    assert b"running" in r.data
+
+
+def test_jobs_htmx_partial_filter_tabs_return_200(app, admin_client):
+    """
+    Input: GET /admin/jobs/_table?status=<tab> for each UI tab
+    Output: 200 — ensures the HTMX polling endpoint is also fixed (BF-2)
+    """
+    for tab in ("all", "queued", "running", "done", "failed"):
+        r = admin_client.get(f"/admin/jobs/_table?status={tab}")
+        assert r.status_code == 200, (
+            f"Expected 200 for /admin/jobs/_table?status={tab}, got {r.status_code}"
+        )
+
+
+def test_dashboard_vectorize_job_shows_dash_not_deleted(app, admin_client):
+    """
+    Input: GET /admin/ as admin with a vectorize CrawlJob (target_id=None)
+    Output: 200; activity row shows "—" for target, not "(deleted)"
+    Details:
+        Regression for BF-3. vectorize_pending creates CrawlJob(target_id=None).
+        The dashboard must not call db.session.get(CrawlerTarget, None) and
+        label it "(deleted)".
+    """
+    from flask_app.models.crawl_job import CrawlJob
+    from datetime import datetime
+
+    with app.app_context():
+        db.session.add(CrawlJob(
+            kind="vectorize", target_id=None,
+            status="success", started_at=datetime.utcnow(),
+        ))
+        db.session.commit()
+
+    mc = MagicMock()
+    mc.count.return_value = {"count": 0}
+    mc.search.side_effect = [
+        {"aggregations": {"svc": {"value": 0}, "vectorized": {"doc_count": 0}}},
+        {"hits": {"hits": []}},
+    ]
+    with patch("flask_app.routes.admin._check_services", return_value=_mock_health()), \
+         patch("flask_app.services.opensearch.get_client", return_value=mc):
+        r = admin_client.get("/admin/")
+
+    assert r.status_code == 200
+    assert b"(deleted)" not in r.data
+
+
 # ── Action buttons ────────────────────────────────────────────────────────
 
 def test_crawl_target_button_dispatches_task(app, admin_client):

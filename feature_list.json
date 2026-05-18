@@ -1038,10 +1038,10 @@
         "passes": true
       },
       "bf2_admin_jobs_tabs_500_error": {
-        "passes": false
+        "passes": true
       },
       "bf3_crawl_phantom_deleted_second_entry": {
-        "passes": false
+        "passes": true
       }
     }
   },
