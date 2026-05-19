@@ -87,13 +87,11 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
         vectorized_count - docs successfully embedded and updated
         attempted_count  - total docs found with vectorized=false
     Details:
-        Phase 1: collects all unvectorized doc IDs and text via paginated reads
-        with no updates happening, so the from/size offsets remain stable.
-        Phase 2: processes the collected list, calling get_embedding() per doc
-        and issuing a partial update on success. Separating read from write
-        avoids a skip bug: updating docs during from/size pagination removes
-        them from the result set, causing the next page's offset to jump over
-        docs that shifted into the vacated positions.
+        Streams unvectorized docs one page at a time using search_after cursor
+        pagination and embeds each doc immediately, so no more than one page
+        of docs is held in RAM at once. Updating a doc does not shift the
+        cursor, so there is no skip bug and the two-phase collect-then-process
+        approach is no longer needed.
         Docs where get_embedding() returns None are left unchanged (LLM API down).
         Callers use the tuple to distinguish success / partial / deferred outcomes.
     """
@@ -101,32 +99,32 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
 
     client = os_client or get_client()
 
-    # Phase 1: collect all unvectorized docs before any updates
-    pending = []
-    page = 0
+    # Stream pages and process immediately — search_after cursor means updating
+    # a doc never shifts the offsets of unseen docs, so two-phase collection
+    # is no longer needed and we avoid loading the full pending set into RAM.
+    attempted_count = 0
+    vectorized_count = 0
+    search_after = None
+
     while True:
-        hits = get_unvectorized(page=page, page_size=page_size, client=client)
+        hits = get_unvectorized(search_after=search_after, page_size=page_size, client=client)
         if not hits:
             break
-        pending.extend(hits)
-        page += 1
+        search_after = hits[-1]["sort"]
 
-    attempted_count = len(pending)
-    vectorized_count = 0
-
-    # Phase 2: embed and update the collected list
-    for hit in pending:
-        doc_id = hit["_id"]
-        text = hit.get("_source", {}).get("text", "")
-        embedding = _embed_text(text, llm_session)
-        if embedding is None:
-            continue
-        client.update(
-            index=_INDEX_NAME,
-            id=doc_id,
-            body={"doc": {"embedding": embedding, "vectorized": True}},
-        )
-        vectorized_count += 1
+        for hit in hits:
+            attempted_count += 1
+            doc_id = hit["_id"]
+            text = hit.get("_source", {}).get("text", "")
+            embedding = _embed_text(text, llm_session)
+            if embedding is None:
+                continue
+            client.update(
+                index=_INDEX_NAME,
+                id=doc_id,
+                body={"doc": {"embedding": embedding, "vectorized": True}},
+            )
+            vectorized_count += 1
 
     return vectorized_count, attempted_count
 

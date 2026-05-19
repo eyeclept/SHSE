@@ -114,9 +114,9 @@ def test_bm25(mock_client):
     Input: mock_client fixture
     Output: None
     Details:
-        Verifies bm25_search sends a multi_match best_fields query across
-        text and title (title boosted 2x) with fuzziness=AUTO and
-        prefix_length=1, and returns the hits list.
+        Verifies bm25_search sends a bool/should query containing a match_phrase
+        boost on title and a multi_match best_fields across text and title
+        (title boosted 2x) with fuzziness=AUTO and prefix_length=1.
     """
     fake_hits = [
         {"_score": 1.5, "_source": {"text": "hello world", "url": "http://a"}},
@@ -129,7 +129,12 @@ def test_bm25(mock_client):
     call_args = mock_client.search.call_args
     body = call_args.kwargs.get("body") or call_args.kwargs["body"]
     assert body["size"] == 5
-    mmq = body["query"]["multi_match"]
+    should = body["query"]["bool"]["should"]
+    phrase_clause = next(c for c in should if "match_phrase" in c)
+    assert phrase_clause["match_phrase"]["title"]["query"] == "hello"
+    assert phrase_clause["match_phrase"]["title"]["boost"] == 4
+    mmq_clause = next(c for c in should if "multi_match" in c)
+    mmq = mmq_clause["multi_match"]
     assert mmq["query"] == "hello"
     assert "title^2" in mmq["fields"]
     assert "text" in mmq["fields"]
@@ -259,13 +264,12 @@ def test_index_doc(mock_client):
     Input: mock_client fixture
     Output: None
     Details:
-        Verifies index_document splits text into 800-word chunks, calls
-        client.index once per chunk, and stores vectorized=false and
-        embedding=null on every chunk. client.get raises NotFoundError to
-        simulate new documents (no prior version to compare hashes against).
+        Verifies index_document splits text into 800-word chunks, issues one
+        mget and one bulk call, and stores vectorized=false and embedding=null
+        on every chunk. mget returns found=False to simulate new documents.
     """
-    mock_client.get.side_effect = NotFoundError(404, "not found", {})
-    mock_client.index.return_value = {"result": "created", "_id": "abc"}
+    mock_client.mget.return_value = {"docs": [{"_id": "x", "found": False}, {"_id": "y", "found": False}]}
+    mock_client.bulk.return_value = {"items": [{"index": {"_id": "a"}}, {"index": {"_id": "b"}}], "errors": False}
 
     words = ["token"] * 1600
     text = " ".join(words)
@@ -283,20 +287,23 @@ def test_index_doc(mock_client):
         client=mock_client,
     )
 
-    # two chunks of 800 words each (overlap=0 gives non-overlapping behaviour)
-    assert mock_client.index.call_count == 2
+    # two chunks of 800 words each; one mget + one bulk call
+    assert mock_client.mget.call_count == 1
+    assert mock_client.bulk.call_count == 1
     assert len(responses) == 2
 
-    for call in mock_client.index.call_args_list:
-        doc = call.kwargs.get("body") or call.args[0]
+    bulk_body = mock_client.bulk.call_args.kwargs.get("body") or mock_client.bulk.call_args.args[0]
+    # bulk body alternates action / doc; extract the "index" docs
+    index_docs = [bulk_body[i + 1] for i in range(0, len(bulk_body), 2) if "index" in bulk_body[i]]
+    assert len(index_docs) == 2
+    for doc in index_docs:
         assert doc["vectorized"] is False
         assert doc["embedding"] is None
         assert doc["url"] == "http://host/page"
         assert doc["service_nickname"] == "test-svc"
-        chunk_words = len(doc["text"].split())
-        assert chunk_words == 800
+        assert len(doc["text"].split()) == 800
         assert "content_hash" in doc
-        assert len(doc["content_hash"]) == 64  # sha256 hex digest
+        assert len(doc["content_hash"]) == 64
 
 
 def test_deferred_index(mock_client):
@@ -305,12 +312,11 @@ def test_deferred_index(mock_client):
     Output: None
     Details:
         Verifies that when embeddings=None (LLM API unavailable), index_document
-        stores every chunk with vectorized=false and embedding=null and still
-        calls client.index for each chunk without raising an exception.
-        client.get raises NotFoundError to simulate new documents.
+        stores the chunk with vectorized=false and embedding=null via a single
+        bulk call. mget returns found=False to simulate a new document.
     """
-    mock_client.get.side_effect = NotFoundError(404, "not found", {})
-    mock_client.index.return_value = {"result": "created", "_id": "xyz"}
+    mock_client.mget.return_value = {"docs": [{"_id": "x", "found": False}]}
+    mock_client.bulk.return_value = {"items": [{"index": {"_id": "xyz"}}], "errors": False}
 
     words = ["word"] * 800
     text = " ".join(words)
@@ -327,10 +333,11 @@ def test_deferred_index(mock_client):
         client=mock_client,
     )
 
-    assert mock_client.index.call_count == 1
+    assert mock_client.bulk.call_count == 1
     assert len(responses) == 1
 
-    doc = mock_client.index.call_args.kwargs.get("body") or mock_client.index.call_args.args[0]
+    bulk_body = mock_client.bulk.call_args.kwargs.get("body") or mock_client.bulk.call_args.args[0]
+    doc = bulk_body[1]  # action at [0], doc at [1]
     assert doc["vectorized"] is False
     assert doc["embedding"] is None
     assert "content_hash" in doc
@@ -342,12 +349,12 @@ def test_index_doc_with_embeddings(mock_client):
     Input: mock_client fixture
     Output: None
     Details:
-        Verifies that when embeddings are supplied, each chunk is stored with
-        vectorized=true and the correct embedding vector.
-        client.get raises NotFoundError to simulate new documents.
+        Verifies that when embeddings are supplied, the chunk is stored with
+        vectorized=true and the correct embedding vector via bulk.
+        mget returns found=False to simulate a new document.
     """
-    mock_client.get.side_effect = NotFoundError(404, "not found", {})
-    mock_client.index.return_value = {"result": "created", "_id": "xyz"}
+    mock_client.mget.return_value = {"docs": [{"_id": "x", "found": False}]}
+    mock_client.bulk.return_value = {"items": [{"index": {"_id": "xyz"}}], "errors": False}
 
     fake_embedding = [0.1] * EMBEDDING_DIM
     words = ["word"] * 800
@@ -365,7 +372,8 @@ def test_index_doc_with_embeddings(mock_client):
         client=mock_client,
     )
 
-    doc = mock_client.index.call_args.kwargs.get("body") or mock_client.index.call_args.args[0]
+    bulk_body = mock_client.bulk.call_args.kwargs.get("body") or mock_client.bulk.call_args.args[0]
+    doc = bulk_body[1]
     assert doc["vectorized"] is True
     assert doc["embedding"] == fake_embedding
 
@@ -375,86 +383,75 @@ def test_idempotent_upsert(mock_client):
     Input: mock_client fixture
     Output: None
     Details:
-        Verifies that re-indexing a chunk whose content_hash is unchanged produces
-        no second write (client.index not called again). Also verifies that a chunk
-        with a changed content_hash is written with its deterministic document ID.
+        Verifies three cases via mget + bulk:
+        1. Matching content_hash — bulk update with crawled_at only, no last_changed_at.
+        2. Stale content_hash — bulk index with full doc including last_changed_at.
+        3. New document (found=False) — bulk index with full doc including last_changed_at.
     """
+    from flask_app.services.opensearch import CHUNK_ALGO_VERSION
+
     chunk_text = "word " * 10
     chunk_text = chunk_text.strip()
     expected_hash = hashlib.sha256(chunk_text.encode()).hexdigest()
-    doc_id = hashlib.sha256(f"http://host/page0".encode()).hexdigest()
+    doc_id = hashlib.sha256("http://host/page0".encode()).hexdigest()
 
-    # Simulate existing document with matching content_hash AND current chunk_algo
-    # — full re-index must be skipped, but crawled_at must be touched via update.
-    from flask_app.services.opensearch import CHUNK_ALGO_VERSION
-    mock_client.get.return_value = {"_source": {"content_hash": expected_hash, "chunk_algo": CHUNK_ALGO_VERSION}}
-    mock_client.index.return_value = {"result": "updated", "_id": doc_id}
+    def _call_index_doc():
+        return index_document(
+            url="http://host/page",
+            port=80,
+            title="Test",
+            crawled_at="2026-04-23T00:00:00",
+            service_nickname="svc",
+            content_type="text/html",
+            text=chunk_text,
+            chunk_size=800,
+            client=mock_client,
+        )
 
-    responses = index_document(
-        url="http://host/page",
-        port=80,
-        title="Test",
-        crawled_at="2026-04-23T00:00:00",
-        service_nickname="svc",
-        content_type="text/html",
-        text=chunk_text,
-        chunk_size=800,
-        client=mock_client,
-    )
+    # ── Case 1: matching hash — crawled_at update only ──────────────────────
+    mock_client.mget.return_value = {"docs": [
+        {"_id": doc_id, "found": True,
+         "_source": {"content_hash": expected_hash, "chunk_algo": CHUNK_ALGO_VERSION}},
+    ]}
+    mock_client.bulk.return_value = {"items": [], "errors": False}
 
-    # content_hash matches — full re-index skipped; only crawled_at updated, NOT last_changed_at
-    mock_client.index.assert_not_called()
-    mock_client.update.assert_called_once_with(
-        index=INDEX_NAME, id=doc_id,
-        body={"doc": {"crawled_at": "2026-04-23T00:00:00"}},
-    )
-    assert "last_changed_at" not in mock_client.update.call_args.kwargs["body"]["doc"]
+    responses = _call_index_doc()
+
+    bulk_body = mock_client.bulk.call_args.kwargs.get("body") or mock_client.bulk.call_args.args[0]
+    action = bulk_body[0]
+    update_doc = bulk_body[1]
+    assert "update" in action
+    assert action["update"]["_id"] == doc_id
+    assert update_doc["doc"]["crawled_at"] == "2026-04-23T00:00:00"
+    assert "last_changed_at" not in update_doc["doc"]
     assert responses == []
 
-    # Changed content (different hash) — full re-index with both timestamps
+    # ── Case 2: stale hash — full re-index with both timestamps ─────────────
     mock_client.reset_mock()
-    mock_client.get.return_value = {"_source": {"content_hash": "stale_hash"}}
-    mock_client.index.return_value = {"result": "updated", "_id": doc_id}
+    mock_client.mget.return_value = {"docs": [
+        {"_id": doc_id, "found": True, "_source": {"content_hash": "stale_hash"}},
+    ]}
+    mock_client.bulk.return_value = {"items": [{"index": {"_id": doc_id}}], "errors": False}
 
-    responses = index_document(
-        url="http://host/page",
-        port=80,
-        title="Test",
-        crawled_at="2026-04-23T00:00:00",
-        service_nickname="svc",
-        content_type="text/html",
-        text=chunk_text,
-        chunk_size=800,
-        client=mock_client,
-    )
+    responses = _call_index_doc()
 
-    mock_client.index.assert_called_once()
-    call_kwargs = mock_client.index.call_args
-    assert call_kwargs.kwargs.get("id") == doc_id or call_kwargs.args[1] == doc_id
-    written_doc = call_kwargs.kwargs.get("body") or call_kwargs.args[2]
+    bulk_body = mock_client.bulk.call_args.kwargs.get("body") or mock_client.bulk.call_args.args[0]
+    assert "index" in bulk_body[0]
+    assert bulk_body[0]["index"]["_id"] == doc_id
+    written_doc = bulk_body[1]
     assert written_doc["content_hash"] == expected_hash
     assert written_doc["last_changed_at"] == "2026-04-23T00:00:00"
     assert len(responses) == 1
 
-    # New document (NotFoundError on get) — write with both timestamps
+    # ── Case 3: new document (found=False) — full index with both timestamps ─
     mock_client.reset_mock()
-    mock_client.get.side_effect = NotFoundError(404, "not found", {})
-    mock_client.index.return_value = {"result": "created", "_id": doc_id}
+    mock_client.mget.return_value = {"docs": [{"_id": doc_id, "found": False}]}
+    mock_client.bulk.return_value = {"items": [{"index": {"_id": doc_id}}], "errors": False}
 
-    responses = index_document(
-        url="http://host/page",
-        port=80,
-        title="Test",
-        crawled_at="2026-04-23T00:00:00",
-        service_nickname="svc",
-        content_type="text/html",
-        text=chunk_text,
-        chunk_size=800,
-        client=mock_client,
-    )
+    responses = _call_index_doc()
 
-    mock_client.index.assert_called_once()
-    new_doc = mock_client.index.call_args.kwargs.get("body") or mock_client.index.call_args.args[2]
+    bulk_body = mock_client.bulk.call_args.kwargs.get("body") or mock_client.bulk.call_args.args[0]
+    new_doc = bulk_body[1]
     assert new_doc["last_changed_at"] == "2026-04-23T00:00:00"
     assert len(responses) == 1
 
@@ -489,34 +486,35 @@ def test_paginate_unvectorized(mock_client):
     Input: mock_client fixture
     Output: None
     Details:
-        Verifies get_unvectorized sends a term query for vectorized=false with
-        correct from/size offsets for page 0 and page 1, and returns the hits
-        list. Also verifies an empty list is returned when no hits remain.
+        Verifies get_unvectorized sends a term query for vectorized=false using
+        search_after cursor pagination (no from/size), and returns the hits list.
+        Also verifies search_after is omitted on the first call and included on
+        subsequent calls, and an empty list is returned when no hits remain.
     """
     fake_hits = [
-        {"_id": "1", "_source": {"text": "chunk one", "vectorized": False}},
-        {"_id": "2", "_source": {"text": "chunk two", "vectorized": False}},
+        {"_id": "1", "_source": {"text": "chunk one", "vectorized": False}, "sort": [1]},
+        {"_id": "2", "_source": {"text": "chunk two", "vectorized": False}, "sort": [2]},
     ]
     mock_client.search.return_value = {"hits": {"hits": fake_hits}}
 
-    # page 0
-    results = get_unvectorized(page=0, page_size=2, client=mock_client)
-    call_args = mock_client.search.call_args
-    body = call_args.kwargs.get("body") or call_args.args[0]
-    assert body["from"] == 0
+    # first page — no search_after in body
+    results = get_unvectorized(search_after=None, page_size=2, client=mock_client)
+    body = mock_client.search.call_args.kwargs.get("body") or mock_client.search.call_args.args[0]
+    assert "from" not in body
+    assert "search_after" not in body
     assert body["size"] == 2
     assert body["query"]["term"]["vectorized"] is False
     assert results == fake_hits
 
-    # page 1
-    get_unvectorized(page=1, page_size=2, client=mock_client)
-    call_args = mock_client.search.call_args
-    body = call_args.kwargs.get("body") or call_args.args[0]
-    assert body["from"] == 2
+    # second page — search_after passed through
+    get_unvectorized(search_after=[2], page_size=2, client=mock_client)
+    body = mock_client.search.call_args.kwargs.get("body") or mock_client.search.call_args.args[0]
+    assert body.get("search_after") == [2]
+    assert "from" not in body
 
     # empty page
     mock_client.search.return_value = {"hits": {"hits": []}}
-    assert get_unvectorized(page=99, page_size=2, client=mock_client) == []
+    assert get_unvectorized(search_after=[99], page_size=2, client=mock_client) == []
 
 
 def test_wipe_index(mock_client):

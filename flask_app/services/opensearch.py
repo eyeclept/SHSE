@@ -47,6 +47,7 @@ INDEX_BODY = {
             "knn": True,
             "number_of_shards": 1,
             "number_of_replicas": 0,
+            "max_result_window": 100000,
         }
     },
     "mappings": {
@@ -104,6 +105,12 @@ def create_index(client=None):
         client = get_client()
 
     if client.indices.exists(index=INDEX_NAME):
+        # Apply max_result_window even to pre-existing indexes — it's a dynamic
+        # setting so no rebuild is required.
+        client.indices.put_settings(
+            index=INDEX_NAME,
+            body={"index": {"max_result_window": 100000}},
+        )
         return {"acknowledged": True, "index": INDEX_NAME, "already_exists": True}
 
     return client.indices.create(index=INDEX_NAME, body=INDEX_BODY)
@@ -174,38 +181,46 @@ def index_document(url, port, title, crawled_at, service_nickname, content_type,
            overlap — words shared between adjacent chunks (default 50);
            source_type — ingest method label (e.g. "nutch", "oai-pmh", "rss", "api-push");
            client — optional OpenSearch client
-    Output: list of OpenSearch index response dicts, one per written chunk; skipped chunks absent
+    Output: list of OpenSearch bulk response items, one per written chunk; skipped chunks absent
     Details:
         Splits text into overlapping word-based chunks via _chunk_text. Document ID is
-        sha256(url + chunk_index), making every write an idempotent upsert. If an existing
-        document with the same ID already holds the same content_hash, the write is skipped.
-        When embeddings is provided, each chunk is stored with its vector and vectorized=true.
-        When None (LLM API unavailable), chunks are stored with embedding=null and
-        vectorized=false for deferred processing.
+        sha256(url + chunk_index), making every write an idempotent upsert. Uses mget to
+        fetch all existing chunks in one round-trip, then bulk to write all changed chunks
+        in one round-trip, replacing the previous N+1 individual GET/index calls.
+        If an existing document with the same content_hash is unchanged, only crawled_at
+        is updated. When embeddings is provided, each chunk is stored with its vector and
+        vectorized=true. When None (LLM API unavailable), chunks are stored with
+        embedding=null and vectorized=false for deferred processing.
     """
     import hashlib
-    from opensearchpy.exceptions import NotFoundError
 
     if client is None:
         client = get_client()
 
     chunks = _chunk_text(text, chunk_size, overlap)
-    responses = []
-    for i, chunk in enumerate(chunks):
-        doc_id = hashlib.sha256(f"{url}{i}".encode()).hexdigest()
-        content_hash = hashlib.sha256(chunk.encode()).hexdigest()
+    if not chunks:
+        return []
 
-        try:
-            existing = client.get(index=INDEX_NAME, id=doc_id)
-            src = existing["_source"]
+    # Build all IDs and hashes upfront
+    doc_ids = [hashlib.sha256(f"{url}{i}".encode()).hexdigest() for i in range(len(chunks))]
+    content_hashes = [hashlib.sha256(c.encode()).hexdigest() for c in chunks]
+
+    # Single mget to fetch all existing chunks
+    mget_resp = client.mget(index=INDEX_NAME, body={"ids": doc_ids})
+    existing = {d["_id"]: d for d in mget_resp["docs"]}
+
+    # Build bulk body
+    bulk_body = []
+    for i, (chunk, doc_id, content_hash) in enumerate(zip(chunks, doc_ids, content_hashes)):
+        ex = existing.get(doc_id, {})
+        if ex.get("found"):
+            src = ex.get("_source", {})
             if (src.get("content_hash") == content_hash
                     and src.get("chunk_algo") == CHUNK_ALGO_VERSION):
-                # Content unchanged — bump crawled_at only; last_changed_at stays.
-                client.update(index=INDEX_NAME, id=doc_id,
-                               body={"doc": {"crawled_at": crawled_at}})
+                # Content unchanged — bump crawled_at only via partial update
+                bulk_body.append({"update": {"_index": INDEX_NAME, "_id": doc_id}})
+                bulk_body.append({"doc": {"crawled_at": crawled_at}})
                 continue
-        except NotFoundError:
-            logger.debug("doc not yet indexed — creating new: %s", doc_id)
 
         if embeddings is not None and i < len(embeddings):
             embedding = embeddings[i]
@@ -229,9 +244,14 @@ def index_document(url, port, title, crawled_at, service_nickname, content_type,
             "content_hash": content_hash,
             "chunk_algo": CHUNK_ALGO_VERSION,
         }
-        resp = client.index(index=INDEX_NAME, id=doc_id, body=doc)
-        responses.append(resp)
-    return responses
+        bulk_body.append({"index": {"_index": INDEX_NAME, "_id": doc_id}})
+        bulk_body.append(doc)
+
+    if not bulk_body:
+        return []
+
+    resp = client.bulk(body=bulk_body)
+    return resp.get("items", [])
 
 
 def vector_search(query_embedding, k=10, client=None):
@@ -308,22 +328,24 @@ def bm25_search(query, k=10, client=None):
     return response["hits"]["hits"]
 
 
-def get_unvectorized(page=0, page_size=100, client=None):
+def get_unvectorized(search_after=None, page_size=100, client=None):
     """
-    Input: page — zero-based page number (default 0);
+    Input: search_after — sort value list from the last hit of the previous page
+                          (None for the first page);
            page_size — documents per page (default 100);
            client — optional OpenSearch client
-    Output: list of hit dicts (each contains _id and _source fields)
+    Output: list of hit dicts (each contains _id, _source, and sort fields)
     Details:
         Returns a single page of documents where vectorized=false, ordered by
-        _doc for stable pagination. Callers increment page until an empty list
-        is returned to drain the full unvectorized set.
+        _doc for stable cursor-based pagination. Callers pass hits[-1]["sort"]
+        as search_after on the next call until an empty list is returned.
+        Uses search_after instead of from/size to avoid the 10 000-document
+        max_result_window limit.
     """
     if client is None:
         client = get_client()
 
     body = {
-        "from": page * page_size,
         "size": page_size,
         "query": {
             "term": {
@@ -332,6 +354,8 @@ def get_unvectorized(page=0, page_size=100, client=None):
         },
         "sort": [{"_doc": "asc"}],
     }
+    if search_after is not None:
+        body["search_after"] = search_after
 
     response = client.search(index=INDEX_NAME, body=body)
     return response["hits"]["hits"]

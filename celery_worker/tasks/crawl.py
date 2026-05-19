@@ -146,7 +146,7 @@ def _nutch_crawl(target, nutch_session=None, os_client=None, job=None, db_sessio
         return
 
     depth = target.crawl_depth if target.crawl_depth is not None else Config.NUTCH_DEFAULT_DEPTH
-    urls = _discover_urls(seed_url, tls_verify=tls_ok, max_depth=depth)
+    urls = _discover_urls(seed_url, tls_verify=tls_ok, max_depth=depth, max_urls=Config.NUTCH_MAX_URLS)
     if not urls:
         raise RuntimeError(
             f"_discover_urls returned no reachable URLs from seed {seed_url!r} — "

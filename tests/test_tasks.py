@@ -311,8 +311,8 @@ def test_vectorize_pending_embeds_all_docs():
     from celery_worker.tasks.vectorize import _vectorize_pending_impl
 
     hits = [
-        {"_id": "id1", "_source": {"text": "hello world"}},
-        {"_id": "id2", "_source": {"text": "foo bar"}},
+        {"_id": "id1", "_source": {"text": "hello world"}, "sort": [1]},
+        {"_id": "id2", "_source": {"text": "foo bar"},     "sort": [2]},
     ]
     os_client = MagicMock()
     os_client.search.side_effect = [
@@ -346,7 +346,7 @@ def test_vectorize_pending_skips_on_llm_failure():
     """
     from celery_worker.tasks.vectorize import _vectorize_pending_impl
 
-    hits = [{"_id": "id1", "_source": {"text": "hello"}}]
+    hits = [{"_id": "id1", "_source": {"text": "hello"}, "sort": [1]}]
     os_client = MagicMock()
     os_client.search.side_effect = [
         {"hits": {"hits": hits}},
@@ -433,25 +433,25 @@ def test_vectorize_pending_all_docs_processed_across_pages():
     Input: None
     Output: None
     Details:
-        Regression test for the from/size pagination skip bug. When docs are
-        spread across two pages, all docs must be attempted and vectorized.
-        The fix collects all docs before updating, so the result set does not
-        shift during processing and no docs are skipped.
+        Regression test for multi-page vectorization. When docs are spread
+        across two pages, all docs must be attempted and vectorized.
+        search_after cursor pagination means the page boundary never shifts
+        when a doc is updated mid-stream.
     """
     from celery_worker.tasks.vectorize import _vectorize_pending_impl
 
     page1_hits = [
-        {"_id": "id1", "_source": {"text": "doc one"}},
-        {"_id": "id2", "_source": {"text": "doc two"}},
+        {"_id": "id1", "_source": {"text": "doc one"},   "sort": [1]},
+        {"_id": "id2", "_source": {"text": "doc two"},   "sort": [2]},
     ]
     page2_hits = [
-        {"_id": "id3", "_source": {"text": "doc three"}},
+        {"_id": "id3", "_source": {"text": "doc three"}, "sort": [3]},
     ]
     os_client = MagicMock()
     os_client.search.side_effect = [
-        {"hits": {"hits": page1_hits}},   # collection page 0
-        {"hits": {"hits": page2_hits}},   # collection page 1
-        {"hits": {"hits": []}},           # collection page 2: empty sentinel
+        {"hits": {"hits": page1_hits}},
+        {"hits": {"hits": page2_hits}},
+        {"hits": {"hits": []}},
     ]
 
     llm_session = MagicMock()

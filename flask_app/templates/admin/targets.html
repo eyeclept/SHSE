@@ -245,7 +245,6 @@
           </td>
           <td style="padding:12px 16px;">
             <div style="display:flex; gap:6px; justify-content:flex-end;">
-              {% if nutch_up %}
               <form method="post" action="{{ url_for('admin.crawl_target', target_id=t.id) }}" style="margin:0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else "" }}">
                 <button type="submit" class="shse-btn shse-btn-ghost"
@@ -253,7 +252,6 @@
                   {{ icon.refresh(12) }} Crawl
                 </button>
               </form>
-              {% endif %}
               <a href="{{ url_for('admin.edit_target', target_id=t.id) }}"
                  class="shse-btn shse-btn-ghost" style="padding:4px 8px; font-size:12px;">
                 {{ icon.edit(12) }} Edit
