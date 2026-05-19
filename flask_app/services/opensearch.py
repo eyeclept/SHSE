@@ -281,12 +281,25 @@ def bm25_search(query, k=10, client=None):
     body = {
         "size": k,
         "query": {
-            "multi_match": {
-                "query": query,
-                "fields": ["title^2", "text"],
-                "type": "best_fields",
-                "fuzziness": "AUTO",
-                "prefix_length": 1,
+            "bool": {
+                "should": [
+                    # Exact phrase in title scores highest — prevents fuzzy tokens
+                    # (e.g. "America") from floating unrelated pages above the target.
+                    {
+                        "match_phrase": {
+                            "title": {"query": query, "boost": 4},
+                        }
+                    },
+                    {
+                        "multi_match": {
+                            "query": query,
+                            "fields": ["title^2", "text"],
+                            "type": "best_fields",
+                            "fuzziness": "AUTO",
+                            "prefix_length": 1,
+                        }
+                    },
+                ]
             }
         },
     }

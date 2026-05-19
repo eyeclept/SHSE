@@ -21,6 +21,10 @@ port = 6379
 [nutch]
 host = YOUR_SERVICES_HOST
 port = 8081
+; default_depth — how many link-hops to follow from the seed URL when a target has no explicit depth set
+; max_depth     — upper bound enforced by the UI and crawl task (prevents runaway crawls)
+default_depth = 2
+max_depth     = 10
 
 [llm]
 ; api_base — Ollama or compatible endpoint. Leave blank to disable LLM features.

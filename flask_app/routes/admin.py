@@ -364,6 +364,7 @@ def health_partial():
 def _target_to_dict(t):
     """Convert a CrawlerTarget ORM row to a plain dict for templates."""
     import yaml as _yaml
+    from flask_app.config import Config
     sched = {}
     if t.schedule_yaml:
         try:
@@ -384,7 +385,7 @@ def _target_to_dict(t):
         "endpoint": t.endpoint or "",
         "feed_path": t.feed_path or "",
         "adapter": t.adapter or "",
-        "crawl_depth": t.crawl_depth if t.crawl_depth is not None else 2,
+        "crawl_depth": t.crawl_depth if t.crawl_depth is not None else Config.NUTCH_DEFAULT_DEPTH,
         "schedule_frequency": sched.get("frequency", ""),
         "schedule_time": sched.get("time", ""),
         "schedule_day": sched.get("day", ""),
@@ -395,6 +396,7 @@ def _target_to_dict(t):
 def _form_to_target(form, existing=None):
     """Read request.form and return a CrawlerTarget (new or updated)."""
     import yaml as _yaml
+    from flask_app.config import Config
     from flask_app.models.crawler_target import CrawlerTarget
 
     t = existing or CrawlerTarget()
@@ -408,8 +410,11 @@ def _form_to_target(form, existing=None):
     t.route = form.get("route", "/").strip() or "/"
     t.service = form.get("service_protocol", "http")
     t.tls_verify = form.get("tls_verify") == "on"
-    depth_raw = form.get("crawl_depth", "2").strip()
-    t.crawl_depth = int(depth_raw) if depth_raw.isdigit() else 2
+    depth_raw = form.get("crawl_depth", str(Config.NUTCH_DEFAULT_DEPTH)).strip()
+    t.crawl_depth = min(
+        int(depth_raw) if depth_raw.isdigit() else Config.NUTCH_DEFAULT_DEPTH,
+        Config.NUTCH_MAX_DEPTH,
+    )
     t.endpoint = form.get("endpoint", "").strip() or None
     t.feed_path = form.get("feed_path", "").strip() or None
     t.adapter = form.get("adapter", "").strip() or None
@@ -445,6 +450,7 @@ def targets():
     all_targets = [_target_to_dict(t)
                    for t in db.session.query(CrawlerTarget).order_by(CrawlerTarget.id).all()]
 
+    from flask_app.config import Config as _Cfg
     return render_template(
         "admin/targets.html",
         targets=all_targets,
@@ -452,6 +458,8 @@ def targets():
         opensearch_up=health.get("opensearch", {}).get("status") == "up",
         nutch_up=health.get("nutch", {}).get("status") == "up",
         llm_api_up=health.get("llm_api", {}).get("status") == "up",
+        max_crawl_depth=_Cfg.NUTCH_MAX_DEPTH,
+        default_crawl_depth=_Cfg.NUTCH_DEFAULT_DEPTH,
     )
 
 
@@ -498,6 +506,7 @@ def edit_target(target_id):
     health = _check_services()
     all_targets = [_target_to_dict(x)
                    for x in db.session.query(CrawlerTarget).order_by(CrawlerTarget.id).all()]
+    from flask_app.config import Config as _Cfg
     return render_template(
         "admin/targets.html",
         targets=all_targets,
@@ -505,6 +514,8 @@ def edit_target(target_id):
         opensearch_up=health.get("opensearch", {}).get("status") == "up",
         nutch_up=health.get("nutch", {}).get("status") == "up",
         llm_api_up=health.get("llm_api", {}).get("status") == "up",
+        max_crawl_depth=_Cfg.NUTCH_MAX_DEPTH,
+        default_crawl_depth=_Cfg.NUTCH_DEFAULT_DEPTH,
     )
 
 

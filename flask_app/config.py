@@ -78,8 +78,10 @@ class Config:
     )
 
     # ── Nutch ──────────────────────────────────────────────────────────────
-    NUTCH_HOST = _c("nutch", "host", "localhost")
-    NUTCH_PORT = int(_c("nutch", "port", "8081"))
+    NUTCH_HOST          = _c("nutch", "host",          "localhost")
+    NUTCH_PORT          = int(_c("nutch", "port",          "8081"))
+    NUTCH_DEFAULT_DEPTH = int(_c("nutch", "default_depth", "2"))
+    NUTCH_MAX_DEPTH     = int(_c("nutch", "max_depth",     "10"))
 
     # ── LLM API ────────────────────────────────────────────────────────────
     LLM_API_BASE       = _c("llm", "api_base",       "http://localhost:11434/v1")

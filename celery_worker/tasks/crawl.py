@@ -18,6 +18,7 @@ from celery.utils.log import get_task_logger
 from celery_worker.app import celery
 from flask_app.services.nutch import _discover_urls, _fetch_page_text
 from flask_app.services.opensearch import index_document, delete_stale, create_index
+from flask_app.config import Config
 
 # Globals
 _INDEX_NAME = "shse_pages"
@@ -144,7 +145,7 @@ def _nutch_crawl(target, nutch_session=None, os_client=None, job=None, db_sessio
     if not seed_url:
         return
 
-    depth = target.crawl_depth if target.crawl_depth is not None else 2
+    depth = target.crawl_depth if target.crawl_depth is not None else Config.NUTCH_DEFAULT_DEPTH
     urls = _discover_urls(seed_url, tls_verify=tls_ok, max_depth=depth)
     if not urls:
         raise RuntimeError(
