@@ -20,6 +20,7 @@ import argparse
 import logging
 import os
 import sys
+import textwrap
 
 logger = logging.getLogger(__name__)
 
@@ -375,19 +376,9 @@ def cmd_search(args):
             print(f"      service: {service}")
         print(f"      {url_val}")
         if snippet:
-            # wrap snippet at 72 chars
-            words = snippet.split()
-            line, lines = [], []
-            for w in words:
-                if sum(len(x) + 1 for x in line) + len(w) > 72:
-                    lines.append(" ".join(line))
-                    line = [w]
-                else:
-                    line.append(w)
-            if line:
-                lines.append(" ".join(line))
-            for ln in lines:
-                print(f"      {ln}")
+            print(textwrap.fill(snippet, width=78,
+                                initial_indent="      ",
+                                subsequent_indent="      "))
         print()
 
     if page < page_count:

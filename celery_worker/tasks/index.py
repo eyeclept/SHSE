@@ -18,21 +18,10 @@ Description:
 from celery.utils.log import get_task_logger
 from celery_worker.app import celery
 from celery_worker.tasks.crawl import _crawl_target_impl, crawl_target
+from celery_worker.tasks.utils import _build_app_context
 
 # Globals
 logger = get_task_logger(__name__)
-
-
-# Functions
-def _build_app_context():
-    """
-    Input: None
-    Output: (Flask app, db)
-    Details:
-        Deferred import avoids circular import at module load time.
-    """
-    from flask_app import create_app, db as _db
-    return create_app(), _db
 
 
 @celery.task

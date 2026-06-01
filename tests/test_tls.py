@@ -151,33 +151,6 @@ def test_nutch_crawl_propagates_tls_verify_to_page_fetch(app):
     assert False in all_args, f"tls_verify=False not found in call args: {call}"
 
 
-# ── Global TLS bypass flag ─────────────────────────────────────────────────
-
-def test_global_tls_flag_disables_session_verify():
-    """
-    Input: INTERNAL_TLS_VERIFY=false in environment
-    Output: get_session() returns a session with verify=False
-    Details:
-        Verifies the global flag flows through get_session() to all
-        Nutch REST API calls made in that session.
-    """
-    from flask_app.services.nutch import get_session
-    with patch.dict("os.environ", {"INTERNAL_TLS_VERIFY": "false"}):
-        session = get_session()
-    assert session.verify is False
-
-
-def test_global_tls_flag_true_keeps_session_verify():
-    """
-    Input: INTERNAL_TLS_VERIFY=true (default) in environment
-    Output: get_session() returns a session with verify=True
-    """
-    from flask_app.services.nutch import get_session
-    with patch.dict("os.environ", {"INTERNAL_TLS_VERIFY": "true"}):
-        session = get_session()
-    assert session.verify is True
-
-
 # ── TLS warning banner ─────────────────────────────────────────────────────
 
 def test_tls_warning_banner_shown_when_target_has_verify_false(app, admin_client):

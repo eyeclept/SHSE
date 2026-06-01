@@ -8,8 +8,6 @@ Description:
     crawl_target dispatches to the correct harvest function based on target type.
     crawl_all iterates all targets and fans out to crawl_target.
     scheduled_crawl is the Celery Beat entry point (dispatches by nickname).
-    harvest_oai, harvest_feeds, push_api_content are type-specific stubs;
-    real external integrations (Metha, feedparser, adapters) are wired here.
 """
 # Imports
 from datetime import datetime
@@ -19,22 +17,16 @@ from celery_worker.app import celery
 from flask_app.services.nutch import _discover_urls, _fetch_page_text
 from flask_app.services.opensearch import index_document, delete_stale, create_index
 from flask_app.config import Config
+from celery_worker.tasks.utils import _build_app_context
 
 # Globals
 _INDEX_NAME = "shse_pages"
 logger = get_task_logger(__name__)
-
-
-# Functions
-def _build_app_context():
-    """
-    Input: None
-    Output: (Flask app, db) — used by tasks when no injected session
-    Details:
-        Deferred import avoids circular import at module load time.
-    """
-    from flask_app import create_app, db as _db
-    return create_app(), _db
+_OAI_NS = {
+    "oai":    "http://www.openarchives.org/OAI/2.0/",
+    "dc":     "http://purl.org/dc/elements/1.1/",
+    "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
+}
 
 
 def _crawl_target_impl(target_id, db_session, nutch_session=None, os_client=None):
@@ -206,12 +198,6 @@ def _oai_fetch(base_url, endpoint, resumption_token=None):
     import urllib.parse
     import requests as _req
 
-    _NS = {
-        "oai": "http://www.openarchives.org/OAI/2.0/",
-        "dc":  "http://purl.org/dc/elements/1.1/",
-        "oai_dc": "http://www.openarchives.org/OAI/2.0/oai_dc/",
-    }
-
     params = {"verb": "ListRecords"}
     if resumption_token:
         params["resumptionToken"] = resumption_token
@@ -228,21 +214,21 @@ def _oai_fetch(base_url, endpoint, resumption_token=None):
         return [], None
 
     records = []
-    for record in root.findall(".//oai:record", _NS):
-        header = record.find("oai:header", _NS)
-        metadata = record.find(".//oai_dc:dc", _NS)
+    for record in root.findall(".//oai:record", _OAI_NS):
+        header = record.find("oai:header", _OAI_NS)
+        metadata = record.find(".//oai_dc:dc", _OAI_NS)
         if header is None or metadata is None:
             continue
-        identifier = (header.findtext("oai:identifier", default="", namespaces=_NS) or "").strip()
-        title_el = metadata.find("dc:title", _NS)
+        identifier = (header.findtext("oai:identifier", default="", namespaces=_OAI_NS) or "").strip()
+        title_el = metadata.find("dc:title", _OAI_NS)
         title = (title_el.text or "").strip() if title_el is not None else ""
-        desc_el = metadata.find("dc:description", _NS)
+        desc_el = metadata.find("dc:description", _OAI_NS)
         description = (desc_el.text or "").strip() if desc_el is not None else ""
         rec_url = f"{url}?verb=GetRecord&metadataPrefix=oai_dc&identifier={urllib.parse.quote(identifier)}"
         text = f"{title} {description}".strip() or identifier
         records.append({"url": rec_url, "title": title, "text": text})
 
-    token_el = root.find(".//oai:resumptionToken", _NS)
+    token_el = root.find(".//oai:resumptionToken", _OAI_NS)
     next_token = (token_el.text or "").strip() if token_el is not None else None
 
     return records, next_token or None
@@ -495,51 +481,6 @@ def scheduled_crawl(nickname, _db_session=None, _nutch_session=None, _os_client=
     app, db = _build_app_context()
     with app.app_context():
         return _impl(db.session)
-
-
-@celery.task
-def harvest_oai(target_id, _db_session=None, _os_client=None):
-    """
-    Input:
-        target_id   - int, CrawlerTarget primary key (must have type oai-pmh)
-        _db_session - injectable SQLAlchemy session (tests only)
-        _os_client  - injectable OpenSearch client (tests only)
-    Output: int — CrawlJob id
-    Details:
-        Standalone entry point for OAI-PMH harvest. Delegates to crawl_target
-        so that a CrawlJob row is created and the status lifecycle is tracked.
-    """
-    return crawl_target(target_id, _db_session=_db_session, _os_client=_os_client)
-
-
-@celery.task
-def harvest_feeds(target_id, _db_session=None, _os_client=None):
-    """
-    Input:
-        target_id   - int, CrawlerTarget primary key (must have type feed)
-        _db_session - injectable SQLAlchemy session (tests only)
-        _os_client  - injectable OpenSearch client (tests only)
-    Output: int — CrawlJob id
-    Details:
-        Standalone entry point for feed harvest. Delegates to crawl_target
-        so that a CrawlJob row is created and the status lifecycle is tracked.
-    """
-    return crawl_target(target_id, _db_session=_db_session, _os_client=_os_client)
-
-
-@celery.task
-def push_api_content(target_id, _db_session=None, _os_client=None):
-    """
-    Input:
-        target_id   - int, CrawlerTarget primary key (must have type api-push)
-        _db_session - injectable SQLAlchemy session (tests only)
-        _os_client  - injectable OpenSearch client (tests only)
-    Output: int — CrawlJob id
-    Details:
-        Standalone entry point for api-push harvest. Delegates to crawl_target
-        so that a CrawlJob row is created and the status lifecycle is tracked.
-    """
-    return crawl_target(target_id, _db_session=_db_session, _os_client=_os_client)
 
 
 if __name__ == "__main__":

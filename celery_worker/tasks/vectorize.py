@@ -22,18 +22,6 @@ _SAFE_EMBED_TOKENS = 1600
 logger = get_task_logger(__name__)
 
 
-# Functions
-def _build_app_context():
-    """
-    Input: None
-    Output: (Flask app, db)
-    Details:
-        Deferred import avoids circular import at module load time.
-    """
-    from flask_app import create_app, db as _db
-    return create_app(), _db
-
-
 def _embed_text(text, llm_session):
     """
     Input:

@@ -172,6 +172,76 @@ def bm25_body_with_dorks(raw_q, page=1, page_size=_PAGE_SIZE, highlight_tags=Non
     return _base_bm25_body({"bool": bool_q}, page, page_size, highlight_tags, sort)
 
 
+def preprocess_query(q):
+    """
+    Input:  q — str, raw user query
+    Output: tuple (preprocessed_q, search_q, rewritten_q)
+        preprocessed_q - result of the strip/normalize/expand pipeline
+        search_q       - final query sent to OpenSearch (may be LLM-rewritten)
+        rewritten_q    - the rewritten string if LLM rewrote it, else None
+    Details:
+        Runs strip_preamble → normalize → strip_stopwords → expand_synonyms,
+        then optionally rewrites via LLM when QUERY_REWRITE_ENABLED is set.
+        Deferred imports avoid circular dependencies at module load time.
+    """
+    from flask_app.config import Config
+    from flask_app.services.query_preprocessor import (
+        strip_preamble, normalize, strip_stopwords, expand_synonyms,
+    )
+
+    preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q)))) if q else q
+    rewritten_q = None
+    search_q = preprocessed_q
+    if q and Config.QUERY_REWRITE_ENABLED:
+        from flask_app.services.llm import rewrite_query
+        candidate = rewrite_query(preprocessed_q)
+        if candidate and candidate != preprocessed_q:
+            rewritten_q = candidate
+            search_q = rewritten_q
+    return preprocessed_q, search_q, rewritten_q
+
+
+def execute_bm25(search_q, page, page_size=_PAGE_SIZE, *,
+                 highlight_tags=None, filter_services=None,
+                 sort="relevance", client=None):
+    """
+    Input:
+        search_q        - str, query to send to OpenSearch (already preprocessed)
+        page            - int, 1-indexed page number
+        page_size       - int, results per page (default _PAGE_SIZE)
+        highlight_tags  - tuple (pre, post) or None for plain-text snippets
+        filter_services - list[str] | None, service_nickname filter
+        sort            - str, one of 'relevance', 'date_desc', 'date_asc'
+        client          - optional OpenSearch client (injectable for tests)
+    Output:
+        tuple (took_ms, total, page_count, hits, sources)
+            took_ms    - int, milliseconds reported by OpenSearch
+            total      - int, total matching documents
+            page_count - int, number of pages
+            hits       - list of raw OpenSearch hit dicts
+            sources    - list of {name, n} service facet dicts
+    Details:
+        Raises on any OpenSearch error — callers are responsible for catching.
+    """
+    from flask_app.services.opensearch import get_client as _get_client
+
+    os_client = client or _get_client()
+    body = bm25_body_with_dorks(
+        search_q, page=page, page_size=page_size,
+        highlight_tags=highlight_tags,
+        filter_services=filter_services,
+        sort=sort,
+    )
+    resp = os_client.search(index=_INDEX_NAME, body=body)
+    took_ms = resp.get("took", 0)
+    total = resp["hits"]["total"]["value"]
+    page_count = max(1, math.ceil(total / page_size))
+    hits = resp["hits"]["hits"]
+    buckets = resp.get("aggregations", {}).get("by_service", {}).get("buckets", [])
+    sources = [{"name": b["key"], "n": b["doc_count"]} for b in buckets]
+    return took_ms, total, page_count, hits, sources
+
+
 _STOP_WORDS = {
     "the", "a", "an", "in", "of", "for", "to", "and", "or", "is", "are",
     "was", "were", "be", "been", "it", "its", "this", "that", "these",
@@ -214,20 +284,6 @@ def _keyword_chips(vector_hits, query, max_chips=6):
     return top_words[:max_chips]
 
 
-def _dummy_vector_search(q, os_client):
-    """
-    Input:  q — search query; os_client — OpenSearch client
-    Output: empty list
-    Details:
-        Placeholder called by get_vector_hits when the embedding model is
-        unavailable. Returns no results so the semantic rail degrades cleanly.
-        TODO (Epic 18c): replace with a CPU-based embedding fallback so the
-        semantic rail still returns real vector results when the GPU/API
-        embedding model is down.
-    """
-    return []
-
-
 def get_vector_hits(q, os_client=None, llm_session=None):
     """
     Input:
@@ -245,7 +301,7 @@ def get_vector_hits(q, os_client=None, llm_session=None):
         1. LLM API (get_embedding) — fast, GPU-backed.
         2. CPU fallback (get_cpu_embedding, sentence-transformers) — slower but
            produces compatible 768-d vectors so vector search remains accurate.
-        Falls back to _dummy_vector_search (returns []) only when both fail.
+        Returns ([], False) when both embedding paths fail.
         Returns embedding_available=True whenever real vector hits are returned
         (regardless of which embedding tier was used).
     """
@@ -265,13 +321,13 @@ def get_vector_hits(q, os_client=None, llm_session=None):
 
     if embedding is None:
         logger.warning("get_vector_hits: no embedding available, semantic rail empty")
-        return _dummy_vector_search(q, client), False
+        return [], False
 
     try:
         raw_hits = vector_search(embedding, k=_VECTOR_K, client=client)
     except Exception:
         logger.exception("get_vector_hits: vector_search failed")
-        return _dummy_vector_search(q, client), False
+        return [], False
 
     hits = []
     for h in raw_hits:

@@ -22,7 +22,6 @@ Description:
 # Imports
 import hashlib
 import logging
-import math
 import time
 
 from flask import Blueprint, abort, jsonify, render_template, request, session
@@ -30,10 +29,7 @@ from flask_login import current_user, login_user
 
 from flask_app import db
 from flask_app.services.opensearch import get_client
-from flask_app.services.search import bm25_body_with_dorks, semantic_results
-from flask_app.services.query_preprocessor import (
-    strip_preamble, normalize, strip_stopwords, expand_synonyms,
-)
+from flask_app.services.search import preprocess_query, execute_bm25, semantic_results
 
 # Globals
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -182,17 +178,7 @@ def search():
     except (ValueError, TypeError):
         page = 1
 
-    preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q)))) if q else q
-
-    from flask_app.config import Config
-    rewritten_q = None
-    search_q = preprocessed_q
-    if q and Config.QUERY_REWRITE_ENABLED:
-        from flask_app.services.llm import rewrite_query
-        candidate = rewrite_query(preprocessed_q)
-        if candidate and candidate != preprocessed_q:
-            rewritten_q = candidate
-            search_q = rewritten_q
+    preprocessed_q, search_q, rewritten_q = preprocess_query(q) if q else (q, q, None)
 
     result_rows = []
     total = 0
@@ -206,14 +192,10 @@ def search():
 
     if q:
         try:
-            client = get_client()
-            body = bm25_body_with_dorks(search_q, page=page, page_size=_PAGE_SIZE)
-            resp = client.search(index=_INDEX_NAME, body=body)
-            took_ms = resp.get("took", 0)
-            total = resp["hits"]["total"]["value"]
-            page_count = max(1, math.ceil(total / _PAGE_SIZE))
-
-            for h in resp["hits"]["hits"]:
+            took_ms, total, page_count, hits, sources = execute_bm25(
+                search_q, page=page, page_size=_PAGE_SIZE,
+            )
+            for h in hits:
                 src = h.get("_source", {})
                 hl = h.get("highlight", {})
                 frags = hl.get("title", []) + hl.get("text", [src.get("text", "")[:300]])
@@ -229,9 +211,6 @@ def search():
                     "snippet": snippet,
                     "vectorized": bool(src.get("vectorized", False)),
                 })
-
-            buckets = resp.get("aggregations", {}).get("by_service", {}).get("buckets", [])
-            sources = [{"name": b["key"], "n": b["doc_count"]} for b in buckets]
 
         except Exception as _exc:
             logger.exception("BM25 search failed on API endpoint: %s", _exc)
@@ -334,7 +313,7 @@ def semantic_summary():
     if cached:
         return cached
     from flask_app.services.search import get_vector_hits, _build_ai_summary
-    preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q))))
+    preprocessed_q, _, _ = preprocess_query(q)
     vector_hits, _ = get_vector_hits(q)
     ai_summary = _build_ai_summary(vector_hits, q, preprocessed_q=preprocessed_q)
     html = render_template("_semantic_summary.html", ai_summary=ai_summary)

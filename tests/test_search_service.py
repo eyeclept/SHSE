@@ -218,18 +218,6 @@ def test_get_vector_hits_skips_cpu_fallback_when_disabled():
     assert hits == []
 
 
-def test_dummy_vector_search_returns_empty():
-    """
-    Input:  any query and client
-    Output: always []
-    Details:
-        Placeholder; must not call the LLM or raise.
-    """
-    from flask_app.services.search import _dummy_vector_search
-    result = _dummy_vector_search("anything", MagicMock())
-    assert result == []
-
-
 def test_hybrid_bm25_failure_returns_empty():
     """
     Input:  BM25 raises; embedding also None

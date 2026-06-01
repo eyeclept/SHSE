@@ -9,16 +9,12 @@ Description:
 """
 # Imports
 import logging
-import math
 
 from flask import Blueprint, render_template, request, session
 from flask_login import current_user, login_required
 from markupsafe import escape, Markup
 from flask_app.services.opensearch import get_client
-from flask_app.services.search import bm25_body_with_dorks
-from flask_app.services.query_preprocessor import (
-    strip_preamble, normalize, strip_stopwords, expand_synonyms,
-)
+from flask_app.services.search import preprocess_query, execute_bm25
 from flask_app.services.inline import build_inline_card
 
 # Globals
@@ -135,15 +131,7 @@ def results():
         preprocessed_q = None
         rewritten_q = None
     else:
-        preprocessed_q = expand_synonyms(strip_stopwords(normalize(strip_preamble(q)))) if q else q
-        rewritten_q = None
-        search_q = preprocessed_q
-        if q and Config.QUERY_REWRITE_ENABLED:
-            from flask_app.services.llm import rewrite_query
-            candidate = rewrite_query(preprocessed_q)
-            if candidate and candidate != preprocessed_q:
-                rewritten_q = candidate
-                search_q = rewritten_q
+        preprocessed_q, search_q, rewritten_q = preprocess_query(q) if q else (q, q, None)
 
     result_rows = []
     total = 0
@@ -157,19 +145,13 @@ def results():
 
     if q:
         try:
-            client = get_client()
-            body = bm25_body_with_dorks(
+            took_ms, total, page_count, hits, sources = execute_bm25(
                 search_q, page=page, page_size=_PAGE_SIZE,
                 highlight_tags=(_HL_OPEN, _HL_CLOSE),
                 filter_services=filter_services,
                 sort=sort,
             )
-            resp = client.search(index=_INDEX_NAME, body=body)
-            took_ms = resp.get("took", 0)
-            total = resp["hits"]["total"]["value"]
-            page_count = max(1, math.ceil(total / _PAGE_SIZE))
-
-            for h in resp["hits"]["hits"]:
+            for h in hits:
                 src = h.get("_source", {})
                 hl = h.get("highlight", {})
                 title_frags = hl.get("title", [])
@@ -191,9 +173,6 @@ def results():
                     "chunks": 1,
                     "vectorized": bool(src.get("vectorized", False)),
                 })
-
-            buckets = resp.get("aggregations", {}).get("by_service", {}).get("buckets", [])
-            sources = [{"name": b["key"], "n": b["doc_count"]} for b in buckets]
 
         except Exception as _exc:
             logger.exception("BM25 search failed: %s", _exc)
