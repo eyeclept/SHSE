@@ -234,6 +234,31 @@ def _oai_fetch(base_url, endpoint, resumption_token=None):
     return records, next_token or None
 
 
+def _index_oai_doc(doc, nickname, os_client):
+    """
+    Input:
+        doc       - dict with url/title/text keys (one OAI-PMH record)
+        nickname  - str, service nickname for the document
+        os_client - optional OpenSearch client
+    Output: None
+    Details:
+        Indexes a single OAI-PMH record with source_type="oai-pmh". Shared by
+        both the streaming real-fetch path and the _docs test-injection path so
+        their behaviour stays identical.
+    """
+    index_document(
+        url=doc["url"],
+        port=80,
+        title=doc.get("title", ""),
+        crawled_at=datetime.utcnow().isoformat(),
+        service_nickname=nickname,
+        content_type="text/xml",
+        text=doc["text"],
+        source_type="oai-pmh",
+        client=os_client,
+    )
+
+
 def _harvest_oai_impl(target, os_client=None, _docs=None):
     """
     Input:
@@ -244,33 +269,26 @@ def _harvest_oai_impl(target, os_client=None, _docs=None):
     Details:
         Fetches records via OAI-PMH ListRecords (oai_dc format), following
         resumption tokens. Indexes each record with source_type="oai-pmh".
+        Each resumption-token batch is indexed as it arrives rather than
+        buffering the whole repository in memory first, so a large repository
+        (tens/hundreds of thousands of records) does not risk OOM on the worker.
+        The _docs test-injection path is already a full in-memory list, so it is
+        indexed directly without streaming.
     """
     nickname = target.nickname or str(target.id)
     run_start = datetime.utcnow().isoformat()
 
     if _docs is not None:
-        docs = _docs
+        for doc in _docs:
+            _index_oai_doc(doc, nickname, os_client)
     else:
-        docs = []
         token = None
         while True:
             batch, token = _oai_fetch(target.url or "", target.endpoint or "/oai2d", token)
-            docs.extend(batch)
+            for doc in batch:
+                _index_oai_doc(doc, nickname, os_client)
             if not token:
                 break
-
-    for doc in docs:
-        index_document(
-            url=doc["url"],
-            port=80,
-            title=doc.get("title", ""),
-            crawled_at=datetime.utcnow().isoformat(),
-            service_nickname=nickname,
-            content_type="text/xml",
-            text=doc["text"],
-            source_type="oai-pmh",
-            client=os_client,
-        )
 
     delete_stale(nickname, run_start, client=os_client)
 

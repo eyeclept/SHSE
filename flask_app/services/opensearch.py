@@ -27,6 +27,7 @@ Description:
 # Imports
 import logging
 import os
+import threading
 import tiktoken
 from opensearchpy import OpenSearch, RequestsHttpConnection
 
@@ -34,6 +35,14 @@ from opensearchpy import OpenSearch, RequestsHttpConnection
 logger = logging.getLogger(__name__)
 INDEX_NAME = "shse_pages"
 EMBEDDING_DIM = 768
+
+# Lazily-built, process-wide OpenSearch client. The opensearchpy client (and its
+# underlying urllib3 connection pool) is thread-safe for concurrent requests and
+# transparently reconnects after a node restart, so a single long-lived instance
+# is reused across every request and Celery task instead of rebuilding the TLS
+# pool on every call.
+_client = None
+_client_lock = threading.Lock()
 _enc = tiktoken.get_encoding("cl100k_base")
 _SAFE_EMBED_TOKENS = 1600  # conservative guard under nomic-embed-text's 2048-token limit
 
@@ -75,22 +84,26 @@ def get_client():
     Input: None
     Output: OpenSearch client instance
     Details:
-        Reads connection parameters from environment variables. Uses HTTPS
-        and basic auth against the OpenSearch security plugin.
+        Returns a lazily-constructed, process-wide singleton client. The first
+        call builds it from Config; later calls reuse the same instance so the
+        TLS handshake and connection pool are set up once, not per request or
+        per indexed document. Thread-safe via double-checked locking. Callers
+        that need a different client (tests) still pass one explicitly.
     """
-    from flask_app.config import Config
-    host     = Config.OPENSEARCH_HOST
-    port     = Config.OPENSEARCH_PORT
-    user     = Config.OPENSEARCH_USER
-    password = Config.OPENSEARCH_PASSWORD
-
-    return OpenSearch(
-        hosts=[{"host": host, "port": port}],
-        http_auth=(user, password),
-        use_ssl=True,
-        verify_certs=False,
-        connection_class=RequestsHttpConnection,
-    )
+    global _client
+    if _client is not None:
+        return _client
+    with _client_lock:
+        if _client is None:
+            from flask_app.config import Config
+            _client = OpenSearch(
+                hosts=[{"host": Config.OPENSEARCH_HOST, "port": Config.OPENSEARCH_PORT}],
+                http_auth=(Config.OPENSEARCH_USER, Config.OPENSEARCH_PASSWORD),
+                use_ssl=True,
+                verify_certs=False,
+                connection_class=RequestsHttpConnection,
+            )
+    return _client
 
 
 def create_index(client=None):

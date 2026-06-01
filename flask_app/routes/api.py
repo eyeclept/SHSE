@@ -22,6 +22,7 @@ Description:
 # Imports
 import hashlib
 import logging
+import threading
 import time
 
 from flask import Blueprint, abort, jsonify, render_template, request, session
@@ -42,16 +43,31 @@ _SEMANTIC_CACHE_TTL  = 3600  # 1 hour
 
 # ── Redis cache helpers (browser semantic endpoints) ──────────────────────────
 
+_redis_client = None
+_redis_lock = threading.Lock()
+
+
 def _redis():
-    """Return a Redis client using the app's configured host/port/password."""
-    import redis
-    from flask_app.config import Config
-    return redis.Redis(
-        host=Config.REDIS_HOST,
-        port=Config.REDIS_PORT,
-        password=Config.REDIS_PASSWORD or None,
-        db=1,
-    )
+    """Return a process-wide Redis client (db=1) for the semantic cache.
+
+    redis.Redis owns a thread-safe connection pool, so one lazily-built instance
+    is reused across every cache read/write instead of opening a new pool per
+    operation. Thread-safe via double-checked locking.
+    """
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+    with _redis_lock:
+        if _redis_client is None:
+            import redis
+            from flask_app.config import Config
+            _redis_client = redis.Redis(
+                host=Config.REDIS_HOST,
+                port=Config.REDIS_PORT,
+                password=Config.REDIS_PASSWORD or None,
+                db=1,
+            )
+    return _redis_client
 
 
 def _cache_key(component, q):
@@ -191,9 +207,12 @@ def search():
     show_bm25_warning = False
 
     if q:
+        client = None
         try:
+            # One client per request, threaded into BM25 and the semantic legs.
+            client = get_client()
             took_ms, total, page_count, hits, sources = execute_bm25(
-                search_q, page=page, page_size=_PAGE_SIZE,
+                search_q, page=page, page_size=_PAGE_SIZE, client=client,
             )
             for h in hits:
                 src = h.get("_source", {})

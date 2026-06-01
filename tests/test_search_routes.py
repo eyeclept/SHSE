@@ -375,7 +375,7 @@ def test_results_raw_mode_skips_preprocessing(client):
     mock_client.search.return_value = _fake_os_search_response([])
 
     with patch("flask_app.routes.search.get_client", return_value=mock_client), \
-         patch("flask_app.routes.search.strip_preamble") as spy_pre:
+         patch("flask_app.services.query_preprocessor.strip_preamble") as spy_pre:
         r = client.get("/search?q=please+find+server&raw=1")
 
     assert r.status_code == 200
@@ -409,10 +409,10 @@ def test_results_shows_exact_link_when_preprocessed(client):
     mock_client.search.return_value = _fake_os_search_response([])
 
     with patch("flask_app.routes.search.get_client", return_value=mock_client), \
-         patch("flask_app.routes.search.strip_preamble", return_value="find server"), \
-         patch("flask_app.routes.search.normalize", return_value="find server"), \
-         patch("flask_app.routes.search.strip_stopwords", return_value="server"), \
-         patch("flask_app.routes.search.expand_synonyms", return_value="server"):
+         patch("flask_app.services.query_preprocessor.strip_preamble", return_value="find server"), \
+         patch("flask_app.services.query_preprocessor.normalize", return_value="find server"), \
+         patch("flask_app.services.query_preprocessor.strip_stopwords", return_value="server"), \
+         patch("flask_app.services.query_preprocessor.expand_synonyms", return_value="server"):
         r = client.get("/search?q=please+find+server")
 
     assert r.status_code == 200

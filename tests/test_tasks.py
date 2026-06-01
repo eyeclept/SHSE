@@ -528,6 +528,46 @@ def test_harvest_oai_uses_correct_source_type(db_session, oai_target):
     assert idx_mock.call_args.kwargs["service_nickname"] == "myoai"
 
 
+def test_harvest_oai_streams_batches_without_buffering(db_session, oai_target):
+    """
+    Input: None
+    Output: None
+    Details:
+        On the real-fetch path, each resumption-token batch is indexed as it
+        arrives rather than buffered. Verified by interleaving order: every doc
+        in batch 1 is indexed before _oai_fetch is called for batch 2.
+    """
+    from celery_worker.tasks.crawl import _harvest_oai_impl
+
+    batch1 = [{"url": "http://oai.lab/r1", "title": "R1", "text": "a"},
+              {"url": "http://oai.lab/r2", "title": "R2", "text": "b"}]
+    batch2 = [{"url": "http://oai.lab/r3", "title": "R3", "text": "c"}]
+    fetch_returns = [(batch1, "tok"), (batch2, None)]
+    events = []
+
+    def fake_fetch(*_args, **_kwargs):
+        events.append(("fetch", len(fetch_returns)))
+        return fetch_returns.pop(0)
+
+    def record_index(**kwargs):
+        events.append(("index", kwargs["url"]))
+
+    with patch("celery_worker.tasks.crawl._oai_fetch", side_effect=fake_fetch), \
+         patch("celery_worker.tasks.crawl.index_document", side_effect=record_index) as idx_mock, \
+         patch("celery_worker.tasks.crawl.delete_stale"):
+        _harvest_oai_impl(oai_target, os_client=MagicMock())
+
+    assert idx_mock.call_count == 3
+    # batch1's two docs are indexed before the second fetch happens (streaming).
+    assert events == [
+        ("fetch", 2),
+        ("index", "http://oai.lab/r1"),
+        ("index", "http://oai.lab/r2"),
+        ("fetch", 1),
+        ("index", "http://oai.lab/r3"),
+    ]
+
+
 def test_harvest_feeds_uses_correct_source_type(db_session, feed_target):
     """
     Input: None

@@ -425,7 +425,7 @@ def semantic_results(q, os_client=None, llm_session=None):
     from flask_app.services.llm import generate_keywords
 
     vector_hits, embedding_up = get_vector_hits(q, os_client=os_client, llm_session=llm_session)
-    ai_summary = _build_ai_summary(vector_hits, q, llm_session=llm_session)
+    ai_summary = _build_ai_summary(vector_hits, q, llm_session=llm_session, os_client=os_client)
     context_for_chips = [h["snippet"] for h in vector_hits[:3]]
     chips = generate_keywords(q, context_for_chips, session=llm_session)
 

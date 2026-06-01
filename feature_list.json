@@ -1358,5 +1358,28 @@
         "passes": true
       }
     }
+  },
+  "epic_30_prerelease_audit": {
+    "description": "Pre-release readiness audit: performance/scalability (30a-c) and broad readiness (30d-f), Opus-only",
+    "items": {
+      "perf_30a_discovery": {
+        "passes": true
+      },
+      "perf_30b_validation": {
+        "passes": true
+      },
+      "perf_30c_implementation": {
+        "passes": false
+      },
+      "prerelease_30d_discovery": {
+        "passes": true
+      },
+      "prerelease_30e_validation": {
+        "passes": false
+      },
+      "prerelease_30f_implementation": {
+        "passes": false
+      }
+    }
   }
 }

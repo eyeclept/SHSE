@@ -145,11 +145,16 @@ def results():
 
     if q:
         try:
+            # Build one OpenSearch client for the request and thread it into the
+            # BM25 call so the whole request uses a single client (and so a
+            # patched get_client controls the search path under test).
+            client = get_client()
             took_ms, total, page_count, hits, sources = execute_bm25(
                 search_q, page=page, page_size=_PAGE_SIZE,
                 highlight_tags=(_HL_OPEN, _HL_CLOSE),
                 filter_services=filter_services,
                 sort=sort,
+                client=client,
             )
             for h in hits:
                 src = h.get("_source", {})
