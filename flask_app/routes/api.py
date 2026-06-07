@@ -22,7 +22,6 @@ Description:
 # Imports
 import hashlib
 import logging
-import threading
 import time
 
 from flask import Blueprint, abort, jsonify, render_template, request, session
@@ -43,31 +42,14 @@ _SEMANTIC_CACHE_TTL  = 3600  # 1 hour
 
 # ── Redis cache helpers (browser semantic endpoints) ──────────────────────────
 
-_redis_client = None
-_redis_lock = threading.Lock()
-
-
 def _redis():
-    """Return a process-wide Redis client (db=1) for the semantic cache.
+    """Return the process-wide Redis client (db=1) for the semantic cache.
 
-    redis.Redis owns a thread-safe connection pool, so one lazily-built instance
-    is reused across every cache read/write instead of opening a new pool per
-    operation. Thread-safe via double-checked locking.
+    Delegates to flask_app.services.cache.get_redis so the whole app shares one
+    lazily-built, thread-safe client instead of opening a pool per operation.
     """
-    global _redis_client
-    if _redis_client is not None:
-        return _redis_client
-    with _redis_lock:
-        if _redis_client is None:
-            import redis
-            from flask_app.config import Config
-            _redis_client = redis.Redis(
-                host=Config.REDIS_HOST,
-                port=Config.REDIS_PORT,
-                password=Config.REDIS_PASSWORD or None,
-                db=1,
-            )
-    return _redis_client
+    from flask_app.services.cache import get_redis
+    return get_redis()
 
 
 def _cache_key(component, q):
@@ -264,23 +246,28 @@ def stats():
     Input:  None
     Output: JSON {docs, services, last_crawl}; zeros when OpenSearch is unreachable
     """
-    try:
-        client = get_client()
-        count = client.count(index=_INDEX_NAME).get("count", 0)
-        agg = client.search(index=_INDEX_NAME, body={
-            "size": 0,
-            "aggs": {"svc": {"cardinality": {"field": "service_nickname"}}},
-        })
-        svc_count = agg["aggregations"]["svc"]["value"]
-        last = client.search(index=_INDEX_NAME, body={
-            "size": 1, "sort": [{"crawled_at": "desc"}], "_source": ["crawled_at"],
-        })
-        hits = last["hits"]["hits"]
-        last_crawl = hits[0]["_source"].get("crawled_at", "")[:19] if hits else None
-        return jsonify({"docs": count, "services": svc_count, "last_crawl": last_crawl})
-    except Exception:
-        logger.warning("OpenSearch unavailable — returning zero stats", exc_info=True)
-        return jsonify({"docs": 0, "services": 0, "last_crawl": None})
+    from flask_app.services.cache import cached_json, STATS_TTL
+
+    def _compute():
+        try:
+            client = get_client()
+            count = client.count(index=_INDEX_NAME).get("count", 0)
+            agg = client.search(index=_INDEX_NAME, body={
+                "size": 0,
+                "aggs": {"svc": {"cardinality": {"field": "service_nickname"}}},
+            })
+            svc_count = agg["aggregations"]["svc"]["value"]
+            last = client.search(index=_INDEX_NAME, body={
+                "size": 1, "sort": [{"crawled_at": "desc"}], "_source": ["crawled_at"],
+            })
+            hits = last["hits"]["hits"]
+            last_crawl = hits[0]["_source"].get("crawled_at", "")[:19] if hits else None
+            return {"docs": count, "services": svc_count, "last_crawl": last_crawl}
+        except Exception:
+            logger.warning("OpenSearch unavailable — returning zero stats", exc_info=True)
+            return {"docs": 0, "services": 0, "last_crawl": None}
+
+    return jsonify(cached_json("shse:stats:api", STATS_TTL, _compute))
 
 
 @api_bp.route("/semantic/vector")

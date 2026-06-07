@@ -51,40 +51,47 @@ def _get_stats():
     Output: dict with docs, services (count), service_names (list), last_crawl
     Details:
         Queries OpenSearch for index stats. Falls back to zeros on error.
+        Cached in Redis with a short TTL (the home page reruns this multi-query
+        OpenSearch sweep on every visit); bypassed under TESTING.
     """
-    try:
-        client = get_client()
-        count_resp = client.count(index=_INDEX_NAME)
-        doc_count = count_resp.get("count", 0)
+    from flask_app.services.cache import cached_json, STATS_TTL
 
-        agg_resp = client.search(index=_INDEX_NAME, body={
-            "size": 0,
-            "aggs": {
-                "services": {"terms": {"field": "service_nickname", "size": 100}},
-            },
-        })
-        buckets = agg_resp["aggregations"]["services"]["buckets"]
-        service_names = [b["key"] for b in buckets]
-        svc_count = len(service_names)
+    def _compute():
+        try:
+            client = get_client()
+            count_resp = client.count(index=_INDEX_NAME)
+            doc_count = count_resp.get("count", 0)
 
-        last_resp = client.search(index=_INDEX_NAME, body={
-            "size": 1, "sort": [{"crawled_at": "desc"}], "_source": ["crawled_at"],
-        })
-        hits = last_resp["hits"]["hits"]
-        last_crawl = hits[0]["_source"].get("crawled_at", "")[:10] if hits else "never"
-    except Exception:
-        logger.warning("OpenSearch unavailable — returning zero stats", exc_info=True)
-        doc_count = 0
-        svc_count = 0
-        service_names = []
-        last_crawl = "unknown"
+            agg_resp = client.search(index=_INDEX_NAME, body={
+                "size": 0,
+                "aggs": {
+                    "services": {"terms": {"field": "service_nickname", "size": 100}},
+                },
+            })
+            buckets = agg_resp["aggregations"]["services"]["buckets"]
+            service_names = [b["key"] for b in buckets]
+            svc_count = len(service_names)
 
-    return {
-        "docs": doc_count,
-        "services": svc_count,
-        "service_names": service_names,
-        "last_crawl": last_crawl,
-    }
+            last_resp = client.search(index=_INDEX_NAME, body={
+                "size": 1, "sort": [{"crawled_at": "desc"}], "_source": ["crawled_at"],
+            })
+            hits = last_resp["hits"]["hits"]
+            last_crawl = hits[0]["_source"].get("crawled_at", "")[:10] if hits else "never"
+        except Exception:
+            logger.warning("OpenSearch unavailable — returning zero stats", exc_info=True)
+            doc_count = 0
+            svc_count = 0
+            service_names = []
+            last_crawl = "unknown"
+
+        return {
+            "docs": doc_count,
+            "services": svc_count,
+            "service_names": service_names,
+            "last_crawl": last_crawl,
+        }
+
+    return cached_json("shse:stats:home", STATS_TTL, _compute)
 
 
 @search_bp.route("/", methods=["GET"])

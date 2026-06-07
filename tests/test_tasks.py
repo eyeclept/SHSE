@@ -148,8 +148,7 @@ def test_crawl_target_creates_crawl_job(db_session, service_target):
 
     os_client = MagicMock()
 
-    with patch("celery_worker.tasks.crawl._discover_urls", return_value=["http://test.local/"]), \
-         patch("celery_worker.tasks.crawl._fetch_page_text", return_value="sample page text"), \
+    with patch("celery_worker.tasks.crawl._discover_urls", return_value=[("http://test.local/", "sample page text")]), \
          patch("celery_worker.tasks.crawl.index_document"), \
          patch("celery_worker.tasks.crawl.delete_stale"):
         job_id = _crawl_target_impl(
@@ -253,8 +252,7 @@ def test_reindex_target_crawls_without_pre_wipe(db_session, service_target):
 
     os_client = MagicMock()
 
-    with patch("celery_worker.tasks.crawl._discover_urls", return_value=["http://test.local/"]), \
-         patch("celery_worker.tasks.crawl._fetch_page_text", return_value="sample page text"), \
+    with patch("celery_worker.tasks.crawl._discover_urls", return_value=[("http://test.local/", "sample page text")]), \
          patch("celery_worker.tasks.crawl.index_document"), \
          patch("celery_worker.tasks.crawl.delete_stale") as stale_mock, \
          patch("flask_app.services.opensearch.delete_by_nickname") as del_mock:
@@ -319,6 +317,11 @@ def test_vectorize_pending_embeds_all_docs():
         {"hits": {"hits": hits}},
         {"hits": {"hits": []}},
     ]
+    os_client.bulk.return_value = {
+        "errors": False,
+        "items": [{"update": {"_id": "id1", "status": 200}},
+                  {"update": {"_id": "id2", "status": 200}}],
+    }
     llm_session = MagicMock()
     embed_resp = MagicMock()
     embed_resp.raise_for_status.return_value = None
@@ -331,10 +334,13 @@ def test_vectorize_pending_embeds_all_docs():
 
     assert vectorized == 2
     assert attempted == 2
-    assert os_client.update.call_count == 2
-    call_body = os_client.update.call_args_list[0].kwargs["body"]
-    assert call_body["doc"]["vectorized"] is True
-    assert len(call_body["doc"]["embedding"]) == 768
+    # One bulk request for the whole page (not one update per doc).
+    assert os_client.bulk.call_count == 1
+    os_client.update.assert_not_called()
+    body = os_client.bulk.call_args.kwargs["body"]
+    assert len(body) == 4  # 2 docs × (action line + doc line)
+    assert body[1]["doc"]["vectorized"] is True
+    assert len(body[1]["doc"]["embedding"]) == 768
 
 
 def test_vectorize_pending_skips_on_llm_failure():
@@ -453,6 +459,7 @@ def test_vectorize_pending_all_docs_processed_across_pages():
         {"hits": {"hits": page2_hits}},
         {"hits": {"hits": []}},
     ]
+    os_client.bulk.return_value = {"errors": False, "items": []}
 
     llm_session = MagicMock()
     embed_resp = MagicMock()
@@ -466,8 +473,13 @@ def test_vectorize_pending_all_docs_processed_across_pages():
 
     assert attempted == 3
     assert vectorized == 3
-    assert os_client.update.call_count == 3
-    updated_ids = {c.kwargs["id"] for c in os_client.update.call_args_list}
+    # One bulk per page (2 pages with docs).
+    assert os_client.bulk.call_count == 2
+    updated_ids = set()
+    for c in os_client.bulk.call_args_list:
+        for line in c.kwargs["body"]:
+            if "update" in line:
+                updated_ids.add(line["update"]["_id"])
     assert updated_ids == {"id1", "id2", "id3"}
 
 
@@ -620,8 +632,7 @@ def test_crawl_job_lifecycle(db_session, service_target):
 
     os_client = MagicMock()
 
-    with patch("celery_worker.tasks.crawl._discover_urls", return_value=["http://test.local/"]), \
-         patch("celery_worker.tasks.crawl._fetch_page_text", return_value="sample page text"), \
+    with patch("celery_worker.tasks.crawl._discover_urls", return_value=[("http://test.local/", "sample page text")]), \
          patch("celery_worker.tasks.crawl.index_document"), \
          patch("celery_worker.tasks.crawl.delete_stale"):
         job_id = _crawl_target_impl(service_target.id, db_session, None, os_client)

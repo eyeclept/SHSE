@@ -100,6 +100,9 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
             break
         search_after = hits[-1]["sort"]
 
+        # Embed every doc in the page, then write the whole page in one bulk
+        # request instead of one update round-trip per document.
+        bulk_body = []
         for hit in hits:
             attempted_count += 1
             doc_id = hit["_id"]
@@ -107,12 +110,29 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
             embedding = _embed_text(text, llm_session)
             if embedding is None:
                 continue
-            client.update(
-                index=_INDEX_NAME,
-                id=doc_id,
-                body={"doc": {"embedding": embedding, "vectorized": True}},
-            )
-            vectorized_count += 1
+            bulk_body.append({"update": {"_index": _INDEX_NAME, "_id": doc_id}})
+            bulk_body.append({"doc": {"embedding": embedding, "vectorized": True}})
+
+        if not bulk_body:
+            continue
+
+        resp = client.bulk(body=bulk_body)
+        items = resp.get("items", [])
+        if resp.get("errors"):
+            # Count only the successful updates; log the rest.
+            for item in items:
+                status = item.get("update", {}).get("status", 0)
+                if 200 <= status < 300:
+                    vectorized_count += 1
+                else:
+                    logger.warning(
+                        "vectorize: bulk update failed for doc %s — %s",
+                        item.get("update", {}).get("_id"),
+                        item.get("update", {}).get("error"),
+                    )
+        else:
+            # No item-level errors: every update action in this page succeeded.
+            vectorized_count += len(bulk_body) // 2
 
     return vectorized_count, attempted_count
 

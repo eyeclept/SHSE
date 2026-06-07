@@ -60,6 +60,28 @@ class _LinkExtractor(HTMLParser):
                     self.links.append(value)
 
 # Functions
+def _extract_text(resp, fallback_url):
+    """
+    Input:
+        resp         - requests.Response, already fetched with status checked
+        fallback_url - str returned when the body has no extractable text
+    Output:
+        str — visible plain text, or fallback_url for non-markup/empty bodies
+    Details:
+        Tag-stripping extraction shared by _fetch_page_text and _discover_urls so
+        a page fetched once during discovery does not need a second fetch just to
+        extract its text. Only HTML/XML bodies are parsed; anything else returns
+        the fallback URL.
+    """
+    content_type = resp.headers.get("Content-Type", "")
+    if "html" not in content_type and "xml" not in content_type:
+        return fallback_url
+    extractor = _TextExtractor()
+    extractor.feed(resp.text)
+    text = extractor.get_text()
+    return text if text.strip() else fallback_url
+
+
 def _fetch_page_text(url, tls_verify=True, timeout=10):
     """
     Input:
@@ -71,26 +93,19 @@ def _fetch_page_text(url, tls_verify=True, timeout=10):
               or the URL itself when fetching or parsing fails
     Details:
         Uses requests.get() to fetch the page and stdlib html.parser to strip
-        tags. Script, style, and nav blocks are excluded. Falls back to the URL
-        string on any error (network, timeout, encoding) so callers always
-        receive a non-empty string to index.
+        tags. Falls back to the URL string on any error (network, timeout,
+        encoding) so callers always receive a non-empty string to index.
     """
     try:
         resp = requests.get(url, timeout=timeout, verify=tls_verify)
         resp.raise_for_status()
-        content_type = resp.headers.get("Content-Type", "")
-        if "html" not in content_type and "xml" not in content_type:
-            return url
-        extractor = _TextExtractor()
-        extractor.feed(resp.text)
-        text = extractor.get_text()
-        return text if text.strip() else url
+        return _extract_text(resp, url)
     except Exception:
         logger.warning("_fetch_page_text failed for %s — indexing URL only", url, exc_info=True)
         return url
 
 
-def _discover_urls(seed_url, tls_verify=True, max_depth=2, max_urls=500, timeout=10):
+def _discover_urls(seed_url, tls_verify=True, max_depth=2, max_urls=500, timeout=10, with_text=False):
     """
     Input:
         seed_url  - str, starting URL
@@ -98,8 +113,12 @@ def _discover_urls(seed_url, tls_verify=True, max_depth=2, max_urls=500, timeout
         max_depth  - int, how many link-hops to follow (0 = seed page only)
         max_urls   - int, cap on total URLs returned
         timeout    - int, per-request timeout in seconds
+        with_text  - bool, when True return (url, text) tuples carrying the text
+                     extracted from the page already fetched during discovery,
+                     so callers need not fetch each page a second time
     Output:
-        list[str] — discovered URLs in BFS order, seed first
+        list[str] when with_text is False (URLs in BFS order, seed first);
+        list[(str, str)] of (url, extracted_text) when with_text is True
     Details:
         BFS from seed_url staying on the same host. Follows redirects
         transparently (the final URL after redirect is recorded). Links are
@@ -133,9 +152,15 @@ def _discover_urls(seed_url, tls_verify=True, max_depth=2, max_urls=500, timeout
             continue
         if final_url not in visited:
             visited.add(final_url)
-        result.append(final_url)
 
-        if depth < max_depth and "html" in resp.headers.get("Content-Type", ""):
+        content_type = resp.headers.get("Content-Type", "")
+        if with_text:
+            # Reuse the response we just fetched to extract text — no second GET.
+            result.append((final_url, _extract_text(resp, final_url)))
+        else:
+            result.append(final_url)
+
+        if depth < max_depth and "html" in content_type:
             extractor = _LinkExtractor()
             extractor.feed(resp.text)
             for href in extractor.links:

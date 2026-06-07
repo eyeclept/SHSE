@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 _INDEX_NAME = "shse_pages"
 _PROBE_TIMEOUT = 3   # seconds per health probe
+_HEALTH_TTL = 5      # seconds; a short-TTL snapshot collapses the 5s /_health
+                     # poll and the list/edit page badges into one sweep/window
 
 # Translate DB status values to the UI names expected by the jobs template.
 # DB:  queued | started | success | failure
@@ -93,6 +95,20 @@ def admin_required(f):
 
 
 def _check_services():
+    """
+    Input: None
+    Output: dict {service: {status, latency_ms, message}}
+    Details:
+        Returns a short-TTL cached snapshot of _probe_services(). The dashboard,
+        the 5s /_health HTMX poll, and the targets/index list and edit pages all
+        call this, so caching means one real sweep per _HEALTH_TTL window instead
+        of a full probe per page load. Bypassed under Flask TESTING.
+    """
+    from flask_app.services.cache import cached_json
+    return cached_json("shse:health", _HEALTH_TTL, _probe_services)
+
+
+def _probe_services():
     """
     Input: None
     Output: dict {service: {status, latency_ms, message}}
@@ -256,41 +272,48 @@ def _get_index_stats(client=None):
     Output: dict {docs, services, last_crawl, vector_coverage_pct, ...}
     Details:
         Queries OpenSearch for aggregate statistics. Returns zeros on error.
+        Cached in Redis with a short TTL (the admin dashboard reruns this sweep
+        on every load); bypassed under TESTING and when a client is injected.
     """
     from flask_app.services.opensearch import get_client
-    try:
-        c = client or get_client()
-        count = c.count(index=_INDEX_NAME).get("count", 0)
-        agg_resp = c.search(index=_INDEX_NAME, body={
-            "size": 0,
-            "aggs": {
-                "svc": {"cardinality": {"field": "service_nickname"}},
-                "vectorized": {"filter": {"term": {"vectorized": True}}},
-            },
-        })
-        aggs = agg_resp.get("aggregations", {})
-        svc_count = aggs.get("svc", {}).get("value", 0)
-        vec_count = aggs.get("vectorized", {}).get("doc_count", 0)
-        last = c.search(index=_INDEX_NAME, body={
-            "size": 1, "sort": [{"crawled_at": "desc"}], "_source": ["crawled_at"],
-        })
-        hits = last["hits"]["hits"]
-        last_crawl = hits[0]["_source"].get("crawled_at", "")[:19] if hits else "—"
-        pct = int(vec_count / count * 100) if count > 0 else 0
-        return {
-            "docs": count,
-            "services": svc_count,
-            "last_crawl": last_crawl,
-            "vector_coverage_pct": pct,
-            "queue_depth": 0,
-            "indexed_24h": 0,
-        }
-    except Exception:
-        logger.warning("OpenSearch unavailable — returning zero index stats", exc_info=True)
-        return {
-            "docs": 0, "services": 0, "last_crawl": "—",
-            "vector_coverage_pct": 0, "queue_depth": 0, "indexed_24h": 0,
-        }
+    from flask_app.services.cache import cached_json, STATS_TTL
+
+    def _compute():
+        try:
+            c = client or get_client()
+            count = c.count(index=_INDEX_NAME).get("count", 0)
+            agg_resp = c.search(index=_INDEX_NAME, body={
+                "size": 0,
+                "aggs": {
+                    "svc": {"cardinality": {"field": "service_nickname"}},
+                    "vectorized": {"filter": {"term": {"vectorized": True}}},
+                },
+            })
+            aggs = agg_resp.get("aggregations", {})
+            svc_count = aggs.get("svc", {}).get("value", 0)
+            vec_count = aggs.get("vectorized", {}).get("doc_count", 0)
+            last = c.search(index=_INDEX_NAME, body={
+                "size": 1, "sort": [{"crawled_at": "desc"}], "_source": ["crawled_at"],
+            })
+            hits = last["hits"]["hits"]
+            last_crawl = hits[0]["_source"].get("crawled_at", "")[:19] if hits else "—"
+            pct = int(vec_count / count * 100) if count > 0 else 0
+            return {
+                "docs": count,
+                "services": svc_count,
+                "last_crawl": last_crawl,
+                "vector_coverage_pct": pct,
+                "queue_depth": 0,
+                "indexed_24h": 0,
+            }
+        except Exception:
+            logger.warning("OpenSearch unavailable — returning zero index stats", exc_info=True)
+            return {
+                "docs": 0, "services": 0, "last_crawl": "—",
+                "vector_coverage_pct": 0, "queue_depth": 0, "indexed_24h": 0,
+            }
+
+    return cached_json("shse:stats:admin", STATS_TTL, _compute)
 
 
 # ── Dashboard ──────────────────────────────────────────────────────────────

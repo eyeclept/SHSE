@@ -30,6 +30,10 @@ _LLM_REWRITE_MODEL = _Config.LLM_REWRITE_MODEL
 _CPU_EMBED_MODEL = "nomic-ai/nomic-embed-text-v1"
 
 _TIMEOUT = 30
+# Bound the connect phase so a routable-but-dead LLM host fails fast (~3s)
+# instead of blocking the whole _TIMEOUT; the read phase keeps _TIMEOUT so real
+# (slow) generation still completes. Used as a (connect, read) tuple.
+_CONNECT_TIMEOUT = 3
 _cpu_model = None
 _cpu_model_lock = threading.Lock()
 
@@ -130,7 +134,7 @@ def get_embedding(text, session=None):
     url = f"{_LLM_API_BASE}/embeddings"
     payload = {"model": _LLM_EMBED_MODEL, "input": text}
     try:
-        resp = requester.post(url, json=payload, timeout=_TIMEOUT)
+        resp = requester.post(url, json=payload, timeout=(_CONNECT_TIMEOUT, _TIMEOUT))
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
@@ -208,7 +212,7 @@ def generate_summary(context_chunks, query, session=None, db_session=None):
     messages = [{"role": "user", "content": prompt}]
     payload = {"model": settings["gen_model"], "messages": messages}
     try:
-        resp = requester.post(url, json=payload, timeout=_TIMEOUT)
+        resp = requester.post(url, json=payload, timeout=(_CONNECT_TIMEOUT, _TIMEOUT))
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
@@ -251,7 +255,7 @@ def rewrite_query(raw_query, session=None):
     ]
     payload = {"model": settings["rewrite_model"], "messages": messages}
     try:
-        resp = requester.post(url, json=payload, timeout=_TIMEOUT)
+        resp = requester.post(url, json=payload, timeout=(_CONNECT_TIMEOUT, _TIMEOUT))
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:
@@ -305,7 +309,7 @@ def generate_keywords(query, context_chunks, session=None):
     ]
     payload = {"model": settings["rewrite_model"], "messages": messages}
     try:
-        resp = requester.post(url, json=payload, timeout=_TIMEOUT)
+        resp = requester.post(url, json=payload, timeout=(_CONNECT_TIMEOUT, _TIMEOUT))
         resp.raise_for_status()
         data = resp.json()
         if "error" in data:

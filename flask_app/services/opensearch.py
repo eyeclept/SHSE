@@ -102,6 +102,13 @@ def get_client():
                 use_ssl=True,
                 verify_certs=False,
                 connection_class=RequestsHttpConnection,
+                # Fail fast instead of degrading slowly: a routable-but-dead node
+                # (e.g. a powered-off VM whose subnet is still up) otherwise
+                # triggers the default 4-attempt retry storm (~12s/call). One
+                # attempt under the default 10s timeout keeps search responsive;
+                # transient crawl/index blips are covered by Celery task retries.
+                max_retries=0,
+                retry_on_timeout=False,
             )
     return _client
 

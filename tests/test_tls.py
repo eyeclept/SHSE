@@ -113,13 +113,15 @@ def test_fetch_page_text_passes_tls_verify_true():
     assert call_kwargs.get("verify") is True
 
 
-def test_nutch_crawl_propagates_tls_verify_to_page_fetch(app):
+def test_nutch_crawl_propagates_tls_verify_to_discovery(app):
     """
     Input: CrawlerTarget with tls_verify=False processed by _nutch_crawl
-    Output: _fetch_page_text is called with tls_verify=False
+    Output: _discover_urls is called with tls_verify=False
     Details:
         Verifies that the per-target tls_verify flag flows from the
         CrawlerTarget model through the crawl pipeline to the page fetch.
+        Discovery now fetches each page once and returns its text, so the
+        single fetch (and its tls_verify) lives in _discover_urls.
     """
     from flask_app.models.crawler_target import CrawlerTarget
     from celery_worker.tasks.crawl import _nutch_crawl
@@ -134,18 +136,16 @@ def test_nutch_crawl_propagates_tls_verify_to_page_fetch(app):
         tls_verify=False,
     )
 
-    fake_urls = ["https://internal.lab/page"]
+    fake_pages = [("https://internal.lab/page", "page text")]
 
     with patch("celery_worker.tasks.crawl._discover_urls",
-               return_value=fake_urls), \
-         patch("celery_worker.tasks.crawl._fetch_page_text",
-               return_value="page text") as fetch_mock, \
+               return_value=fake_pages) as discover_mock, \
          patch("celery_worker.tasks.crawl.index_document"), \
          patch("celery_worker.tasks.crawl.delete_stale"):
         _nutch_crawl(target)
 
-    fetch_mock.assert_called_once()
-    call = fetch_mock.call_args
+    discover_mock.assert_called_once()
+    call = discover_mock.call_args
     # tls_verify may be positional or keyword — check all args
     all_args = list(call.args) + list(call.kwargs.values())
     assert False in all_args, f"tls_verify=False not found in call args: {call}"

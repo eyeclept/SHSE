@@ -14,7 +14,7 @@ from datetime import datetime
 
 from celery.utils.log import get_task_logger
 from celery_worker.app import celery
-from flask_app.services.nutch import _discover_urls, _fetch_page_text
+from flask_app.services.nutch import _discover_urls
 from flask_app.services.opensearch import index_document, delete_stale, create_index
 from flask_app.config import Config
 from celery_worker.tasks.utils import _build_app_context
@@ -138,19 +138,24 @@ def _nutch_crawl(target, nutch_session=None, os_client=None, job=None, db_sessio
         return
 
     depth = target.crawl_depth if target.crawl_depth is not None else Config.NUTCH_DEFAULT_DEPTH
-    urls = _discover_urls(seed_url, tls_verify=tls_ok, max_depth=depth, max_urls=Config.NUTCH_MAX_URLS)
-    if not urls:
+    # with_text=True: each page is fetched once during discovery and its text is
+    # returned alongside the URL, so we don't fetch every page a second time here.
+    pages = _discover_urls(
+        seed_url, tls_verify=tls_ok, max_depth=depth,
+        max_urls=Config.NUTCH_MAX_URLS, with_text=True,
+    )
+    if not pages:
         raise RuntimeError(
             f"_discover_urls returned no reachable URLs from seed {seed_url!r} — "
             "check network connectivity between the crawler and the target host "
             "(e.g. Docker cannot reach the target network)"
         )
-    logger.info("_nutch_crawl: discovered %d URL(s) from seed %s", len(urls), seed_url)
+    logger.info("_nutch_crawl: discovered %d URL(s) from seed %s", len(pages), seed_url)
 
     documents_indexed = 0
-    total_urls = len(urls)
-    for i, url in enumerate(urls):
-        page_text = _fetch_page_text(url, tls_verify=tls_ok)
+    total_urls = len(pages)
+    last_progress = -1
+    for i, (url, page_text) in enumerate(pages):
         if not page_text or page_text == url:
             logger.warning("_nutch_crawl: skipping %s — no text extracted", url)
         else:
@@ -166,13 +171,18 @@ def _nutch_crawl(target, nutch_session=None, os_client=None, job=None, db_sessio
                 client=os_client,
             )
             documents_indexed += 1
+        # Commit progress only when the integer percentage actually advances,
+        # so a large crawl does ~90 DB writes instead of one per URL.
         if job is not None and db_session is not None:
-            job.progress = min(90, int((i + 1) / total_urls * 90))
-            db_session.commit()
+            pct = min(90, int((i + 1) / total_urls * 90))
+            if pct != last_progress:
+                job.progress = pct
+                db_session.commit()
+                last_progress = pct
 
     if documents_indexed == 0:
         raise RuntimeError(
-            f"_nutch_crawl indexed 0 documents from {len(urls)} discovered URL(s) "
+            f"_nutch_crawl indexed 0 documents from {len(pages)} discovered URL(s) "
             f"(seed {seed_url!r}) — all pages returned no extractable text"
         )
     logger.info("_nutch_crawl: indexed %d document(s) for target '%s'", documents_indexed, nickname)
