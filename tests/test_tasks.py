@@ -402,8 +402,8 @@ def test_embed_text_sub_chunks_and_averages_long_text(monkeypatch):
     Output: None
     Details:
         When text exceeds _SAFE_EMBED_TOKENS, _embed_text splits it into
-        sub-chunks, embeds each, and returns the element-wise mean.
-        All sub-chunk embeddings return [1.0]*768; the average is [1.0]*768.
+        sub-chunks, embeds them all in ONE batched request, and returns the
+        element-wise mean. The mock returns one embedding per input item.
         Monkeypatches _enc and _SAFE_EMBED_TOKENS so the failover fires on
         a short test input without needing genuinely dense content.
     """
@@ -417,17 +417,28 @@ def test_embed_text_sub_chunks_and_averages_long_text(monkeypatch):
 
     text = " ".join(["word"] * 10)  # 10 words, well over threshold
 
-    fake_vec = [1.0] * 768
     llm_session = MagicMock()
-    resp = MagicMock()
-    resp.raise_for_status.return_value = None
-    resp.json.return_value = {"data": [{"embedding": fake_vec}]}
-    llm_session.post.return_value = resp
+
+    def fake_post(url, json=None, timeout=None):
+        # Batched request: one embedding per input item, echoing the index.
+        inp = json.get("input")
+        items = inp if isinstance(inp, list) else [inp]
+        r = MagicMock()
+        r.raise_for_status.return_value = None
+        r.json.return_value = {
+            "data": [{"index": i, "embedding": [1.0] * 768} for i in range(len(items))]
+        }
+        return r
+
+    llm_session.post.side_effect = fake_post
 
     result = vmod._embed_text(text, llm_session)
 
-    # Sub-chunking occurred (more than one post call)
-    assert llm_session.post.call_count > 1
+    # One batched HTTP call for all sub-chunks (not one per chunk).
+    assert llm_session.post.call_count == 1
+    sent = llm_session.post.call_args.kwargs["json"]["input"]
+    assert isinstance(sent, list) and len(sent) > 1
+    assert result == [1.0] * 768
     # Average of identical vectors is the same vector
     assert result is not None
     assert abs(result[0] - 1.0) < 1e-6

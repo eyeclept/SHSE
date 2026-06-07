@@ -29,6 +29,10 @@ migrate = Migrate()
 oauth = OAuth()
 csrf = CSRFProtect()
 
+# Throttle window (seconds) for persisting ApiToken.last_used_at — avoids a DB
+# write on every authenticated API request.
+_TOKEN_LAST_USED_THROTTLE = 60
+
 
 def _limiter_key():
     """
@@ -98,8 +102,12 @@ def load_user_from_request(request):
         if token is None:
             return None
         from datetime import datetime
-        token.last_used_at = datetime.utcnow()
-        db.session.commit()
+        now = datetime.utcnow()
+        # Only persist last_used_at when the stored value is stale by more than
+        # the throttle window, so a burst of API calls is not one commit each.
+        if token.last_used_at is None or (now - token.last_used_at).total_seconds() > _TOKEN_LAST_USED_THROTTLE:
+            token.last_used_at = now
+            db.session.commit()
         import logging as _logging
         _logging.getLogger(__name__).info(
             "api token auth: user_id=%s token_id=%s path=%s",

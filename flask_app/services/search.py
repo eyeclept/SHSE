@@ -418,16 +418,39 @@ def semantic_results(q, os_client=None, llm_session=None):
         tuple (vector_hits, ai_summary, show_bm25_warning, keyword_chips)
     Details:
         Backward-compatible wrapper used by the JSON /api/search endpoint.
-        Calls get_vector_hits, _build_ai_summary, and generate_keywords
-        independently so each degrades without blocking the others.
+        Runs get_vector_hits first (it has its own LLM->CPU embedding fallback),
+        then runs the AI summary and keyword chips concurrently — both depend
+        only on vector_hits and are independent of each other. Both generative
+        legs are skipped when the LLM is unreachable (is_llm_available is
+        process-cached, so the gate is cheap and avoids two connect timeouts).
+        Each leg degrades to None/[] without blocking the other.
         For the HTMX semantic rail, /api/semantic calls these directly.
     """
-    from flask_app.services.llm import generate_keywords
+    from concurrent.futures import ThreadPoolExecutor
+    from flask_app.services.llm import generate_keywords, is_llm_available
 
     vector_hits, embedding_up = get_vector_hits(q, os_client=os_client, llm_session=llm_session)
-    ai_summary = _build_ai_summary(vector_hits, q, llm_session=llm_session, os_client=os_client)
-    context_for_chips = [h["snippet"] for h in vector_hits[:3]]
-    chips = generate_keywords(q, context_for_chips, session=llm_session)
+
+    ai_summary = None
+    chips = []
+    if is_llm_available(session=llm_session):
+        context_for_chips = [h["snippet"] for h in vector_hits[:3]]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            summary_future = pool.submit(
+                _build_ai_summary, vector_hits, q,
+                llm_session=llm_session, os_client=os_client,
+            )
+            chips_future = pool.submit(
+                generate_keywords, q, context_for_chips, session=llm_session,
+            )
+            try:
+                ai_summary = summary_future.result()
+            except Exception:
+                logger.exception("semantic_results: AI summary failed")
+            try:
+                chips = chips_future.result() or []
+            except Exception:
+                logger.exception("semantic_results: keyword chips failed")
 
     return vector_hits, ai_summary, not embedding_up, chips
 

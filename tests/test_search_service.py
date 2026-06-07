@@ -345,3 +345,60 @@ def test_build_ai_summary_bm25_failure_logs_exception():
     mock_logger.exception.assert_called_once()
     args = mock_logger.exception.call_args[0]
     assert "BM25" in args[0] or "bm25" in args[0].lower()
+
+
+# ── semantic_results: concurrent legs + LLM gate (finding #10) ──────────────
+
+_FAKE_VEC_HIT = {
+    "_id": "a", "score": 0.9, "service": "kiwix", "url": "http://k/A",
+    "title": "A", "snippet": "snip", "context": "ctx",
+}
+
+
+def test_semantic_results_runs_summary_and_chips_when_llm_up():
+    """
+    Input: get_vector_hits returns hits, is_llm_available True
+    Output: both _build_ai_summary and generate_keywords are invoked and their
+            results returned
+    Details:
+        Finding #10 — the AI summary and keyword chips run concurrently after
+        get_vector_hits; both must still be called when the LLM is up.
+    """
+    from flask_app.services import search
+
+    with patch("flask_app.services.search.get_vector_hits", return_value=([_FAKE_VEC_HIT], True)), \
+         patch("flask_app.services.llm.is_llm_available", return_value=True), \
+         patch("flask_app.services.search._build_ai_summary",
+               return_value={"html": "S", "sources": []}) as sum_mock, \
+         patch("flask_app.services.llm.generate_keywords", return_value=["c1", "c2"]) as kw_mock:
+        vector_hits, ai_summary, show_warning, chips = search.semantic_results("q")
+
+    assert vector_hits == [_FAKE_VEC_HIT]
+    assert ai_summary == {"html": "S", "sources": []}
+    assert show_warning is False
+    assert chips == ["c1", "c2"]
+    sum_mock.assert_called_once()
+    kw_mock.assert_called_once()
+
+
+def test_semantic_results_skips_generative_legs_when_llm_down():
+    """
+    Input: get_vector_hits returns hits, is_llm_available False
+    Output: neither generative leg is called; summary None, chips empty
+    Details:
+        Finding #10 / BUG-001 — gate the generative legs on the fast cached
+        is_llm_available() check so a down LLM does not trigger work.
+    """
+    from flask_app.services import search
+
+    with patch("flask_app.services.search.get_vector_hits", return_value=([_FAKE_VEC_HIT], True)), \
+         patch("flask_app.services.llm.is_llm_available", return_value=False), \
+         patch("flask_app.services.search._build_ai_summary") as sum_mock, \
+         patch("flask_app.services.llm.generate_keywords") as kw_mock:
+        vector_hits, ai_summary, show_warning, chips = search.semantic_results("q")
+
+    assert vector_hits == [_FAKE_VEC_HIT]
+    assert ai_summary is None
+    assert chips == []
+    sum_mock.assert_not_called()
+    kw_mock.assert_not_called()

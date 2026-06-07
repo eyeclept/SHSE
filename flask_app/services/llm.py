@@ -67,15 +67,16 @@ def _get_llm_settings(db_session=None):
         from flask_app.models.system_setting import SystemSetting
         session = db_session or db.session
 
-        def _get(k):
-            row = session.get(SystemSetting, k)
-            return row.value if row else None
-
+        keys = ("llm.gen_model", "llm.embed_model", "llm.rewrite_model", "llm.summary_template")
+        vals = {
+            row.key: row.value
+            for row in session.query(SystemSetting).filter(SystemSetting.key.in_(keys))
+        }
         return {
-            "gen_model":        _get("llm.gen_model")        or _LLM_GEN_MODEL,
-            "embed_model":      _get("llm.embed_model")      or _LLM_EMBED_MODEL,
-            "rewrite_model":    _get("llm.rewrite_model")    or _LLM_REWRITE_MODEL,
-            "summary_template": _get("llm.summary_template") or _DEFAULT_SUMMARY_TEMPLATE,
+            "gen_model":        vals.get("llm.gen_model")        or _LLM_GEN_MODEL,
+            "embed_model":      vals.get("llm.embed_model")      or _LLM_EMBED_MODEL,
+            "rewrite_model":    vals.get("llm.rewrite_model")    or _LLM_REWRITE_MODEL,
+            "summary_template": vals.get("llm.summary_template") or _DEFAULT_SUMMARY_TEMPLATE,
         }
     except Exception:
         logger.warning("_get_llm_settings: DB read failed, using env-var defaults", exc_info=True)
@@ -143,6 +144,47 @@ def get_embedding(text, session=None):
         return data["data"][0]["embedding"]
     except Exception:
         logger.warning("get_embedding failed", exc_info=True)
+        return None
+
+
+def get_embeddings_batch(texts, session=None):
+    """
+    Input:
+        texts   - list[str] to embed in a single request
+        session - optional requests.Session for injection in tests
+    Output:
+        list[list[float]] in the same order as texts, or None if the batch
+        request fails (caller should fall back to per-text get_embedding)
+    Details:
+        Sends all texts as one OpenAI-style `input` list to cut HTTP overhead.
+        Returns None on any failure or shape mismatch — not every backend
+        accepts batched input, so callers must degrade to single-item calls.
+        Each text must already fit the model's token limit (see _embed_text).
+    """
+    if not texts:
+        return []
+    requester = session or requests
+    url = f"{_LLM_API_BASE}/embeddings"
+    payload = {"model": _LLM_EMBED_MODEL, "input": texts}
+    try:
+        resp = requester.post(url, json=payload, timeout=(_CONNECT_TIMEOUT, _TIMEOUT))
+        resp.raise_for_status()
+        data = resp.json()
+        if "error" in data:
+            logger.warning("LLM batch embedding API returned error: %s", data.get("error"))
+            return None
+        items = data.get("data", [])
+        if len(items) != len(texts):
+            logger.warning(
+                "get_embeddings_batch: expected %d embeddings, got %d — falling back",
+                len(texts), len(items),
+            )
+            return None
+        # Preserve input order via the response index when the backend sets it.
+        ordered = sorted(items, key=lambda it: it.get("index", 0))
+        return [it["embedding"] for it in ordered]
+    except Exception:
+        logger.warning("get_embeddings_batch failed", exc_info=True)
         return None
 
 

@@ -416,5 +416,50 @@ def test_revoked_token_returns_401(client, app, admin_token):
     assert "error" in data
 
 
+def test_token_last_used_at_write_is_throttled(app, admin_token):
+    """
+    Input: repeated Bearer-token auths via load_user_from_request
+    Output: last_used_at is written on first use and after the throttle window,
+            but NOT on a second auth inside the window
+    Details:
+        Finding #14 — last_used_at was committed on every authenticated request.
+        It should only be persisted when the stored value is stale.
+    """
+    from datetime import datetime, timedelta
+    from flask import request
+    from flask_app import load_user_from_request, db, _TOKEN_LAST_USED_THROTTLE
+    from flask_app.models.api_token import ApiToken
+
+    token_obj, raw = admin_token
+    tid = token_obj.id
+    headers = {"Authorization": f"Bearer {raw}"}
+
+    def do_auth():
+        with app.test_request_context("/", headers=headers):
+            return load_user_from_request(request)
+
+    def last_used():
+        with app.app_context():
+            return db.session.get(ApiToken, tid).last_used_at
+
+    # First auth: last_used_at was None -> written.
+    assert do_auth() is not None
+    first = last_used()
+    assert first is not None
+
+    # Second auth within the throttle window -> not rewritten.
+    do_auth()
+    assert last_used() == first
+
+    # Make the stored timestamp stale -> next auth rewrites it.
+    with app.app_context():
+        t = db.session.get(ApiToken, tid)
+        t.last_used_at = datetime.utcnow() - timedelta(seconds=_TOKEN_LAST_USED_THROTTLE + 5)
+        db.session.commit()
+        stale = t.last_used_at
+    do_auth()
+    assert last_used() > stale
+
+
 if __name__ == "__main__":
     pass

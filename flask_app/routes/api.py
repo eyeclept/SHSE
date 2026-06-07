@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 _INDEX_NAME          = "shse_pages"
 _PAGE_SIZE           = 10
+_MAX_PAGE            = 100000 // _PAGE_SIZE   # OpenSearch max_result_window / page size
 _SEMANTIC_CACHE_TTL  = 3600  # 1 hour
 
 
@@ -174,7 +175,9 @@ def search():
     try:
         page = max(1, int(request.args.get("page", 1)))
     except (ValueError, TypeError):
+        logger.warning("api search: invalid page param %r — defaulting to 1", request.args.get("page"))
         page = 1
+    page = min(page, _MAX_PAGE)   # clamp deep pagination to the result window
 
     preprocessed_q, search_q, rewritten_q = preprocess_query(q) if q else (q, q, None)
 

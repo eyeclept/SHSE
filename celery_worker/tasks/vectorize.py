@@ -38,7 +38,7 @@ def _embed_text(text, llm_session):
         characters) that tokenizes to more than nomic-embed-text's 2048-token
         architectural limit. Normal prose chunks pass through unchanged.
     """
-    from flask_app.services.llm import get_embedding
+    from flask_app.services.llm import get_embedding, get_embeddings_batch
 
     tokens = _enc.encode(text)
     if len(tokens) <= _SAFE_EMBED_TOKENS:
@@ -49,10 +49,20 @@ def _embed_text(text, llm_session):
     tokens_per_word = len(tokens) / max(1, len(words))
     words_per_sub = max(1, int(_SAFE_EMBED_TOKENS / tokens_per_word * 0.9))
 
-    vecs = []
+    subs = []
     for i in range(0, len(words), words_per_sub):
         sub = " ".join(words[i : i + words_per_sub]).strip()
         if sub:
+            subs.append(sub)
+    if not subs:
+        return None
+
+    # Each sub-chunk already fits the token limit, so embed them all in one
+    # batched request; fall back to per-chunk calls if the backend rejects it.
+    vecs = get_embeddings_batch(subs, session=llm_session)
+    if vecs is None:
+        vecs = []
+        for sub in subs:
             v = get_embedding(sub, session=llm_session)
             if v is not None:
                 vecs.append(v)

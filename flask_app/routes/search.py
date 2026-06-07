@@ -22,6 +22,7 @@ search_bp = Blueprint("search", __name__)
 logger = logging.getLogger(__name__)
 
 _PAGE_SIZE = 10
+_MAX_PAGE = 100000 // _PAGE_SIZE   # OpenSearch max_result_window / page size
 _INDEX_NAME = "shse_pages"
 _HL_OPEN = '<strong class="shse-hit">'
 _HL_CLOSE = "</strong>"
@@ -126,7 +127,9 @@ def results():
     try:
         page = max(1, int(request.args.get("page", 1)))
     except (ValueError, TypeError):
+        logger.warning("results: invalid page param %r — defaulting to 1", request.args.get("page"))
         page = 1
+    page = min(page, _MAX_PAGE)   # clamp deep pagination to the result window
 
     from flask_app.config import Config
     from flask_app.services.llm import is_llm_available

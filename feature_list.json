@@ -1369,7 +1369,7 @@
         "passes": true
       },
       "perf_30c_implementation": {
-        "passes": false
+        "passes": true
       },
       "prerelease_30d_discovery": {
         "passes": true

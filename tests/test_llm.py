@@ -207,15 +207,12 @@ def test_get_llm_settings_reads_from_db_session():
     from unittest.mock import MagicMock
 
     mock_row = MagicMock()
+    mock_row.key = "llm.gen_model"
     mock_row.value = "custom-model"
 
-    def _get(model_cls, key):
-        if key == "llm.gen_model":
-            return mock_row
-        return None
-
+    # _get_llm_settings now fetches all keys in one query: query(...).filter(...)
     mock_session = MagicMock()
-    mock_session.get.side_effect = _get
+    mock_session.query.return_value.filter.return_value = [mock_row]
 
     result = _get_llm_settings(db_session=mock_session)
     assert result["gen_model"] == "custom-model"

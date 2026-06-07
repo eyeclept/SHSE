@@ -10,6 +10,7 @@ Description:
 # Imports
 import logging
 import urllib.parse
+from collections import deque
 from html.parser import HTMLParser
 
 import requests
@@ -130,11 +131,11 @@ def _discover_urls(seed_url, tls_verify=True, max_depth=2, max_urls=500, timeout
     base_host = parsed_seed.netloc
 
     visited = set()
-    queue = [(seed_url, 0)]
+    queue = deque([(seed_url, 0)])
     result = []
 
     while queue and len(result) < max_urls:
-        url, depth = queue.pop(0)
+        url, depth = queue.popleft()
         norm = url.split("#")[0]
         if norm in visited:
             continue
