@@ -242,25 +242,24 @@ def persist_targets(yaml_str, parsed_targets, db_session):
     Output:
         list[CrawlerTarget] — newly created ORM objects after commit
     Details:
-        Deletes all existing rows (full replace on upload), then inserts one
-        row per resolved target. yaml_source stores the raw YAML blob.
+        Full replace on upload: every existing row is deleted and one row per
+        resolved target is inserted. To avoid a destructive partial import, all
+        replacement rows are built and validated in memory FIRST; only when the
+        whole set constructs successfully does the delete-then-insert run. A
+        malformed entry therefore raises before anything is deleted, leaving the
+        existing target list intact. yaml_source stores the raw YAML blob;
         schedule_yaml stores the serialised schedule block for the target.
     """
     from flask_app.models.crawler_target import CrawlerTarget
     from flask_app.models.crawl_job import CrawlJob
     from flask_app.models.system_setting import SystemSetting
 
-    # Null out target references before deleting targets to satisfy the FK constraint.
-    # Jobs are preserved for audit purposes; target_id becomes NULL.
-    db_session.query(CrawlJob).filter(CrawlJob.target_id.isnot(None)).update(
-        {"target_id": None}, synchronize_session="fetch"
-    )
-    db_session.query(CrawlerTarget).delete(synchronize_session="fetch")
-
+    # Build (and thereby validate) every replacement row before touching the DB.
+    # Any KeyError / serialisation error here happens before the delete below.
     created = []
     for t in parsed_targets:
         schedule = t.get("schedule")
-        row = CrawlerTarget(
+        created.append(CrawlerTarget(
             nickname=t.get("nickname"),
             target_type=t["type"],
             url=t.get("url"),
@@ -276,10 +275,16 @@ def persist_targets(yaml_str, parsed_targets, db_session):
             adapter=t.get("adapter"),
             schedule_yaml=yaml.dump(schedule) if schedule else None,
             yaml_source=yaml_str,
-        )
-        db_session.add(row)
-        created.append(row)
+        ))
 
+    # All rows valid — now mutate. Null target references first to satisfy the
+    # FK constraint (jobs are preserved for audit; target_id becomes NULL),
+    # delete the old set, and insert the validated replacements.
+    db_session.query(CrawlJob).filter(CrawlJob.target_id.isnot(None)).update(
+        {"target_id": None}, synchronize_session="fetch"
+    )
+    db_session.query(CrawlerTarget).delete(synchronize_session="fetch")
+    db_session.add_all(created)
     db_session.commit()
 
     llm = parse_llm_settings(yaml_str)

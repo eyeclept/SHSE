@@ -79,6 +79,29 @@ INDEX_BODY = {
 }
 
 # Functions
+def _tls_kwargs():
+    """
+    Input: None (reads Config.INTERNAL_TLS_VERIFY and Config.INTERNAL_TLS_CA)
+    Output: dict of OpenSearch TLS kwargs (verify_certs and optionally ca_certs)
+    Details:
+        Honours the INTERNAL_TLS_VERIFY knob, but only verifies when a CA bundle
+        is also configured — without one, a self-signed internal cert cannot be
+        validated, so verifying would break the connection. When verification is
+        requested but no CA bundle is set, verification is disabled and a warning
+        is logged so the misconfiguration is visible rather than silent.
+    """
+    from flask_app.config import Config
+    if Config.INTERNAL_TLS_VERIFY and Config.INTERNAL_TLS_CA:
+        return {"verify_certs": True, "ca_certs": Config.INTERNAL_TLS_CA}
+    if Config.INTERNAL_TLS_VERIFY and not Config.INTERNAL_TLS_CA:
+        logger.warning(
+            "INTERNAL_TLS_VERIFY is set but no [tls] ca_cert is configured; "
+            "OpenSearch certificate verification is disabled. Provide a CA bundle "
+            "to enable verification of the internal TLS connection."
+        )
+    return {"verify_certs": False}
+
+
 def get_client():
     """
     Input: None
@@ -100,8 +123,8 @@ def get_client():
                 hosts=[{"host": Config.OPENSEARCH_HOST, "port": Config.OPENSEARCH_PORT}],
                 http_auth=(Config.OPENSEARCH_USER, Config.OPENSEARCH_PASSWORD),
                 use_ssl=True,
-                verify_certs=False,
                 connection_class=RequestsHttpConnection,
+                **_tls_kwargs(),
                 # Fail fast instead of degrading slowly: a routable-but-dead node
                 # (e.g. a powered-off VM whose subnet is still up) otherwise
                 # triggers the default 4-attempt retry storm (~12s/call). One

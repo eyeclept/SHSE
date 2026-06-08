@@ -350,32 +350,12 @@ def semantic_chips():
     return html
 
 
-@api_bp.route("/jobs/<int:job_id>/logs")
-def job_logs(job_id):
-    """
-    Input:  job_id — URL path integer
-    Output: JSON {id, status, message, traceback}
-    Details:
-        No auth required — used by the JS log modal which runs in an authenticated
-        browser session but calls this as a plain fetch without extra headers.
-        Only returns data for the requested job; no enumeration risk.
-    """
-    from flask_app.models.crawl_job import CrawlJob
-
-    job = db.session.get(CrawlJob, job_id)
-    if job is None:
-        return jsonify({"error": "not found"}), 404
-
-    result = {"id": job.id, "status": job.status, "message": job.message, "traceback": None}
-    if job.task_id:
-        try:
-            from celery_worker.app import celery
-            ar = celery.AsyncResult(job.task_id)
-            if ar.failed():
-                result["traceback"] = str(ar.traceback)
-        except Exception:
-            logger.warning("Failed to fetch Celery traceback for job %s", job_id, exc_info=True)
-    return jsonify(result)
+# NOTE: Crawl-job logs (status, message, Celery traceback) are served only by the
+# admin-gated route admin.job_logs (/admin/jobs/<id>/logs, @admin_required). The
+# previously unauthenticated duplicate that lived here leaked tracebacks — which
+# routinely expose internal URLs, hostnames, and filesystem paths — to any
+# unauthenticated client over a sequential, enumerable id. It was removed; the
+# admin jobs page fetches the admin route directly.
 
 
 @api_bp.route("/admin-check")
@@ -390,6 +370,22 @@ def admin_check():
     if current_user.is_authenticated and current_user.role == "admin":
         return "", 200
     return "", 403
+
+
+@api_bp.route("/healthz")
+def healthz():
+    """
+    Input:  None
+    Output: 200 "ok" when the app can serve requests
+    Details:
+        Cheap liveness probe for the container healthcheck. Deliberately makes no
+        backend calls (no MariaDB/OpenSearch/Redis) so it tests that the Flask
+        process is up and routing — not the whole stack. Served at /api/healthz
+        (the api blueprint is mounted under /api). Probe with `curl -fsS` so a 5xx
+        from a broken app actually fails the healthcheck (the old probe used
+        `curl -s`, which reports healthy on any response, including 500).
+    """
+    return "ok", 200
 
 
 # ── Versioned REST API  (/api/v1/*) ──────────────────────────────────────────

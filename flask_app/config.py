@@ -97,7 +97,12 @@ class Config:
     STARDICT_DICT_PATH = _c("stardict", "dict_path", "/app/dicts")
 
     # ── TLS ────────────────────────────────────────────────────────────────
+    # Verify the internal OpenSearch certificate. Effective only when a CA
+    # bundle (INTERNAL_TLS_CA) is also provided; with no CA the connection
+    # cannot validate a self-signed cert, so verification is skipped and a
+    # warning is logged (see services/opensearch._tls_kwargs).
     INTERNAL_TLS_VERIFY = _c("tls", "internal_verify", "true").lower() == "true"
+    INTERNAL_TLS_CA     = _c("tls", "ca_cert", "")
 
     # ── SSO (disabled by default; local password auth is the default) ──────
     SSO_ENABLED      = _c("sso", "enabled",      "false").lower() == "true"

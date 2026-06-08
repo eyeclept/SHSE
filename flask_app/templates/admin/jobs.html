@@ -146,7 +146,7 @@ function showJobLogs(jobId) {
   var body  = document.getElementById('logs-body');
   modal.style.display = 'flex';
   body.innerHTML = '<span style="color:var(--shse-text-faint)">Loading…</span>';
-  fetch('/api/jobs/' + jobId + '/logs')
+  fetch('/admin/jobs/' + jobId + '/logs')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       body.innerHTML = '';

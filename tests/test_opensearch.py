@@ -601,3 +601,44 @@ def test_vector_search_returns_empty_on_no_hits(mock_client):
     results = vector_search([0.0] * EMBEDDING_DIM, client=mock_client)
 
     assert results == []
+
+
+def test_tls_kwargs_unverified_without_ca(monkeypatch):
+    """
+    Input:  INTERNAL_TLS_VERIFY True but no CA bundle
+    Output: {"verify_certs": False} (cannot verify a self-signed cert with no CA)
+    Details:
+        30f #8 — the previously dead INTERNAL_TLS_VERIFY knob now controls
+        verification, but only when a CA bundle is supplied; without one the
+        connection falls back to unverified so existing self-signed deployments
+        are not broken.
+    """
+    from flask_app.services.opensearch import _tls_kwargs
+    from flask_app.config import Config
+    monkeypatch.setattr(Config, "INTERNAL_TLS_VERIFY", True)
+    monkeypatch.setattr(Config, "INTERNAL_TLS_CA", "")
+    assert _tls_kwargs() == {"verify_certs": False}
+
+
+def test_tls_kwargs_verified_with_ca(monkeypatch):
+    """
+    Input:  INTERNAL_TLS_VERIFY True and a CA bundle path
+    Output: verify_certs True with ca_certs set to the bundle
+    """
+    from flask_app.services.opensearch import _tls_kwargs
+    from flask_app.config import Config
+    monkeypatch.setattr(Config, "INTERNAL_TLS_VERIFY", True)
+    monkeypatch.setattr(Config, "INTERNAL_TLS_CA", "/etc/ssl/certs/internal-ca.pem")
+    assert _tls_kwargs() == {"verify_certs": True, "ca_certs": "/etc/ssl/certs/internal-ca.pem"}
+
+
+def test_tls_kwargs_unverified_when_disabled(monkeypatch):
+    """
+    Input:  INTERNAL_TLS_VERIFY False
+    Output: {"verify_certs": False}
+    """
+    from flask_app.services.opensearch import _tls_kwargs
+    from flask_app.config import Config
+    monkeypatch.setattr(Config, "INTERNAL_TLS_VERIFY", False)
+    monkeypatch.setattr(Config, "INTERNAL_TLS_CA", "/some/ca.pem")
+    assert _tls_kwargs() == {"verify_certs": False}

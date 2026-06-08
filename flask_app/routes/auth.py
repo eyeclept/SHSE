@@ -43,7 +43,13 @@ def login():
     Details:
         Validates credentials against MariaDB bcrypt hash.
         Creates Flask-Login session on success.
+        On a fresh install (empty user table) there is no admin to log in as —
+        no default admin is seeded — so funnel to the first-run /setup flow.
     """
+    no_users = db.session.execute(db.select(User)).scalars().first() is None
+    if no_users:
+        return redirect(url_for("auth.setup"))
+
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -101,8 +107,11 @@ def logout():
     Input: None
     Output: redirect to login page
     Details:
-        Clears the Flask-Login session.
+        Clears the Flask-Login session. Logs the session-termination event for
+        the audit trail (capture the id before logout_user clears current_user).
     """
+    user_id = getattr(current_user, "id", None)
+    logger.info("logout: user_id=%s", user_id)
     logout_user()
     return redirect(url_for("auth.login"))
 

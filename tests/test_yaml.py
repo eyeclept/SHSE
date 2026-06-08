@@ -487,6 +487,40 @@ targets:
     assert orphaned_job.target_id is None
 
 
+def test_persist_malformed_entry_does_not_wipe_existing_targets(db_session):
+    """
+    Input:  an existing target, then persist_targets called with a malformed
+            parsed entry (missing the required "type" key)
+    Output: the call raises, and the existing target is left untouched
+    Details:
+        30f #16 — the import builds and validates all replacement rows before the
+        destructive delete, so a malformed upload can no longer blank the target
+        list mid-operation.
+    """
+    from flask_app.config_parser import parse_config, persist_targets
+    from flask_app.models.crawler_target import CrawlerTarget
+
+    good_yaml = """\
+defaults: {}
+targets:
+  - type: service
+    nickname: keep-me
+    url: keep.lab
+"""
+    persist_targets(good_yaml, parse_config(good_yaml), db_session)
+    assert db_session.query(CrawlerTarget).filter_by(nickname="keep-me").first() is not None
+
+    # A parsed entry with no "type" triggers a KeyError while building rows —
+    # which must happen before any delete.
+    with pytest.raises(KeyError):
+        persist_targets("malformed", [{"nickname": "broken-no-type"}], db_session)
+
+    db_session.rollback()
+    rows = db_session.query(CrawlerTarget).all()
+    assert len(rows) == 1
+    assert rows[0].nickname == "keep-me"
+
+
 def test_celery_beat_entries():
     """
     Input: None

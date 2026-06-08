@@ -147,7 +147,7 @@ def _vectorize_pending_impl(os_client=None, llm_session=None, page_size=100):
     return vectorized_count, attempted_count
 
 
-@celery.task(autoretry_for=(Exception,), max_retries=3, countdown=30)
+@celery.task(autoretry_for=(Exception,), max_retries=3, default_retry_delay=30)
 def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100, _db_session=None):
     """
     Input:
@@ -173,38 +173,40 @@ def vectorize_pending(_os_client=None, _llm_session=None, _page_size=100, _db_se
 
     app = create_app()
     with app.app_context():
-        job = CrawlJob(kind="vectorize", status="started", started_at=datetime.utcnow())
-        _db.session.add(job)
-        _db.session.commit()
-        logger.info("CrawlJob %s started — kind=vectorize task_id=%s", job.id, job.task_id)
-
+        # Run the work first, then record a CrawlJob only when there is something
+        # to report. An empty no-op run (nothing pending) creates no row — those
+        # otherwise flood the jobs list, since this task is dispatched after every
+        # crawl and most runs find nothing to vectorize (BF-pending).
+        started = datetime.utcnow()
         try:
             vectorized, attempted = _vectorize_pending_impl(
                 os_client=_os_client, llm_session=_llm_session, page_size=_page_size,
             )
-            if attempted == 0:
-                job.status = "success"
-                job.message = "No documents pending vectorization"
-            elif vectorized == attempted:
-                job.status = "success"
-                job.message = f"Vectorized {vectorized} document(s)"
-            elif vectorized == 0:
-                job.status = "deferred"
-                job.message = f"LLM API unavailable — {attempted} document(s) pending vectorization"
-            else:
-                job.status = "partial"
-                job.message = f"Vectorized {vectorized}/{attempted} document(s); LLM unavailable for remainder"
-            job.finished_at = datetime.utcnow()
-            logger.info("CrawlJob %s %s — %s", job.id, job.status, job.message)
         except Exception as exc:
-            job.status = "failure"
-            job.finished_at = datetime.utcnow()
-            job.message = str(exc)[:500]
-            logger.exception("CrawlJob %s failure — kind=vectorize", job.id)
+            # Failures are always recorded so they surface in the jobs list.
+            job = CrawlJob(kind="vectorize", status="failure", started_at=started,
+                           finished_at=datetime.utcnow(), message=str(exc)[:500])
+            _db.session.add(job)
             _db.session.commit()
+            logger.exception("CrawlJob %s failure — kind=vectorize", job.id)
             raise
 
+        if attempted == 0:
+            logger.info("vectorize_pending: no documents pending — no job row created")
+            return vectorized
+
+        if vectorized == attempted:
+            status, message = "success", f"Vectorized {vectorized} document(s)"
+        elif vectorized == 0:
+            status, message = "deferred", f"LLM API unavailable — {attempted} document(s) pending vectorization"
+        else:
+            status, message = "partial", f"Vectorized {vectorized}/{attempted} document(s); LLM unavailable for remainder"
+
+        job = CrawlJob(kind="vectorize", status=status, started_at=started,
+                       finished_at=datetime.utcnow(), message=message)
+        _db.session.add(job)
         _db.session.commit()
+        logger.info("CrawlJob %s %s — %s", job.id, job.status, job.message)
         return vectorized
 
 

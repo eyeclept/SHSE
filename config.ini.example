@@ -30,11 +30,14 @@ max_urls      = 500
 
 [llm]
 ; api_base — Ollama or compatible endpoint. Leave blank to disable LLM features.
+; Each model below must be pulled/available in the configured backend, or the
+; corresponding feature (summary / rewrite / translate) silently no-ops. These
+; defaults match the in-code fallbacks (flask_app/config.py).
 api_base        = http://YOUR_LLM_HOST:11434/v1
 embed_model     = nomic-embed-text
-gen_model       = llama3
-rewrite_model   = llama3
-translate_model = llama3
+gen_model       = granite4.1:8b
+rewrite_model   = granite4.1:3b
+translate_model = aya-expanse:8b
 query_rewrite   = false
 ; Set to true to enable CPU embedding fallback (requires sentence-transformers)
 cpu_fallback    = false
@@ -44,7 +47,13 @@ cpu_fallback    = false
 dict_path = /app/dicts
 
 [tls]
+# Verify the internal OpenSearch TLS certificate. Takes effect only when ca_cert
+# below points to a CA bundle that can validate the OpenSearch server cert. With
+# no ca_cert the internal services use self-signed certs that cannot be verified,
+# so verification is skipped and a warning is logged. Set both to enable real
+# verification against a trusted CA.
 internal_verify = true
+ca_cert =
 
 [sso]
 enabled      = false

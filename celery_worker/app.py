@@ -51,7 +51,13 @@ celery = Celery(
 celery.conf.update(
     beat_scheduler="redbeat.RedBeatScheduler",
     redbeat_redis_url=_REDIS_URL,
-    redbeat_lock_timeout=60,          # seconds; prevents stale lock if Beat crashes
+    # The redbeat lock TTL MUST exceed beat's max loop interval. Beat refreshes
+    # the lock once per tick (up to beat_max_loop_interval apart); if the TTL is
+    # shorter, the lock expires while beat sleeps between ticks and the next tick
+    # dies with "Cannot extend a lock that's no longer owned" — a hard crash-loop.
+    # 900s lock vs a 300s loop leaves a 600s refresh margin.
+    beat_max_loop_interval=300,       # seconds between scheduler ticks
+    redbeat_lock_timeout=900,         # seconds; must be > beat_max_loop_interval
     broker_connection_retry_on_startup=True,
     broker_connection_max_retries=None,   # retry indefinitely until broker is ready
 )

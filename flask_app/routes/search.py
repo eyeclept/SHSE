@@ -219,7 +219,11 @@ def results():
         took_ms=took_ms,
         page=page,
         page_count=page_count,
-        tab_counts={"all": total, "docs": 0, "web": 0, "code": 0},
+        # Only the "All" tab is live; the docs/web/code content-type tabs are
+        # commented out in results.html until per-type classification exists, so
+        # passing hardcoded zeros for them was dead/misleading. The template's
+        # tab_counts.get(key, 0) supplies the 0 fallback if they are re-enabled.
+        tab_counts={"all": total},
         related=[],
         vector_hits=[],
         keyword_chips=[],

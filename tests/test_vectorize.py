@@ -104,3 +104,71 @@ def test_vectorize_pending_counts_only_successful_bulk_items():
 
 if __name__ == "__main__":
     pass
+
+
+def _sqlite_vectorize_app():
+    """
+    Output: a minimal Flask app on in-memory SQLite with the CrawlJob table,
+            sharing the global flask_app.db so vectorize_pending's own
+            `from flask_app import db` resolves to it.
+    """
+    from flask import Flask
+    from flask_app import db
+    from flask_app.models.crawler_target import CrawlerTarget  # noqa: F401 — FK target
+    from flask_app.models.crawl_job import CrawlJob  # noqa: F401 — registers the table
+
+    app = Flask("test_vectorize_wrapper")
+    app.config.update(SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
+                      SQLALCHEMY_TRACK_MODIFICATIONS=False, TESTING=True, SECRET_KEY="t")
+    db.init_app(app)
+    with app.app_context():
+        db.create_all()
+    return app
+
+
+def test_vectorize_pending_creates_no_job_row_when_nothing_pending(monkeypatch):
+    """
+    Input:  vectorize_pending runs with an impl that finds nothing pending (0, 0)
+    Output: returns 0 and creates NO CrawlJob row
+    Details:
+        BF-pending — an empty no-op vectorize run must not litter the jobs list
+        with a "No documents pending" row. The task is dispatched after every
+        crawl, so most runs are no-ops.
+    """
+    import flask_app
+    from flask_app import db
+    from flask_app.models.crawl_job import CrawlJob
+    from celery_worker.tasks import vectorize
+
+    app = _sqlite_vectorize_app()
+    monkeypatch.setattr(flask_app, "create_app", lambda: app)
+    monkeypatch.setattr(vectorize, "_vectorize_pending_impl", lambda **k: (0, 0))
+
+    result = vectorize.vectorize_pending()
+    assert result == 0
+    with app.app_context():
+        assert db.session.query(CrawlJob).count() == 0
+
+
+def test_vectorize_pending_records_job_row_when_work_done(monkeypatch):
+    """
+    Input:  vectorize_pending runs with an impl that vectorized 5/5 docs
+    Output: returns 5 and creates exactly one success CrawlJob row
+    """
+    import flask_app
+    from flask_app import db
+    from flask_app.models.crawl_job import CrawlJob
+    from celery_worker.tasks import vectorize
+
+    app = _sqlite_vectorize_app()
+    monkeypatch.setattr(flask_app, "create_app", lambda: app)
+    monkeypatch.setattr(vectorize, "_vectorize_pending_impl", lambda **k: (5, 5))
+
+    result = vectorize.vectorize_pending()
+    assert result == 5
+    with app.app_context():
+        rows = db.session.query(CrawlJob).all()
+        assert len(rows) == 1
+        assert rows[0].kind == "vectorize"
+        assert rows[0].status == "success"
+        assert "5" in rows[0].message

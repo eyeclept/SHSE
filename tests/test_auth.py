@@ -536,6 +536,13 @@ def test_sso_button_absent_when_disabled(sqlite_app):
         GET /register without SSO_ENABLED must not render the SSO button.
     """
     sqlite_app.config["SSO_ENABLED"] = False
+    # Seed a user so /login renders the form instead of funnelling to /setup
+    # (the first-run funnel only fires on a truly empty user table).
+    with sqlite_app.app_context():
+        u = User(username="ssouser1", role="user")
+        u.set_password("ssopass12")
+        db.session.add(u)
+        db.session.commit()
     client = sqlite_app.test_client()
 
     response = client.get("/login")
@@ -555,6 +562,12 @@ def test_sso_button_present_when_enabled(sso_app):
         GET /login with SSO_ENABLED=True must render the SSO login button.
         GET /register with SSO_ENABLED=True must render the SSO login button.
     """
+    # Seed a user so /login renders the form instead of funnelling to /setup.
+    with sso_app.app_context():
+        u = User(username="ssouser2", role="user")
+        u.set_password("ssopass12")
+        db.session.add(u)
+        db.session.commit()
     client = sso_app.test_client()
 
     response = client.get("/login")
@@ -568,3 +581,82 @@ def test_sso_button_present_when_enabled(sso_app):
 
 if __name__ == "__main__":
     pass
+
+
+def test_login_funnels_to_setup_when_no_users(sqlite_app):
+    """
+    Input:  empty user table; GET /login
+    Output: 302 redirect to /setup
+    Details:
+        30f #6 — no default admin is seeded, so a fresh install funnels to the
+        first-run /setup flow instead of presenting an unusable login form.
+    """
+    client = sqlite_app.test_client()
+    r = client.get("/login")
+    assert r.status_code == 302
+    assert "/setup" in r.headers.get("Location", "")
+
+
+def test_setup_page_renders_on_fresh_install(sqlite_app):
+    """
+    Input:  empty user table; GET /setup
+    Output: 200 with the setup form
+    """
+    client = sqlite_app.test_client()
+    r = client.get("/setup")
+    assert r.status_code == 200
+    assert b"First-run setup" in r.data
+
+
+def test_setup_creates_admin_then_login_works(sqlite_app):
+    """
+    Input:  POST /setup with valid credentials on a fresh install
+    Output: an admin row is created; afterwards /login no longer funnels to setup
+    Details:
+        30f #6 — the operator interactively creates the initial admin; the
+        created account has role 'admin'.
+    """
+    client = sqlite_app.test_client()
+    r = client.post("/setup", data={"username": "rootadmin", "password": "str0ngpass"})
+    assert r.status_code == 302
+    assert "/login" in r.headers.get("Location", "")
+
+    with sqlite_app.app_context():
+        admin = db.session.execute(
+            db.select(User).filter_by(username="rootadmin")
+        ).scalar_one_or_none()
+        assert admin is not None
+        assert admin.role == "admin"
+
+    # An admin now exists, so /login presents the form rather than redirecting.
+    r2 = client.get("/login")
+    assert r2.status_code == 200
+
+
+def test_setup_rejects_short_password(sqlite_app):
+    """
+    Input:  POST /setup with a < 8-char password on a fresh install
+    Output: 400, no admin created
+    """
+    client = sqlite_app.test_client()
+    r = client.post("/setup", data={"username": "rootadmin", "password": "short"})
+    assert r.status_code == 400
+    with sqlite_app.app_context():
+        assert db.session.execute(db.select(User)).scalars().first() is None
+
+
+def test_setup_redirects_to_login_when_admin_exists(sqlite_app):
+    """
+    Input:  an admin already exists; GET /setup
+    Output: 302 redirect to /login (setup is first-run only)
+    """
+    with sqlite_app.app_context():
+        admin = User(username="existingadmin", role="admin")
+        admin.set_password("adminpass1")
+        db.session.add(admin)
+        db.session.commit()
+
+    client = sqlite_app.test_client()
+    r = client.get("/setup")
+    assert r.status_code == 302
+    assert "/login" in r.headers.get("Location", "")

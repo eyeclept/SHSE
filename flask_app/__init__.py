@@ -14,6 +14,7 @@ from datetime import timedelta
 from logging.handlers import RotatingFileHandler
 
 from flask import Flask, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_migrate import Migrate
@@ -32,6 +33,16 @@ csrf = CSRFProtect()
 # Throttle window (seconds) for persisting ApiToken.last_used_at — avoids a DB
 # write on every authenticated API request.
 _TOKEN_LAST_USED_THROTTLE = 60
+
+# SECRET_KEY values that must never sign real session cookies: the empty string,
+# the in-code fallback (config.py), and the .env.example placeholder. create_app
+# refuses to boot (outside testing) when SECRET_KEY is one of these.
+_WEAK_SECRET_KEYS = {"", "change-me", "change-me-to-a-long-random-string"}
+
+# Hosts treated as local-only. A passwordless Redis bound to one of these is a
+# development convenience; a passwordless Redis on any other (network-reachable)
+# host is an unauthenticated broker/cache and is refused at startup.
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", ""}
 
 
 def _limiter_key():
@@ -133,21 +144,67 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object("flask_app.config.Config")
 
+    # Refuse to boot outside testing with a missing or placeholder SECRET_KEY.
+    # A known signing key lets anyone forge session cookies, which is a direct
+    # privilege-escalation path (an attacker can mint an admin session). Failing
+    # fast here turns a silent insecure default into an obvious deploy error.
+    _secret = app.config.get("SECRET_KEY", "")
+    if not app.testing and _secret in _WEAK_SECRET_KEYS:
+        raise RuntimeError(
+            "SECRET_KEY is unset or a known placeholder value. Generate a strong "
+            "random key and set it in .env before starting, e.g. "
+            "`python -c \"import secrets; print(secrets.token_hex(32))\"`. "
+            "Refusing to boot with a forgeable session-signing key."
+        )
+
+    # Refuse to boot outside testing when Redis is network-reachable but has no
+    # password. Redis is the Celery broker, so an unauthenticated, LAN-reachable
+    # instance lets anyone inject tasks (code execution on the worker), read the
+    # cache, or flush data. A blank password is allowed only for a loopback bind
+    # (development). Pair with --requirepass in docker-compose.services.yml.
+    _redis_host = app.config.get("REDIS_HOST", "")
+    _redis_pw = app.config.get("REDIS_PASSWORD", "")
+    if not app.testing and not _redis_pw and _redis_host not in _LOOPBACK_HOSTS:
+        raise RuntimeError(
+            f"REDIS_PASSWORD is empty but Redis is bound to a non-loopback host "
+            f"({_redis_host!r}). An unauthenticated, network-reachable Redis is the "
+            "Celery broker — anyone on the network could inject tasks or flush data. "
+            "Set a strong REDIS_PASSWORD in .env and --requirepass on the Redis "
+            "container before starting."
+        )
+
+    # Behind Nginx: trust exactly one proxy hop so request.remote_addr and the
+    # URL scheme reflect the real client, not the Nginx container IP. The IP-keyed
+    # login rate limit (_limiter_key) and every request.remote_addr audit log
+    # depend on this. Nginx must set X-Forwarded-For and X-Forwarded-Proto
+    # (see nginx/nginx.conf). Trusting exactly one hop prevents clients from
+    # spoofing X-Forwarded-For through the proxy.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
     # Session security hardening (SEC-002, SEC-004)
     app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
     app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
     app.config.setdefault("SESSION_COOKIE_SECURE", not app.testing)
     app.config.setdefault("PERMANENT_SESSION_LIFETIME", timedelta(hours=24))
 
+    # Attach the rotating file handler once per process. create_app() can run
+    # more than once (the test suite; a Celery worker rebuilding its app), and
+    # without this guard each call stacked another handler on the root logger —
+    # every log line written N times, file handles leaked, rotation churned.
     log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
     os.makedirs(log_dir, exist_ok=True)
-    _fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
-    _handler = RotatingFileHandler(
-        os.path.join(log_dir, "flask.log"), maxBytes=5 * 1024 * 1024, backupCount=3
+    log_path = os.path.abspath(os.path.join(log_dir, "flask.log"))
+    _already = any(
+        isinstance(h, RotatingFileHandler)
+        and getattr(h, "baseFilename", None) == log_path
+        for h in logging.root.handlers
     )
-    _handler.setFormatter(logging.Formatter(_fmt))
+    if not _already:
+        _fmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
+        _handler = RotatingFileHandler(log_path, maxBytes=5 * 1024 * 1024, backupCount=3)
+        _handler.setFormatter(logging.Formatter(_fmt))
+        logging.root.addHandler(_handler)
     logging.root.setLevel(logging.INFO)
-    logging.root.addHandler(_handler)
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -187,21 +244,11 @@ def create_app():
     app.register_blueprint(api_bp)
     csrf.exempt(api_bp)
 
-    _init_logger = logging.getLogger(__name__)
-
-    # Ensure a default admin account exists on first boot.
-    # Username: admin  Password: admin  (change after first login)
-    with app.app_context():
-        try:
-            if not db.session.execute(
-                db.select(User).filter_by(role="admin")
-            ).scalar_one_or_none():
-                default_admin = User(username="admin", role="admin")
-                default_admin.set_password("admin")
-                db.session.add(default_admin)
-                db.session.commit()
-        except Exception:
-            _init_logger.exception("Default admin seeding failed")
+    # No default admin is seeded. A fixed admin/admin account is a standing,
+    # network-reachable foothold until an operator changes it. Instead, the first
+    # run is handled by the /setup flow: when the user table is empty, the login
+    # route funnels to /setup so an operator interactively creates the initial
+    # admin with their own credentials (see flask_app/routes/auth.py:login/setup).
 
     return app
 

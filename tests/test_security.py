@@ -251,3 +251,157 @@ def test_admin_target_delete_requires_admin_role(secure_app):
 
 if __name__ == "__main__":
     pass
+
+
+def test_create_app_refuses_weak_secret_key(monkeypatch):
+    """
+    Input:  Config.SECRET_KEY monkeypatched to each weak/placeholder value
+    Output: create_app() raises RuntimeError before any DB work
+    Details:
+        30f #5 — a known signing key allows session-cookie forgery (privilege
+        escalation). create_app must fail fast rather than boot with a forgeable
+        key. The guard runs immediately after config load, before db.init_app or
+        the admin seed, so no DB is touched. app.testing is False here because
+        Config does not set TESTING.
+    """
+    import flask_app
+    from flask_app.config import Config
+
+    for weak in ("", "change-me", "change-me-to-a-long-random-string"):
+        monkeypatch.setattr(Config, "SECRET_KEY", weak)
+        with pytest.raises(RuntimeError, match="SECRET_KEY"):
+            flask_app.create_app()
+
+
+def test_create_app_allows_weak_secret_key_in_testing(monkeypatch):
+    """
+    Input:  Config with a weak SECRET_KEY but TESTING enabled
+    Output: the SECRET_KEY guard does not fire (no RuntimeError from the guard)
+    Details:
+        30f #5 — the fail-fast guard is gated on `not app.testing` so the test
+        suite (and any explicit testing context) is never blocked by it. We only
+        assert the guard itself does not raise; later DB-dependent steps are out
+        of scope and patched away.
+    """
+    import flask_app
+    from flask_app.config import Config
+
+    monkeypatch.setattr(Config, "TESTING", True, raising=False)
+    monkeypatch.setattr(Config, "SECRET_KEY", "change-me")
+    # Stop create_app right after the guard so it never reaches DB init.
+    sentinel = RuntimeError("reached db.init_app")
+
+    def _boom(*_a, **_k):
+        raise sentinel
+
+    monkeypatch.setattr(flask_app.db, "init_app", _boom)
+    with pytest.raises(RuntimeError) as exc:
+        flask_app.create_app()
+    # The guard was skipped; the only RuntimeError is our sentinel past the guard.
+    assert exc.value is sentinel
+
+
+def test_create_app_refuses_passwordless_redis_on_network_host(monkeypatch):
+    """
+    Input:  Config with a blank REDIS_PASSWORD and a non-loopback REDIS_HOST
+    Output: create_app() raises RuntimeError before any DB work
+    Details:
+        30f #9 — Redis is the Celery broker; an unauthenticated, network-reachable
+        instance allows task injection (worker code execution). create_app refuses
+        to boot in that configuration. A valid SECRET_KEY is set so the earlier
+        SECRET_KEY guard does not mask this one.
+    """
+    import flask_app
+    from flask_app.config import Config
+
+    monkeypatch.setattr(Config, "SECRET_KEY", "a-strong-test-secret-value")
+    monkeypatch.setattr(Config, "REDIS_HOST", "172.27.72.57")
+    monkeypatch.setattr(Config, "REDIS_PASSWORD", "")
+    with pytest.raises(RuntimeError, match="REDIS_PASSWORD"):
+        flask_app.create_app()
+
+
+def test_create_app_allows_passwordless_redis_on_loopback(monkeypatch):
+    """
+    Input:  blank REDIS_PASSWORD but a loopback REDIS_HOST (development)
+    Output: the Redis guard does not fire
+    Details:
+        30f #9 — a passwordless Redis on localhost is a dev convenience and is
+        permitted. We stop create_app right after the guards (sentinel on
+        db.init_app) so the test never needs a live DB.
+    """
+    import flask_app
+    from flask_app.config import Config
+
+    monkeypatch.setattr(Config, "SECRET_KEY", "a-strong-test-secret-value")
+    monkeypatch.setattr(Config, "REDIS_HOST", "localhost")
+    monkeypatch.setattr(Config, "REDIS_PASSWORD", "")
+    sentinel = RuntimeError("reached db.init_app")
+
+    def _boom(*_a, **_k):
+        raise sentinel
+
+    monkeypatch.setattr(flask_app.db, "init_app", _boom)
+    with pytest.raises(RuntimeError) as exc:
+        flask_app.create_app()
+    assert exc.value is sentinel
+
+
+def test_proxyfix_trusts_one_forwarded_hop(monkeypatch):
+    """
+    Input:  an app built by create_app(); a request carrying X-Forwarded-For
+    Output: request.remote_addr reflects the forwarded client IP, not the peer
+    Details:
+        30f #7 — behind Nginx, ProxyFix(x_for=1) must surface the real client IP
+        so the IP-keyed login rate limit and audit logs are meaningful. Strong
+        SECRET_KEY and loopback Redis are set so the startup guards pass.
+    """
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    import flask_app
+    from flask_app.config import Config
+
+    monkeypatch.setattr(Config, "SECRET_KEY", "strong-secret-value-for-proxyfix")
+    monkeypatch.setattr(Config, "REDIS_HOST", "localhost")
+    monkeypatch.setattr(Config, "REDIS_PASSWORD", "")
+    app = flask_app.create_app()
+    assert isinstance(app.wsgi_app, ProxyFix)
+
+    @app.route("/_t_remote_addr")
+    def _t_remote_addr():
+        from flask import request
+        return request.remote_addr or ""
+
+    client = app.test_client()
+    r = client.get("/_t_remote_addr", headers={"X-Forwarded-For": "203.0.113.7"})
+    assert r.data.decode() == "203.0.113.7"
+
+
+def test_create_app_logging_handler_is_idempotent(monkeypatch):
+    """
+    Input:  create_app() called twice in the same process
+    Output: the root logger gains no additional flask.log handler on the 2nd call
+    Details:
+        30f #12 — create_app must not stack a new RotatingFileHandler each call;
+        otherwise a worker that rebuilds its app writes every log line N times.
+    """
+    import logging
+    from logging.handlers import RotatingFileHandler
+    import flask_app
+    from flask_app.config import Config
+
+    monkeypatch.setattr(Config, "SECRET_KEY", "a-strong-test-secret-value")
+    monkeypatch.setattr(Config, "REDIS_HOST", "localhost")
+    monkeypatch.setattr(Config, "REDIS_PASSWORD", "")
+
+    def _flask_log_handlers():
+        return [h for h in logging.root.handlers
+                if isinstance(h, RotatingFileHandler)
+                and getattr(h, "baseFilename", "").endswith("flask.log")]
+
+    flask_app.create_app()
+    count_after_first = len(_flask_log_handlers())
+    flask_app.create_app()
+    count_after_second = len(_flask_log_handlers())
+
+    assert count_after_first >= 1
+    assert count_after_second == count_after_first

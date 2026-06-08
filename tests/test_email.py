@@ -280,6 +280,12 @@ def test_forgot_password_link_absent_without_smtp(no_smtp_app):
         The login page must not render the "Forgot password?" link when
         SMTP is not configured.
     """
+    # Seed a user so /login renders the form instead of funnelling to /setup.
+    with no_smtp_app.app_context():
+        u = User(username="nosmtpuser", role="user")
+        u.set_password("nosmtppass1")
+        db.session.add(u)
+        db.session.commit()
     client = no_smtp_app.test_client()
     response = client.get("/login")
     assert response.status_code == 200
@@ -293,6 +299,12 @@ def test_forgot_password_link_present_with_smtp(email_app):
     Details:
         The login page renders the "Forgot password?" link when SMTP is configured.
     """
+    # Seed a user so /login renders the form instead of funnelling to /setup.
+    with email_app.app_context():
+        u = User(username="smtpuser", role="user")
+        u.set_password("smtppass123")
+        db.session.add(u)
+        db.session.commit()
     client = email_app.test_client()
     response = client.get("/login")
     assert response.status_code == 200

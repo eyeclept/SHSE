@@ -521,3 +521,52 @@ def test_semantic_summary_returns_empty_when_admin_disabled(app, admin_client):
     r = admin_client.get("/api/semantic/summary?q=test")
     assert r.status_code == 200
     assert r.data == b""
+
+
+def test_job_logs_redirects_unauthenticated(client):
+    """
+    Input:  GET /admin/jobs/1/logs without a session
+    Output: 302 redirect to login (no traceback leaked)
+    Details:
+        30f #4 — crawl-job logs/tracebacks are admin-only. The previously
+        unauthenticated /api/jobs/<id>/logs duplicate was removed; the only
+        logs endpoint now lives behind @admin_required.
+    """
+    r = client.get("/admin/jobs/1/logs")
+    assert r.status_code == 302
+    assert "/login" in r.headers.get("Location", "")
+
+
+def test_job_logs_forbidden_for_non_admin(user_client):
+    """
+    Input:  GET /admin/jobs/1/logs as an authenticated non-admin
+    Output: 403 (no traceback leaked)
+    """
+    r = user_client.get("/admin/jobs/1/logs")
+    assert r.status_code == 403
+
+
+def test_unauthenticated_api_job_logs_route_removed(client):
+    """
+    Input:  GET /api/jobs/1/logs (the old unauthenticated duplicate)
+    Output: 404 — the leaky route no longer exists
+    Details:
+        30f #4 — confirms the enumerable, unauthenticated traceback endpoint
+        is gone rather than merely gated, so it cannot leak even by accident.
+    """
+    r = client.get("/api/jobs/1/logs")
+    assert r.status_code == 404
+
+
+def test_healthz_returns_ok_without_auth(client):
+    """
+    Input:  GET /api/healthz with no session
+    Output: 200 "ok"
+    Details:
+        30f #10 — cheap liveness route for the container healthcheck. Must return
+        200 so `curl -fsS` passes when the app serves, and (being a real route)
+        a broken app returning 5xx makes the healthcheck fail.
+    """
+    r = client.get("/api/healthz")
+    assert r.status_code == 200
+    assert r.data == b"ok"

@@ -233,11 +233,19 @@ def test_history_page_requires_login(client):
 
 # ── Auth pages ────────────────────────────────────────────────────────────
 
-def test_login_page_renders(client):
+def test_login_page_renders(app, client):
     """
     Input: GET /login
     Output: 200 HTML with 'Sign in' text
     """
+    # Seed a user so /login renders the form instead of funnelling to /setup
+    # (the first-run funnel only fires on a truly empty user table).
+    from flask_app.models.user import User
+    with app.app_context():
+        u = User(username="loginpageuser", role="user")
+        u.set_password("pagepass12")
+        db.session.add(u)
+        db.session.commit()
     r = client.get("/login")
     assert r.status_code == 200
     assert b"Sign in" in r.data

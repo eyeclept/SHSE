@@ -466,6 +466,11 @@ def hybrid_search(query, k=10, client=None, llm_session=None):
         list[dict] — top-k result dicts sorted by descending RRF score, each
         containing _source fields merged with an 'rrf_score' float field.
     Details:
+        EXPERIMENTAL — not wired into any production path. The live search uses
+        execute_bm25 + semantic_results (routes/search.py, routes/api.py); this
+        RRF fusion has no route/task/CLI/MCP caller and exists only for its tests.
+        Keep or remove deliberately; do not assume hybrid ranking is active.
+
         Runs BM25 and vector search in parallel via ThreadPoolExecutor.
         Applies Reciprocal Rank Fusion (RRF): for each document at rank r
         in list L, its score increases by 1 / (_RRF_K + r). Documents
