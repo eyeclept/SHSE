@@ -1381,5 +1381,16 @@
         "passes": true
       }
     }
+  },
+  "epic_31_test_suite_audit": {
+    "description": "Systematic line-by-line audit of tests/ + cli.py: coverage gaps, coincidental passes, skips, brittleness, slowness, redundancy. Opus-only. Findings in Assist/test_audit_findings.md; HIGH findings implemented per user approval.",
+    "items": {
+      "test_audit_findings": {
+        "passes": true
+      },
+      "test_audit_high_fixes": {
+        "passes": true
+      }
+    }
   }
 }

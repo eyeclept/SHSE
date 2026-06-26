@@ -10,11 +10,31 @@ Description:
 import os
 import subprocess
 
+import pytest
+
 # Globals
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VENV_PYTHON = os.path.join(PROJECT_ROOT, ".venv", "bin", "python")
 
+# These are environment/integration checks, not unit tests: they shell out to the
+# project virtualenv and to init.sh (which needs the full Docker stack). Guard them
+# so a fresh clone / offline run skips cleanly instead of erroring on a missing
+# .venv or a down stack.
+_VENV_PRESENT = os.path.isfile(VENV_PYTHON)
+_RUN_INTEGRATION = os.environ.get("SHSE_RUN_INTEGRATION") == "1"
+
+requires_venv = pytest.mark.skipif(
+    not _VENV_PRESENT,
+    reason=f"{VENV_PYTHON} not found — create the project virtualenv to run env checks",
+)
+requires_integration = pytest.mark.skipif(
+    not _RUN_INTEGRATION,
+    reason="init.sh needs the full Docker stack — set SHSE_RUN_INTEGRATION=1 to run",
+)
+
+
 # Functions
+@requires_venv
 def test_venv_activates():
     """
     Input: None
@@ -29,6 +49,7 @@ def test_venv_activates():
     assert result.returncode == 0, result.stderr.decode()
 
 
+@requires_venv
 def test_requirements_import():
     """
     Input: None
@@ -68,6 +89,7 @@ def test_requirements_import():
         )
 
 
+@requires_integration
 def test_init_sh():
     """
     Input: None

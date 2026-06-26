@@ -11,7 +11,8 @@ Flask-WTF>=1.2
 Flask-Limiter>=3.5
 
 # Database
-SQLAlchemy==2.0.23
+# 2.0.41+ required for Python 3.14 (TypingOnly guard rejects __firstlineno__/__static_attributes__ on older 2.0.x)
+SQLAlchemy==2.0.51
 Flask-SQLAlchemy==3.1.1
 PyMySQL>=1.1.1
 

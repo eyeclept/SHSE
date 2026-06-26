@@ -191,7 +191,11 @@ def create_app():
     # more than once (the test suite; a Celery worker rebuilding its app), and
     # without this guard each call stacked another handler on the root logger —
     # every log line written N times, file handles leaked, rotation churned.
-    log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
+    # Log directory defaults to <repo>/logs but can be overridden with SHSE_LOG_DIR
+    # so a process that cannot write the default path (e.g. the host user running
+    # the test suite against a root-owned container log on the app VM) can point it
+    # at a writable location instead of failing on handler construction.
+    log_dir = os.environ.get("SHSE_LOG_DIR") or os.path.join(os.path.dirname(__file__), "..", "logs")
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.abspath(os.path.join(log_dir, "flask.log"))
     _already = any(

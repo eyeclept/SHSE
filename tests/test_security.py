@@ -20,6 +20,21 @@ _TEMPLATE_DIR = os.path.join(_PROJECT_ROOT, "flask_app", "templates")
 _STATIC_DIR = os.path.join(_PROJECT_ROOT, "flask_app", "static")
 
 # Functions
+@pytest.fixture(autouse=True)
+def _writable_log_dir(tmp_path, monkeypatch):
+    """
+    Input: tmp_path, monkeypatch fixtures
+    Output: None — sets SHSE_LOG_DIR to a writable temp dir for every test here
+    Details:
+        The tests that call the real create_app() construct a RotatingFileHandler
+        on <repo>/logs/flask.log. On the app VM that file is owned by the root
+        container, so a host-user pytest run hits PermissionError. Redirect the
+        log dir to a per-test writable path so these tests pass regardless of who
+        owns the repo's logs/ directory.
+    """
+    monkeypatch.setenv("SHSE_LOG_DIR", str(tmp_path))
+
+
 @pytest.fixture
 def secure_app():
     """
@@ -117,32 +132,6 @@ def test_admin_unauthenticated_does_not_return_200(secure_app):
         assert resp.status_code != 200, (
             "Unauthenticated request to /admin/ returned 200 — access control bypassed"
         )
-
-
-def test_secret_key_not_weak_default():
-    """
-    Input: None (imports Config directly)
-    Output: None
-    Details:
-        Confirms the production Config class does not have a hardcoded weak
-        SECRET_KEY literal. The value must come from the environment.
-        This test reads the env var that Config reads — not the Config class
-        attribute directly — so it only passes when SECRET_KEY is set.
-
-        See SEC-006: config.py defaults to "change-me" when SECRET_KEY env
-        var is absent. This test documents that behaviour and will fail in CI
-        unless SECRET_KEY is set to a non-weak value.
-    """
-    from flask_app.config import Config
-    weak_values = {"dev", "secret", "change-me", "development", "test", ""}
-    key = os.environ.get("SECRET_KEY", "change-me")
-    # In tests we set SECRET_KEY via env; skip when clearly running locally
-    # without a real secret (the fixture overrides it for app tests above).
-    if key in weak_values:
-        pytest.skip("SECRET_KEY env var not set to a production value — skipping in dev context")
-    assert key not in weak_values, (
-        f"SECRET_KEY is a known-weak value ('{key}'). Set a strong random key in .env (SEC-006)"
-    )
 
 
 def test_jinja2_autoescape_enabled(secure_app):

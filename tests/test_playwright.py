@@ -310,8 +310,9 @@ def test_calculator_card_renders_for_math_query(page, base_url):
     page.goto(f"{base_url}/search?q=2+%2B+2+%3D")
     page.wait_for_load_state("networkidle")
     card = page.locator(".shse-card").filter(has_text="Calculator")
-    if not card.count():
-        pytest.skip("Calculator card not rendered — arithmetic detection may be disabled")
+    # Calculator detection is pure-Python and deterministic — a missing card is a
+    # regression, not an optional-service absence, so assert rather than skip.
+    assert card.count(), "Calculator card not rendered for '2 + 2 =' — arithmetic detection regressed"
     expect(card.first).to_be_visible()
 
 
@@ -326,8 +327,8 @@ def test_unit_converter_card_renders_for_conversion_query(page, base_url):
     page.goto(f"{base_url}/search?q=5+km+to+miles")
     page.wait_for_load_state("networkidle")
     card = page.locator(".shse-card").filter(has_text="Unit Converter")
-    if not card.count():
-        pytest.skip("Unit converter card not rendered — conversion query not detected")
+    # Unit conversion is pure-Python and deterministic — assert rather than skip.
+    assert card.count(), "Unit converter card not rendered for '5 km to miles' — conversion detection regressed"
     expect(card.first).to_be_visible()
 
 
@@ -344,8 +345,8 @@ def test_datetime_card_renders_for_date_query(page, base_url):
     # Datetime card has data-ai-context attr and is an answer card (high z-order)
     # Its label text varies; check for any shse-card that precedes the results list
     cards = page.locator(".shse-card[data-ai-context]")
-    if not cards.count():
-        pytest.skip("Datetime answer card not rendered for date query")
+    # Date/time resolution is pure-Python and deterministic — assert rather than skip.
+    assert cards.count(), "Datetime answer card not rendered for 'what day is today' — date detection regressed"
     expect(cards.first).to_be_visible()
 
 

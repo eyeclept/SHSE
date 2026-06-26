@@ -41,6 +41,31 @@ def _get_conn():
     )
 
 
+def _db_up():
+    """
+    Input: None
+    Output: bool — True if MariaDB is reachable with the configured credentials
+    Details:
+        Probe used by the module-level skip guard so a fresh clone / offline run
+        skips these live-DB tests instead of erroring on connect, matching the
+        live-test convention used by test_stardict / test_email_live / test_kiwix.
+    """
+    try:
+        conn = _get_conn()
+        conn.close()
+        return True
+    except Exception:
+        logger.warning("MariaDB not reachable at %s:%s — live DB tests will skip",
+                       Config.MARIADB_HOST, Config.MARIADB_PORT)
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _db_up(),
+    reason="MariaDB not reachable — start the stack (docker compose up -d) to run live DB tests",
+)
+
+
 def test_all_tables_exist():
     """
     Input: None

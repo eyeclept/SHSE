@@ -10,10 +10,16 @@ Description:
 """
 # Imports
 import asyncio
+import os
 import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# Globals
+# Resolve the repo root from this file's location so the compose tests work from
+# any checkout (local dev, the app VM's ~/shse, CI) — not just one developer's path.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 # Functions
@@ -112,7 +118,7 @@ def test_compose_config_valid_without_mcp_profile():
     """
     result = subprocess.run(
         ["docker", "compose", "-f", "docker-compose.yml", "config", "--services"],
-        capture_output=True, text=True, cwd="/home/eyeclept/Documents/Code/Projects/SHSE",
+        capture_output=True, text=True, cwd=_PROJECT_ROOT,
     )
     assert result.returncode == 0, result.stderr
     services = result.stdout.splitlines()
@@ -127,7 +133,7 @@ def test_compose_config_valid_with_mcp_profile():
     result = subprocess.run(
         ["docker", "compose", "-f", "docker-compose.yml", "--profile", "mcp",
          "config", "--services"],
-        capture_output=True, text=True, cwd="/home/eyeclept/Documents/Code/Projects/SHSE",
+        capture_output=True, text=True, cwd=_PROJECT_ROOT,
     )
     assert result.returncode == 0, result.stderr
     services = result.stdout.splitlines()
