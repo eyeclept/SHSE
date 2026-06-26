@@ -87,7 +87,7 @@ def test_home_succeeds_when_opensearch_unreachable(client):
 
 def test_admin_dispatch_flashes_error_when_redis_unreachable(client):
     """POST /admin/targets/1/crawl must redirect (not 500) and flash an error when .delay() raises."""
-    with patch("flask_app.routes.admin.current_user") as mock_user, \
+    with patch("flask_app.routes.admin._shared.current_user") as mock_user, \
          patch("celery_worker.tasks.crawl.crawl_target") as mock_task:
 
         mock_user.is_authenticated = True

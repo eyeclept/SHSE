@@ -133,7 +133,7 @@ def test_dashboard_renders_for_admin(admin_client):
         {"aggregations": {"svc": {"value": 3}, "vectorized": {"doc_count": 30}}},
         {"hits": {"hits": [{"_source": {"crawled_at": "2026-04-25T00:00:00"}}]}},
     ]
-    with patch("flask_app.routes.admin._check_services", return_value=_mock_health()), \
+    with patch("flask_app.routes.admin.health._check_services", return_value=_mock_health()), \
          patch("flask_app.services.opensearch.get_client", return_value=mc):
         r = admin_client.get("/admin/")
     assert r.status_code == 200
@@ -147,7 +147,7 @@ def test_health_checks_return_correct_status(admin_client):
     Input: GET /admin/_health as admin
     Output: 200 HTML fragment; 'Up' appears for mocked services
     """
-    with patch("flask_app.routes.admin._check_services", return_value=_mock_health(True)):
+    with patch("flask_app.routes.admin.health._check_services", return_value=_mock_health(True)):
         r = admin_client.get("/admin/_health")
     assert r.status_code == 200
     assert b"Up" in r.data
@@ -160,7 +160,7 @@ def test_health_check_shows_down_when_service_unreachable(admin_client):
     """
     health = _mock_health(True)
     health["opensearch"]["status"] = "down"
-    with patch("flask_app.routes.admin._check_services", return_value=health):
+    with patch("flask_app.routes.admin.health._check_services", return_value=health):
         r = admin_client.get("/admin/_health")
     assert r.status_code == 200
     assert b"Down" in r.data
@@ -312,7 +312,7 @@ def test_dashboard_vectorize_job_shows_dash_not_deleted(app, admin_client):
         {"aggregations": {"svc": {"value": 0}, "vectorized": {"doc_count": 0}}},
         {"hits": {"hits": []}},
     ]
-    with patch("flask_app.routes.admin._check_services", return_value=_mock_health()), \
+    with patch("flask_app.routes.admin.health._check_services", return_value=_mock_health()), \
          patch("flask_app.services.opensearch.get_client", return_value=mc):
         r = admin_client.get("/admin/")
 
@@ -455,7 +455,7 @@ def test_settings_save_ai_summary_enabled(app, admin_client):
     Output: system_settings row llm.ai_summary_enabled == "1"
     """
     from flask_app.models.system_setting import SystemSetting
-    with patch("flask_app.routes.admin._validate_llm_model", return_value=None):
+    with patch("flask_app.routes.admin.config._validate_llm_model", return_value=None):
         r = admin_client.post("/admin/config", data={
             "action": "settings",
             "ai_summary_enabled": "1",
@@ -475,7 +475,7 @@ def test_settings_save_ai_summary_disabled(app, admin_client):
     Output: system_settings row llm.ai_summary_enabled == "0"
     """
     from flask_app.models.system_setting import SystemSetting
-    with patch("flask_app.routes.admin._validate_llm_model", return_value=None):
+    with patch("flask_app.routes.admin.config._validate_llm_model", return_value=None):
         r = admin_client.post("/admin/config", data={
             "action": "settings",
             "llm_gen_model": "",
@@ -494,7 +494,7 @@ def test_settings_model_validation_error_blocks_save(app, admin_client):
     Output: no system_settings row written; error flash shown
     """
     from flask_app.models.system_setting import SystemSetting
-    with patch("flask_app.routes.admin._validate_llm_model",
+    with patch("flask_app.routes.admin.config._validate_llm_model",
                return_value="Model 'bad-model' not found. Available: granite3.3:latest"):
         r = admin_client.post("/admin/config", data={
             "action": "settings",

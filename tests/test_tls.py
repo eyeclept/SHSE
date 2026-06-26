@@ -170,7 +170,7 @@ def test_tls_warning_banner_shown_when_target_has_verify_false(app, admin_client
         db.session.add(t)
         db.session.commit()
 
-    with patch("flask_app.routes.admin._check_services",
+    with patch("flask_app.routes.admin.health._check_services",
                return_value={s: {"status": "up", "latency_ms": 1, "message": None}
                              for s in ("opensearch", "nutch", "llm_api", "redis", "mariadb")}), \
          patch("flask_app.services.opensearch.get_client") as mock_os:
@@ -202,7 +202,7 @@ def test_tls_warning_banner_absent_when_all_targets_verify(app, admin_client):
         db.session.add(t)
         db.session.commit()
 
-    with patch("flask_app.routes.admin._check_services",
+    with patch("flask_app.routes.admin.health._check_services",
                return_value={s: {"status": "up", "latency_ms": 1, "message": None}
                              for s in ("opensearch", "nutch", "llm_api", "redis", "mariadb")}), \
          patch("flask_app.services.opensearch.get_client") as mock_os:
